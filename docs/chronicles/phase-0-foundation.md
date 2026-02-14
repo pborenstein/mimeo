@@ -12,11 +12,13 @@ Chronicle of Phase 0 activities.
 
 **How**:
 
-- Created Python package with uv-based dependency management
-- Set up CLI entry point with Click framework
+- Created Python package with uv-based dependency management (pyproject.toml)
+- Set up CLI entry point with Click framework (mimeo/cli.py)
 - Configured development tools (pytest, mypy, ruff)
 - Initialized token-efficient documentation system (CONTEXT.md, IMPLEMENTATION.md, DECISIONS.md)
 - Defined 6-phase implementation plan from Research → Polish
+- Created virtual environment and verified CLI works (mimeo --version)
+- All tests passing (1/1)
 
 **Decisions**:
 
@@ -25,6 +27,6 @@ Chronicle of Phase 0 activities.
 - DEC-003: Porkbun + GitHub Pages initial implementation
 - DEC-004: Provider abstraction for extensibility
 
-**Files**: Complete project structure created in /Users/philip/projects/mimeo
+**Files**: See commit c1ff0b8
 
 ---

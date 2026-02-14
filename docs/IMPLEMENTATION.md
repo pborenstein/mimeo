@@ -10,8 +10,8 @@ Living document tracking progress on the domain landing page provisioning tool.
 
 | Phase | Status | Description | Commits |
 |-------|--------|-------------|---------|
-| Phase 0: Research & Design | 🔄 In Progress | Project setup, API exploration, architecture design | Initial |
-| Phase 1: Core CLI | 📋 Planned | CLI command structure, configuration management | - |
+| Phase 0: Research & Design | ✅ Complete | Project setup, API exploration, architecture design | Initial |
+| Phase 1: Core Infrastructure | 🔵 Current | Configuration management, data models, provider abstractions | - |
 | Phase 2: Porkbun Integration | 📋 Planned | DNS configuration via Porkbun API | - |
 | Phase 3: GitHub Pages Integration | 📋 Planned | Repository creation, Pages setup, workflow deployment | - |
 | Phase 4: Content Templates | 📋 Planned | Template system for landing page generation | - |
@@ -19,9 +19,9 @@ Living document tracking progress on the domain landing page provisioning tool.
 
 ---
 
-## Current Phase
+## Completed Phases
 
-### Phase 0: Research & Design (2026-02-14 - Present)
+### Phase 0: Research & Design (2026-02-14 - 2026-02-14)
 
 **Goal**: Establish project foundation, understand API requirements, design architecture for automating domain landing page provisioning.
 
@@ -59,15 +59,43 @@ Living document tracking progress on the domain landing page provisioning tool.
 - [x] Document GitHub Pages workflow (Actions deployment)
 - [x] Extract reusable patterns (dark theme, letter spacing)
 
-**Next Steps**: Complete project initialization, then dive into API documentation and design the provider abstraction layer.
+---
+
+## Current Phase
+
+### 🔵 Phase 1: Core Infrastructure (2026-02-14 - Present)
+
+**Goal**: Configuration management, data models, and provider abstraction layer.
+
+**Tasks**:
+
+- [x] Add Phase 1 dependencies (requests, dnspython, pytest-mock, pytest-cov, responses)
+- [x] Create mimeo/exceptions.py with error hierarchy
+- [x] Create mimeo/models.py with Domain, DNSRecord, DeploymentConfig
+- [x] Create mimeo/config.py with TOML loading and env var overrides
+- [x] Create mimeo/providers/base.py with Registrar and Host ABCs
+- [x] Write comprehensive tests (38 tests passing)
+- [x] Verify type checking passes (mypy)
+- [x] Verify linting passes (ruff)
+
+**Success Criteria**: ✅ All criteria met
+
+- Configuration loads API credentials from file and env vars
+- Models validate domain names and DNS records
+- Provider ABCs defined with clear interfaces
+- All tests passing (38/38)
+- Type checking passes
+- Linting passes
+
+**Next Steps**: Begin Phase 2 - Implement Porkbun API integration for DNS management.
 
 ---
 
 ## Planned Phases
 
-### Phase 1: Core CLI (Planned)
+### Phase 2: Porkbun Integration (Planned)
 
-**Goal**: Implement basic CLI structure with configuration management.
+**Goal**: Automate DNS configuration via Porkbun API.
 
 **Key deliverables**:
 

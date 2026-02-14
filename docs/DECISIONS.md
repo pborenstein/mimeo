@@ -146,6 +146,23 @@ Architectural decisions for Mimeo. Search with `grep -i "keyword" docs/DECISIONS
 
 ---
 
+### DEC-009: Porkbun IPv4 API Endpoint (2026-02-14)
+
+**Status**: Active
+
+**Context**: Need to choose correct Porkbun API endpoint for HTTP requests.
+
+**Decision**: Use `https://api-ipv4.porkbun.com/api/json/v3` as the base URL for all Porkbun API calls.
+
+**Alternatives considered**:
+
+- https://porkbun.com/api/json/v3: Returns 403 Forbidden errors
+- https://api.porkbun.com/api/json/v3: Not tested, IPv4 version recommended
+
+**Consequences**: Successful API authentication and DNS operations. The IPv4-specific endpoint is required for API access to work. Using the wrong endpoint results in 403 errors even with valid credentials.
+
+---
+
 ## Superseded/Deprecated
 
 [No superseded decisions yet]

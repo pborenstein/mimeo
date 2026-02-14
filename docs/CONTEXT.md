@@ -1,24 +1,24 @@
 ---
-phase: 1
-phase_name: Core Infrastructure
+phase: 2
+phase_name: Porkbun Integration
 updated: 2026-02-14
-last_commit: 0ceb11a
+last_commit: 3d07ce3
 ---
 
 ## Current Focus
 
-Phase 1 complete! Built foundational infrastructure: configuration system with TOML and env var support, data models for domains and DNS records, exception hierarchy, and provider abstractions. All 38 tests passing with full type safety.
+Phase 2 complete! Implemented Porkbun API integration with HTTP client (retry logic, error handling), Porkbun registrar provider (DNS configuration, verification), and comprehensive testing. Smoke tested against live API with mimeo.lol and clusterfuck.rodeo.
 
 ## Active Tasks
 
-- [x] Add Phase 1 dependencies to pyproject.toml
-- [x] Create mimeo/exceptions.py with error hierarchy
-- [x] Create mimeo/models.py with data models
-- [x] Create mimeo/config.py with configuration management
-- [x] Create mimeo/providers/base.py with ABC interfaces
-- [x] Write comprehensive tests (38 tests)
-- [x] Run type checking and linting
-- [ ] Begin Phase 2: Porkbun API integration
+- [x] Create HTTP client utility with retry logic
+- [x] Implement Porkbun API client
+- [x] Write tests for HTTP client (19 tests)
+- [x] Write tests for Porkbun provider (19 tests)
+- [x] Verify type checking and linting
+- [x] Smoke test with real Porkbun API
+- [x] Fix API endpoint (use api-ipv4.porkbun.com)
+- [ ] Begin Phase 3: GitHub Pages integration
 
 ## Blockers
 
@@ -26,13 +26,15 @@ None currently.
 
 ## Context
 
-- Phase 1 delivered: config, models, exceptions, provider ABCs
-- 38 tests passing (config loading, model validation, exception hierarchy, ABCs)
+- Phase 2 delivered: HTTP client, Porkbun registrar provider
+- 76 tests passing (38 from Phase 1 + 38 from Phase 2)
 - Type checking (mypy) and linting (ruff) passing
-- Config supports both TOML files and environment variable overrides
-- Domain model validates domain names with regex
-- Provider abstractions ready for Porkbun and GitHub implementations
+- Porkbun API uses api-ipv4.porkbun.com endpoint (not porkbun.com)
+- HTTP client has automatic retries with exponential backoff
+- Porkbun provider implements configure_dns and verify_dns methods
+- Created config.toml.example with setup instructions
+- Smoke tested successfully with real API credentials
 
 ## Next Session
 
-Begin Phase 2: Implement Porkbun registrar provider. Create mimeo/providers/registrar/porkbun.py with DNS record management, implement configure_dns and verify_dns methods, add HTTP client with retry logic in mimeo/utils/http.py.
+Begin Phase 3: Implement GitHub Pages hosting provider. Create mimeo/providers/host/github.py with repository creation, GitHub Pages configuration, and custom domain setup.

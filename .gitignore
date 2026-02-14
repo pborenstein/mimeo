@@ -54,6 +54,7 @@ dmypy.json
 .env
 config.json
 config.yaml
+config.toml
 
 # Logs
 *.log

@@ -35,3 +35,23 @@ class DNSError(MimeoError):
     """Raised when DNS operations or verification fail."""
 
     pass
+
+
+class NetworkError(MimeoError):
+    """Raised when network requests fail."""
+
+    pass
+
+
+class APIError(MimeoError):
+    """Raised when API returns an error response."""
+
+    def __init__(self, message: str, status_code: int | None = None) -> None:
+        """Initialize API error.
+
+        Args:
+            message: Error message
+            status_code: HTTP status code if applicable
+        """
+        super().__init__(message)
+        self.status_code = status_code

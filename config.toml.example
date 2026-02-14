@@ -1,0 +1,71 @@
+# Mimeo Configuration Example
+#
+# This file shows how to configure Mimeo for automated website deployment.
+#
+# INSTALLATION LOCATION:
+#   Copy this file to: ~/.config/mimeo/config.toml
+#
+#   Linux/macOS:
+#     mkdir -p ~/.config/mimeo
+#     cp config.toml.example ~/.config/mimeo/config.toml
+#     chmod 600 ~/.config/mimeo/config.toml  # Protect credentials
+#
+# ENVIRONMENT VARIABLE OVERRIDES:
+#   All settings can be overridden with MIMEO_* environment variables:
+#     export MIMEO_PORKBUN_API_KEY="your-key"
+#     export MIMEO_PORKBUN_SECRET_KEY="your-secret"
+#     export MIMEO_GITHUB_TOKEN="your-token"
+#
+#   Environment variables take precedence over values in this file.
+#
+
+# =============================================================================
+# Porkbun Registrar Configuration
+# =============================================================================
+[porkbun]
+# API credentials from https://porkbun.com/account/api
+# Click "Create API Key" and enable API access for your domains
+api_key = "pk1_your_api_key_here"
+secret_key = "sk1_your_secret_key_here"
+
+# Optional: Default TTL for DNS records (in seconds)
+# Default is 600 (10 minutes) if not specified
+# default_ttl = 600
+
+# =============================================================================
+# GitHub Configuration
+# =============================================================================
+[github]
+# Personal Access Token from https://github.com/settings/tokens
+# Required scopes: repo, workflow (for GitHub Pages deployment)
+token = "ghp_your_personal_access_token_here"
+
+# Optional: Default GitHub organization/user for repository creation
+# If not specified, uses the authenticated user's account
+# default_org = "your-username-or-org"
+
+# Optional: Make repositories private by default
+# Default is false (public repositories)
+# default_private = false
+
+# =============================================================================
+# Global Defaults
+# =============================================================================
+[defaults]
+# Default registrar provider (currently only "porkbun" supported)
+registrar = "porkbun"
+
+# Default hosting provider (currently only "github" supported)
+host = "github"
+
+# Optional: Default template for new sites
+# template = "simple-landing"
+
+# =============================================================================
+# SECURITY NOTES
+# =============================================================================
+# - Keep this file secure! It contains API credentials.
+# - Never commit this file to version control.
+# - Use file permissions 600 (read/write for user only):
+#     chmod 600 ~/.config/mimeo/config.toml
+# - For CI/CD environments, use environment variables instead of this file.

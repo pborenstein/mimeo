@@ -11,7 +11,8 @@ Living document tracking progress on the domain landing page provisioning tool.
 | Phase | Status | Description | Commits |
 |-------|--------|-------------|---------|
 | Phase 0: Research & Design | ✅ Complete | Project setup, API exploration, architecture design | Initial |
-| Phase 1: Core Infrastructure | 🔵 Current | Configuration management, data models, provider abstractions | - |
+| Phase 1: Core Infrastructure | ✅ Complete | Configuration management, data models, provider abstractions | 2026-02-14 |
+| Phase 2: Porkbun Integration | 🔵 Current | DNS configuration via Porkbun API | - |
 | Phase 2: Porkbun Integration | 📋 Planned | DNS configuration via Porkbun API | - |
 | Phase 3: GitHub Pages Integration | 📋 Planned | Repository creation, Pages setup, workflow deployment | - |
 | Phase 4: Content Templates | 📋 Planned | Template system for landing page generation | - |
@@ -63,63 +64,45 @@ Living document tracking progress on the domain landing page provisioning tool.
 
 ## Current Phase
 
-### 🔵 Phase 1: Core Infrastructure (2026-02-14 - Present)
+### ✅ Phase 1: Core Infrastructure (2026-02-14 - Complete)
 
-**Goal**: Configuration management, data models, and provider abstraction layer.
+Configuration management, data models, and provider abstraction layer. All 38 tests passing with full type safety.
+
+---
+
+### 🔵 Phase 2: Porkbun Integration (2026-02-14 - Present)
+
+**Goal**: Automate DNS configuration via Porkbun API.
 
 **Tasks**:
 
-- [x] Add Phase 1 dependencies (requests, dnspython, pytest-mock, pytest-cov, responses)
-- [x] Create mimeo/exceptions.py with error hierarchy
-- [x] Create mimeo/models.py with Domain, DNSRecord, DeploymentConfig
-- [x] Create mimeo/config.py with TOML loading and env var overrides
-- [x] Create mimeo/providers/base.py with Registrar and Host ABCs
-- [x] Write comprehensive tests (38 tests passing)
-- [x] Verify type checking passes (mypy)
-- [x] Verify linting passes (ruff)
+- [x] Create mimeo/utils/http.py with HTTP client and retry logic
+- [x] Create mimeo/providers/registrar/porkbun.py implementing Registrar ABC
+- [x] Implement configure_dns() method for DNS record management
+- [x] Implement verify_dns() method for DNS propagation verification
+- [x] Add github_pages_records() helper for GitHub Pages DNS setup
+- [x] Write comprehensive tests (19 tests for HTTP client, 19 for Porkbun)
+- [x] Add types-requests dependency for mypy
+- [x] Verify type checking and linting pass
+- [x] Create config.toml.example with setup instructions
+- [x] Smoke test with real Porkbun API (mimeo.lol, clusterfuck.rodeo)
+- [x] Fix API endpoint (use api-ipv4.porkbun.com)
 
 **Success Criteria**: ✅ All criteria met
 
-- Configuration loads API credentials from file and env vars
-- Models validate domain names and DNS records
-- Provider ABCs defined with clear interfaces
-- All tests passing (38/38)
+- HTTP client with automatic retries and error handling
+- Porkbun provider implements configure_dns and verify_dns
+- Handles GitHub Pages DNS requirements (4 A records + CNAME)
+- All tests passing (76/76 total)
 - Type checking passes
 - Linting passes
+- Successfully tested against live Porkbun API
 
-**Next Steps**: Begin Phase 2 - Implement Porkbun API integration for DNS management.
+**Next Steps**: Begin Phase 3 - Implement GitHub Pages hosting provider.
 
 ---
 
 ## Planned Phases
-
-### Phase 2: Porkbun Integration (Planned)
-
-**Goal**: Automate DNS configuration via Porkbun API.
-
-**Key deliverables**:
-
-- CLI command parsing with Click
-- Configuration file loading (API keys, defaults)
-- Provider selection (--host, --registrar flags)
-- Dry-run mode for safety
-- Verbose logging support
-
-### Phase 2: Porkbun Integration (Planned)
-
-**Goal**: Automate DNS configuration via Porkbun API.
-
-**Key deliverables**:
-
-- Porkbun API client implementation
-- DNS record creation for GitHub Pages (A and CNAME records)
-- API error handling and retry logic
-- Verification that DNS propagated correctly
-
-**GitHub Pages DNS Requirements**:
-
-- A records: 185.199.108.153, 185.199.109.153, 185.199.110.153, 185.199.111.153
-- CNAME record: www → username.github.io
 
 ### Phase 3: GitHub Pages Integration (Planned)
 

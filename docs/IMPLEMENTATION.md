@@ -38,25 +38,26 @@ Living document tracking progress on the domain landing page provisioning tool.
 - [x] Verify tests pass (1/1 passing)
 
 #### API Research
-- [ ] Review Porkbun API documentation for DNS management
-- [ ] Review GitHub Pages documentation for custom domain setup
+- [x] Review Porkbun API documentation for DNS management
+- [x] Review GitHub Pages documentation for custom domain setup
+- [x] Document DNS record requirements for GitHub Pages (4 A records + CNAME)
 - [ ] Test Porkbun API authentication (requires API key)
 - [ ] Test GitHub API for repository creation
-- [ ] Document DNS record requirements for GitHub Pages
 
 #### Architecture Design
-- [ ] Design CLI command structure (mimeo <domain> --host --registrar --content)
-- [ ] Design configuration file format for API credentials
-- [ ] Design abstraction for registrar providers (future extensibility)
-- [ ] Design abstraction for host providers (future extensibility)
-- [ ] Design template system for content generation
-- [ ] Document workflow sequence (registrar → host → verification)
+- [x] Design CLI command structure (mimeo provision <domain> with options)
+- [x] Design configuration file format for API credentials (~/.config/mimeo/config.toml)
+- [x] Design abstraction for registrar providers (Registrar ABC)
+- [x] Design abstraction for host providers (Host ABC)
+- [x] Design template system for content generation (minimal template)
+- [x] Document workflow sequence (config → template → DNS → repo → deploy)
+- [x] Create comprehensive implementation plan (docs/PLAN.md)
 
 #### Reference Implementation
-- [ ] Study existing mimeo.lol setup
-- [ ] Document DNS configuration currently in use
-- [ ] Document GitHub Pages workflow currently in use
-- [ ] Extract reusable patterns
+- [x] Study existing mimeo.lol setup
+- [x] Document DNS configuration (GitHub Pages A records + CNAME)
+- [x] Document GitHub Pages workflow (Actions deployment)
+- [x] Extract reusable patterns (dark theme, letter spacing)
 
 **Next Steps**: Complete project initialization, then dive into API documentation and design the provider abstraction layer.
 

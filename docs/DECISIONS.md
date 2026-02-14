@@ -75,6 +75,77 @@ Architectural decisions for Mimeo. Search with `grep -i "keyword" docs/DECISIONS
 
 ---
 
+### DEC-005: tomllib for TOML Parsing (2026-02-14)
+
+**Status**: Active
+
+**Context**: Need to parse TOML configuration files for user credentials and settings.
+
+**Decision**: Use Python's built-in `tomllib` (available in Python 3.11+) for TOML parsing.
+
+**Alternatives considered**:
+
+- toml package: External dependency, not needed since tomllib is in stdlib
+- PyYAML for YAML config: Less human-friendly for configuration files
+
+**Consequences**: Zero external dependencies for config parsing. Requires Python 3.11+ (already our minimum). tomllib is read-only, but we don't need to write config files.
+
+---
+
+### DEC-006: Dataclasses over Pydantic for Models (2026-02-14)
+
+**Status**: Active
+
+**Context**: Need data models for Domain, DNSRecord, and DeploymentConfig with validation.
+
+**Decision**: Use standard library dataclasses with custom validation in `__post_init__`.
+
+**Alternatives considered**:
+
+- Pydantic: Powerful but adds external dependency
+- attrs: Similar to dataclasses but external dependency
+- Plain classes: Less boilerplate but more code
+
+**Consequences**: Keep dependencies minimal. Dataclasses provide clean syntax and type hints. Custom validation gives us full control. Trade-off is less automatic validation than Pydantic, but sufficient for our needs.
+
+---
+
+### DEC-007: Environment Variable Overrides for Credentials (2026-02-14)
+
+**Status**: Active
+
+**Context**: Configuration should support both file-based and environment variable credentials for flexibility (CI/CD, Docker, etc.).
+
+**Decision**: Support environment variable overrides for all credentials with `MIMEO_*` prefix. Env vars take precedence over config file values.
+
+**Alternatives considered**:
+
+- File-only config: Simpler but less flexible for deployment scenarios
+- .env files: Adds dependency and complexity
+- Command-line arguments: Too verbose for sensitive credentials
+
+**Consequences**: Flexible deployment (local dev uses config file, CI uses env vars). Clear naming convention with MIMEO_ prefix. Follows 12-factor app principles.
+
+---
+
+### DEC-008: XDG Base Directory for Configuration (2026-02-14)
+
+**Status**: Active
+
+**Context**: Need to decide where to store user configuration file.
+
+**Decision**: Use `~/.config/mimeo/config.toml` following XDG Base Directory specification.
+
+**Alternatives considered**:
+
+- ~/.mimeo/config.toml: Non-standard location
+- /etc/mimeo/: System-wide, requires elevated permissions
+- Current directory: Not portable
+
+**Consequences**: Follows Unix/Linux conventions. Config separate from working directories. Cross-platform compatible (works on macOS, Linux). Standard location users expect.
+
+---
+
 ## Superseded/Deprecated
 
 [No superseded decisions yet]

@@ -154,7 +154,7 @@ def list(config: Path | None) -> None:
             click.secho(f"  • {name}", fg="cyan", bold=True)
             click.echo(f"    Repository: {url}")
             click.echo(f"    Site: {pages_url}")
-            click.secho(f"    Updated: {updated}", fg="bright_black")
+            click.secho(f"    Updated: {updated}", fg="white", dim=True)
             click.echo()
 
     except ConfigurationError as e:

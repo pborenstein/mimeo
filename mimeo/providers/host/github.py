@@ -460,3 +460,11 @@ class GitHubHost(Host):
             raise HostError(
                 f"Failed to configure custom domain {domain}: {e}"
             ) from e
+
+    def __enter__(self) -> "GitHubHost":
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, *args: Any) -> None:
+        """Context manager exit."""
+        pass

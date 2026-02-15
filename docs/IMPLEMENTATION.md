@@ -14,8 +14,8 @@ Living document tracking progress on the domain landing page provisioning tool.
 | Phase 1: Core Infrastructure | ✅ Complete | Configuration management, data models, provider abstractions | 0ceb11a |
 | Phase 2: Porkbun Integration | ✅ Complete | DNS configuration via Porkbun API | d9ff35d |
 | Phase 3: GitHub Pages Integration | ✅ Complete | Repository creation, Pages setup, custom domains | 32b29d4 |
-| Phase 4: Content Generation | 🔵 Current | Simple HTML generator (no template engine) | - |
-| Phase 5: CLI Integration | 📋 Planned | Wire everything together in main CLI command | - |
+| Phase 4: Content Generation | ✅ Complete | Simple HTML generator (no template engine) | 311e70a |
+| Phase 5: CLI Integration | 🔵 Current | Wire everything together in main CLI command | - |
 
 ---
 
@@ -63,28 +63,32 @@ Living document tracking progress on the domain landing page provisioning tool.
 
 ## Current Phase
 
-### 🔵 Phase 4: Content Generation (2026-02-14 - Present)
+### 🔵 Phase 5: CLI Integration (2026-02-14 - Present)
 
-**Goal**: Simple content generator for minimal landing pages.
+**Goal**: Wire everything together in the main CLI command for end-to-end site deployment.
 
 **Tasks**:
 
-- [x] Create mimeo/content.py with generate_minimal_site()
-- [x] Simple string substitution (no template engine)
-- [x] Minimal HTML in mimeo.lol style (dark theme, letter spacing)
-- [x] Write 11 tests for content generation
-- [x] Verify type checking and linting pass
-- [ ] Begin Phase 5: Wire everything together in CLI
+- [x] Implement main `create` CLI command in mimeo/cli.py
+- [x] Orchestrate content generation, GitHub deployment, and DNS configuration
+- [x] Add progress indicators with click.echo and click.secho
+- [x] Implement error handling for all provider errors
+- [x] Add context manager support to GitHubHost
+- [x] Write 15 tests for CLI integration
+- [x] Verify all 132 tests pass
+- [x] Type checking and linting clean
+- [ ] Manual end-to-end testing with real domain
 
 **Success Criteria**: ✅ All criteria met
 
-- Content generator creates index.html with domain name
-- Hardcoded colors (no templating complexity)
-- Mobile responsive design
-- 117 tests passing (Phase 1: 38, Phase 2: 38, Phase 3: 30, Phase 4: 11)
+- CLI command `mimeo create domain.com` orchestrates full deployment
+- Progress indicators show each step (loading config, generating content, deploying, configuring DNS)
+- Error handling for configuration, deployment, and DNS errors
+- Success message displays site URL and repository URL
+- 132 tests passing (Phase 1: 38, Phase 2: 38, Phase 3: 30, Phase 4: 11, Phase 5: 15)
 - Type checking and linting clean
 
-**Next Steps**: Phase 5 - Implement main CLI command that orchestrates everything.
+**Next Steps**: Phase 6 - Polish, documentation, and production readiness.
 
 ---
 
@@ -99,25 +103,16 @@ HTTP client, Porkbun registrar provider, DNS configuration. 38 tests passing.
 ### ✅ Phase 3: GitHub Pages Integration
 GitHubHost provider using gh CLI, repository creation, Pages setup, custom domains. 30 tests passing. Uses gh credential helper for git push authentication.
 
+### ✅ Phase 4: Content Generation
+Simple HTML generator with string substitution (no template engine). Minimal landing pages in mimeo.lol style. 11 tests passing.
+
 ---
 
 ## Planned Phases
 
-### Phase 5: CLI Integration (Planned)
+### Phase 6: Polish & Production Readiness (Planned)
 
-**Goal**: Implement template system for landing page generation.
-
-**Key deliverables**:
-
-- Template engine (Jinja2 or similar)
-- "minimal" template (domain name displayed beautifully)
-- Template variable substitution
-- Static asset handling (CSS, fonts)
-- Mobile-responsive design
-
-### Phase 5: Polish & Testing (Planned)
-
-**Goal**: Production-ready tool with comprehensive testing.
+**Goal**: Production-ready tool with comprehensive testing and documentation.
 
 **Key deliverables**:
 

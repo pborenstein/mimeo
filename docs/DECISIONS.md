@@ -163,6 +163,43 @@ Architectural decisions for Mimeo. Search with `grep -i "keyword" docs/DECISIONS
 
 ---
 
+### DEC-010: Use gh CLI for GitHub Operations (2026-02-14)
+
+**Status**: Active
+
+**Context**: Need to interact with GitHub API for repository creation and Pages setup. Must handle authentication for both API calls and git push operations.
+
+**Decision**: Use gh CLI for all GitHub operations rather than direct API access or PyGithub.
+
+**Alternatives considered**:
+
+- PyGithub library: Would need separate solution for git push authentication
+- Direct API with requests: Same authentication challenges
+- SSH keys: Requires users to set up SSH (additional friction)
+
+**Consequences**: gh CLI handles OAuth flow and stores credentials. Can use `gh auth git-credential` as git credential helper for seamless HTTPS push authentication. Simpler for users (single `gh auth login` setup). Trade-off is dependency on external tool, but gh CLI is standard in developer workflows.
+
+**Technical detail**: Configure git with `git config credential.https://github.com.helper "!gh auth git-credential"` to use gh for authentication.
+
+---
+
+### DEC-011: No Template Engine for Content Generation (2026-02-14)
+
+**Status**: Active
+
+**Context**: Need to generate minimal landing pages with domain names. Initial plan was to use Jinja2 template engine.
+
+**Decision**: Use simple string substitution instead of a template engine. Hardcode HTML structure and styles.
+
+**Alternatives considered**:
+
+- Jinja2: Over-engineered for single variable substitution
+- Other template engines: Same problem, unnecessary complexity
+
+**Consequences**: Simpler code, no external dependencies, easier to understand. Trade-off is less flexibility for customization, but current goal is just "hello world on multiple domains" - not customizable templates. Can add templating later if needed.
+
+---
+
 ## Superseded/Deprecated
 
 [No superseded decisions yet]

@@ -11,12 +11,11 @@ Living document tracking progress on the domain landing page provisioning tool.
 | Phase | Status | Description | Commits |
 |-------|--------|-------------|---------|
 | Phase 0: Research & Design | ✅ Complete | Project setup, API exploration, architecture design | Initial |
-| Phase 1: Core Infrastructure | ✅ Complete | Configuration management, data models, provider abstractions | 2026-02-14 |
-| Phase 2: Porkbun Integration | 🔵 Current | DNS configuration via Porkbun API | - |
-| Phase 2: Porkbun Integration | 📋 Planned | DNS configuration via Porkbun API | - |
-| Phase 3: GitHub Pages Integration | 📋 Planned | Repository creation, Pages setup, workflow deployment | - |
-| Phase 4: Content Templates | 📋 Planned | Template system for landing page generation | - |
-| Phase 5: Polish & Testing | 📋 Planned | Error handling, testing, documentation | - |
+| Phase 1: Core Infrastructure | ✅ Complete | Configuration management, data models, provider abstractions | 0ceb11a |
+| Phase 2: Porkbun Integration | ✅ Complete | DNS configuration via Porkbun API | d9ff35d |
+| Phase 3: GitHub Pages Integration | ✅ Complete | Repository creation, Pages setup, custom domains | 32b29d4 |
+| Phase 4: Content Generation | 🔵 Current | Simple HTML generator (no template engine) | - |
+| Phase 5: CLI Integration | 📋 Planned | Wire everything together in main CLI command | - |
 
 ---
 
@@ -64,60 +63,47 @@ Living document tracking progress on the domain landing page provisioning tool.
 
 ## Current Phase
 
-### ✅ Phase 1: Core Infrastructure (2026-02-14 - Complete)
+### 🔵 Phase 4: Content Generation (2026-02-14 - Present)
 
-Configuration management, data models, and provider abstraction layer. All 38 tests passing with full type safety.
-
----
-
-### 🔵 Phase 2: Porkbun Integration (2026-02-14 - Present)
-
-**Goal**: Automate DNS configuration via Porkbun API.
+**Goal**: Simple content generator for minimal landing pages.
 
 **Tasks**:
 
-- [x] Create mimeo/utils/http.py with HTTP client and retry logic
-- [x] Create mimeo/providers/registrar/porkbun.py implementing Registrar ABC
-- [x] Implement configure_dns() method for DNS record management
-- [x] Implement verify_dns() method for DNS propagation verification
-- [x] Add github_pages_records() helper for GitHub Pages DNS setup
-- [x] Write comprehensive tests (19 tests for HTTP client, 19 for Porkbun)
-- [x] Add types-requests dependency for mypy
+- [x] Create mimeo/content.py with generate_minimal_site()
+- [x] Simple string substitution (no template engine)
+- [x] Minimal HTML in mimeo.lol style (dark theme, letter spacing)
+- [x] Write 11 tests for content generation
 - [x] Verify type checking and linting pass
-- [x] Create config.toml.example with setup instructions
-- [x] Smoke test with real Porkbun API (mimeo.lol, clusterfuck.rodeo)
-- [x] Fix API endpoint (use api-ipv4.porkbun.com)
+- [ ] Begin Phase 5: Wire everything together in CLI
 
 **Success Criteria**: ✅ All criteria met
 
-- HTTP client with automatic retries and error handling
-- Porkbun provider implements configure_dns and verify_dns
-- Handles GitHub Pages DNS requirements (4 A records + CNAME)
-- All tests passing (76/76 total)
-- Type checking passes
-- Linting passes
-- Successfully tested against live Porkbun API
+- Content generator creates index.html with domain name
+- Hardcoded colors (no templating complexity)
+- Mobile responsive design
+- 117 tests passing (Phase 1: 38, Phase 2: 38, Phase 3: 30, Phase 4: 11)
+- Type checking and linting clean
 
-**Next Steps**: Begin Phase 3 - Implement GitHub Pages hosting provider.
+**Next Steps**: Phase 5 - Implement main CLI command that orchestrates everything.
+
+---
+
+## Completed Phases (Summary)
+
+### ✅ Phase 1: Core Infrastructure
+Configuration management, data models, provider abstractions. 38 tests passing.
+
+### ✅ Phase 2: Porkbun Integration
+HTTP client, Porkbun registrar provider, DNS configuration. 38 tests passing.
+
+### ✅ Phase 3: GitHub Pages Integration
+GitHubHost provider using gh CLI, repository creation, Pages setup, custom domains. 30 tests passing. Uses gh credential helper for git push authentication.
 
 ---
 
 ## Planned Phases
 
-### Phase 3: GitHub Pages Integration (Planned)
-
-**Goal**: Automate repository creation and GitHub Pages setup.
-
-**Key deliverables**:
-
-- GitHub API client (via gh CLI or PyGithub)
-- Local repository creation in ./mimeo-sites/
-- Remote repository creation on GitHub
-- GitHub Pages workflow file generation
-- Custom domain configuration in repository settings
-- CNAME file creation
-
-### Phase 4: Content Templates (Planned)
+### Phase 5: CLI Integration (Planned)
 
 **Goal**: Implement template system for landing page generation.
 

@@ -454,7 +454,7 @@ class GitHubHost(Host):
             repo_name = domain
 
             # Create repository
-            repo_full_name = self._create_repository(repo_name)
+            repo_full_name = self._create_repository(repo_name, org=self.default_org)
 
             # Initialize and push content
             self._init_and_push_repository(repo_full_name, content_path)

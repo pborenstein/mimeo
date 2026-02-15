@@ -89,6 +89,7 @@ Living document tracking progress on the domain landing page provisioning tool.
 - [x] Add 5 new tests for topics and list command
 - [x] Verify all 145 tests pass
 - [x] Multiple successful deployments (pepito.lol, mellowtimesphere.com, laminar.rodeo)
+- [x] Fix organization repository creation bug (deploy_site now uses default_org)
 
 **Success Criteria**: ✅ All criteria met
 

@@ -182,3 +182,20 @@ Implemented the main `mimeo create` command that orchestrates the complete site 
 **Files**: Commits febd67b (topics), 8a9e04e (list command), eb0d38b (color fix)
 
 **Result**: ✅ All mimeo sites now tagged automatically. 'mimeo list' command shows managed sites with clean formatted output. 145 tests passing.
+
+## Entry 9: Organization Repository Bug Fix (2026-02-15)
+
+**What**: Fixed bug where repositories were created in personal account instead of configured organization.
+
+**Why**: User configured `github.default_org = "tepiton"` in config but repos were still created under personal account "pborenstein". The deploy_site() method wasn't passing the org parameter to _create_repository().
+
+**How**:
+- Updated deploy_site() in mimeo/providers/host/github.py:457
+- Changed `repo_full_name = self._create_repository(repo_name)` to pass org parameter
+- Now: `repo_full_name = self._create_repository(repo_name, org=self.default_org)`
+- The _create_repository() method already had correct logic to use org endpoint vs user endpoint
+- It just wasn't receiving the org parameter from deploy_site()
+
+**Files**: mimeo/providers/host/github.py (1 line changed)
+
+**Result**: ✅ Repositories now created in configured organization. Verified with xhosi.dev deployment.

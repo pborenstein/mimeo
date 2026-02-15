@@ -64,8 +64,8 @@ class TestCreateCommand:
         """Test create command shows help."""
         result = runner.invoke(create, ["--help"])
         assert result.exit_code == 0
-        assert "Create and deploy a minimal landing page" in result.output
-        assert "DOMAIN" in result.output
+        assert "Create and deploy minimal landing pages" in result.output
+        assert "DOMAINS" in result.output
 
     def test_create_requires_domain(self, runner: CliRunner) -> None:
         """Test create command requires domain argument."""
@@ -108,10 +108,10 @@ class TestCreateCommand:
         # Verify success
         assert result.exit_code == 0
         assert "Loading configuration" in result.output
-        assert "Generating site for example.com" in result.output
-        assert "Deploying to GitHub Pages" in result.output
+        assert "Generating site content" in result.output
+        assert "Creating GitHub repository" in result.output
         assert "Configuring DNS records" in result.output
-        assert "Site successfully deployed!" in result.output
+        assert "Successfully created: 1/1 domain(s)" in result.output
         assert "https://example.com" in result.output
 
         # Verify mocks called correctly
@@ -160,7 +160,7 @@ class TestCreateCommand:
         # Verify success but with warning
         assert result.exit_code == 0
         assert "DNS records created but not yet propagated" in result.output
-        assert "Site successfully deployed!" in result.output
+        assert "Successfully created: 1/1 domain(s)" in result.output
 
     @patch("mimeo.cli.Config.load")
     def test_create_config_error(self, mock_config_load: Any, runner: CliRunner) -> None:
@@ -212,7 +212,7 @@ class TestCreateCommand:
         mock_config: Config,
         mock_dns_records: List[DNSRecord],
     ) -> None:
-        """Test create command handles DNS configuration errors."""
+        """Test create command handles DNS configuration errors gracefully."""
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
@@ -228,9 +228,11 @@ class TestCreateCommand:
 
         result = runner.invoke(create, ["example.com"])
 
-        assert result.exit_code == 1
-        assert "DNS configuration error" in result.output
+        # DNS errors no longer fail the entire operation - site is deployed but DNS not configured
+        assert result.exit_code == 0
+        assert "DNS configuration failed" in result.output
         assert "Porkbun API failed" in result.output
+        assert "Site deployed but DNS not configured" in result.output
 
     @patch("mimeo.cli.Config.load")
     @patch("mimeo.cli.generate_minimal_site")

@@ -311,7 +311,7 @@ class TestGitHubHost:
                             url = host.deploy_site("example.com", content_path)
 
                             assert url == "https://example.com"
-                            mock_create.assert_called_once_with("example.com")
+                            mock_create.assert_called_once_with("example.com", org="testorg")
                             mock_push.assert_called_once_with(
                                 "testorg/example.com", content_path
                             )

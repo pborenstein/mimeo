@@ -1,7 +1,9 @@
 """Command-line interface for Mimeo."""
 
 import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from threading import Lock
 
 import click
 
@@ -12,8 +14,11 @@ from .exceptions import ConfigurationError, HostError, RegistrarError
 from .providers.host.github import GitHubHost
 from .providers.registrar.porkbun import PorkbunRegistrar
 
+# Lock for thread-safe console output
+_console_lock = Lock()
 
-def _process_single_domain(domain: str, cfg: Config, dry_run: bool) -> dict:
+
+def _process_single_domain(domain: str, cfg: Config, dry_run: bool, verbose: bool = True) -> dict:
     """Process a single domain creation.
 
     Args:
@@ -36,16 +41,19 @@ def _process_single_domain(domain: str, cfg: Config, dry_run: bool) -> dict:
     }
 
     def log(message: str, level: str = "info") -> None:
-        """Add to result log and print to console."""
+        """Add to result log and optionally print to console."""
         result["log"].append({"message": message, "level": level})
-        if level == "error":
-            click.secho(f"  ✗ {message}", fg="red")
-        elif level == "warning":
-            click.secho(f"  ⚠ {message}", fg="yellow")
-        elif level == "success":
-            click.secho(f"  ✓ {message}", fg="green")
-        else:
-            click.echo(f"  {message}")
+
+        # Only print to console in verbose mode (sequential/dry-run)
+        if verbose:
+            if level == "error":
+                click.secho(f"  ✗ {message}", fg="red")
+            elif level == "warning":
+                click.secho(f"  ⚠ {message}", fg="yellow")
+            elif level == "success":
+                click.secho(f"  ✓ {message}", fg="green")
+            else:
+                click.echo(f"  {message}")
 
     try:
         if dry_run:
@@ -167,7 +175,12 @@ def main() -> None:
     is_flag=True,
     help="Stop processing if any domain fails (default: continue with remaining domains)",
 )
-def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on_error: bool) -> None:
+@click.option(
+    "--sequential",
+    is_flag=True,
+    help="Process domains sequentially instead of concurrently",
+)
+def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on_error: bool, sequential: bool) -> None:
     """Create and deploy minimal landing pages for one or more domains.
 
     This command will:
@@ -176,10 +189,13 @@ def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on
     3. Configure DNS records
     4. Set up custom domain
 
+    Multiple domains are processed concurrently for faster provisioning.
+
     Examples:
         mimeo create example.com
         mimeo create site1.com site2.com site3.com
         mimeo create example.com --dry-run
+        mimeo create site1.com site2.com --sequential
     """
     # Load configuration once
     try:
@@ -196,21 +212,64 @@ def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on
     # Track results for summary
     results = []
 
-    # Process each domain
-    for idx, domain in enumerate(domains, 1):
-        if len(domains) > 1:
-            click.echo()
-            click.secho(f"[{idx}/{len(domains)}] Processing {domain}", fg="cyan", bold=True)
-            click.secho("=" * 60, fg="cyan")
+    # Process domains concurrently or sequentially
+    # Always use sequential mode for dry-run or single domain
+    if dry_run or sequential or len(domains) == 1:
+        # Sequential processing (verbose mode)
+        for idx, domain in enumerate(domains, 1):
+            if len(domains) > 1:
+                click.echo()
+                click.secho(f"[{idx}/{len(domains)}] Processing {domain}", fg="cyan", bold=True)
+                click.secho("=" * 60, fg="cyan")
 
-        result = _process_single_domain(domain, cfg, dry_run)
-        results.append(result)
+            result = _process_single_domain(domain, cfg, dry_run, verbose=True)
+            results.append(result)
 
-        # Stop on error if requested
-        if stop_on_error and not result["success"]:
-            click.echo()
-            click.secho(f"Stopping due to error with {domain}", fg="red")
-            break
+            # Stop on error if requested
+            if stop_on_error and not result["success"]:
+                click.echo()
+                click.secho(f"Stopping due to error with {domain}", fg="red")
+                break
+    else:
+        # Concurrent processing (non-verbose to avoid garbled output)
+        click.echo()
+        click.secho(f"Processing {len(domains)} domains concurrently...", fg="cyan", bold=True)
+        click.echo()
+
+        # Use ThreadPoolExecutor for concurrent processing
+        # Limit to 5 workers to avoid overwhelming APIs
+        with ThreadPoolExecutor(max_workers=min(len(domains), 5)) as executor:
+            # Submit all tasks
+            future_to_domain = {
+                executor.submit(_process_single_domain, domain, cfg, dry_run, verbose=False): domain
+                for domain in domains
+            }
+
+            # Process results as they complete
+            for future in as_completed(future_to_domain):
+                domain = future_to_domain[future]
+                try:
+                    result = future.result()
+                    results.append(result)
+
+                    # Show completion status
+                    if result["success"]:
+                        click.secho(f"✓ {domain} completed", fg="green")
+                    else:
+                        click.secho(f"✗ {domain} failed: {result.get('error', 'Unknown error')}", fg="red")
+
+                except Exception as e:
+                    # Should not happen as exceptions are caught in _process_single_domain
+                    click.secho(f"✗ {domain} failed unexpectedly: {e}", fg="red")
+                    results.append({
+                        "domain": domain,
+                        "success": False,
+                        "error": str(e),
+                    })
+
+        # Sort results by original domain order for consistent summary
+        domain_order = {domain: idx for idx, domain in enumerate(domains)}
+        results.sort(key=lambda r: domain_order.get(r["domain"], 999))
 
     # Print summary
     click.echo()

@@ -425,6 +425,82 @@ class TestCreateCommand:
         assert result.exit_code == 0
         mock_registrar_class.assert_called_with("pk1_test", "sk1_test")
 
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.generate_minimal_site")
+    @patch("mimeo.cli.GitHubHost")
+    @patch("mimeo.cli.PorkbunRegistrar")
+    def test_create_multiple_domains_concurrent(
+        self,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_generate: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+        mock_dns_records: List[DNSRecord],
+    ) -> None:
+        """Test create command with multiple domains processes concurrently."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.deploy_site.side_effect = lambda domain, _: f"https://{domain}"
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        mock_registrar = MagicMock()
+        mock_registrar.verify_dns.return_value = True
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar_class.return_value = mock_registrar
+        mock_registrar_class.github_pages_records.return_value = mock_dns_records
+
+        result = runner.invoke(create, ["site1.com", "site2.com", "site3.com"])
+
+        assert result.exit_code == 0
+        assert "Processing 3 domains concurrently" in result.output
+        assert "Successfully created: 3/3 domain(s)" in result.output
+        assert "site1.com" in result.output
+        assert "site2.com" in result.output
+        assert "site3.com" in result.output
+
+        # Verify all three domains were processed
+        assert mock_host.deploy_site.call_count == 3
+        assert mock_registrar.configure_dns.call_count == 3
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.generate_minimal_site")
+    @patch("mimeo.cli.GitHubHost")
+    @patch("mimeo.cli.PorkbunRegistrar")
+    def test_create_multiple_domains_sequential(
+        self,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_generate: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+        mock_dns_records: List[DNSRecord],
+    ) -> None:
+        """Test create command with --sequential flag."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.deploy_site.side_effect = lambda domain, _: f"https://{domain}"
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        mock_registrar = MagicMock()
+        mock_registrar.verify_dns.return_value = True
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar_class.return_value = mock_registrar
+        mock_registrar_class.github_pages_records.return_value = mock_dns_records
+
+        result = runner.invoke(create, ["site1.com", "site2.com", "--sequential"])
+
+        assert result.exit_code == 0
+        assert "Processing site1.com" in result.output
+        assert "Processing site2.com" in result.output
+        assert "Successfully created: 2/2 domain(s)" in result.output
+
 
 class TestListCommand:
     """Tests for list CLI command."""

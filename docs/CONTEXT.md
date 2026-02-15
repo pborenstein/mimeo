@@ -2,38 +2,37 @@
 phase: 5
 phase_name: CLI Integration
 updated: 2026-02-14
-last_commit: 311e70a
+last_commit: ea14163
 ---
 
 ## Current Focus
 
-Completed Phase 5! Implemented main CLI orchestration that wires together all the pieces (content generation, GitHub deployment, DNS configuration) into a single `mimeo create` command.
+Phase 5 complete! Fixed config format mismatch and added workflow/README generation. Successfully deployed pepito.lol end-to-end. Site is live with full GitHub Actions workflow.
 
 ## Active Tasks
 
-- [x] Implement main `create` CLI command
-- [x] Add progress indicators and error handling
-- [x] Add context manager support to GitHubHost
-- [x] Write 15 tests for CLI integration
-- [x] Verify all 132 tests pass
-- [ ] Manual end-to-end testing with real domain
-- [ ] Begin Phase 6: Polish and production readiness
+- [x] Fix config.toml format (match example file)
+- [x] Add workflow file generation (.github/workflows/static.yml)
+- [x] Add README.md generation
+- [x] Complete E2E test (pepito.lol deployed successfully)
+- [ ] Fix DNS record matching for Porkbun parking records
+- [ ] Document workflow scope requirement in setup docs
 
 ## Blockers
 
-None currently.
+None.
 
 ## Context
 
-- Main command: `mimeo create domain.com`
-- Orchestrates: content generation → GitHub deployment → DNS configuration
-- Progress indicators show each step with colored output
-- Error handling for ConfigurationError, HostError, RegistrarError
-- Uses temporary directory for content generation
-- Displays site URL and repository URL on success
-- 132 tests passing (Phase 1: 38, Phase 2: 38, Phase 3: 30, Phase 4: 11, Phase 5: 15)
-- Type checking and linting clean
+- Config uses [porkbun], [github], [defaults] (NOT [providers.X])
+- Content generates: index.html, README.md, .github/workflows/static.yml
+- GitHub Pages uses workflow build type (not legacy)
+- gh CLI needs workflow scope for pushing workflow files
+- DNS matching bug: apex records show as "domain.com" not ""
+- Porkbun adds default parking records (ALIAS/CNAME to pixie.porkbun.com)
+- 131 tests passing (removed fallback test)
+- E2E success: https://pepito.lol is live
 
 ## Next Session
 
-Phase 6: Polish and production readiness. Manual E2E testing, comprehensive README, better error messages, possibly rollback capability.
+Fix DNS record matching to auto-delete Porkbun parking records. Add config example and setup docs for workflow scope.

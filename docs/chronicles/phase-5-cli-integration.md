@@ -122,3 +122,27 @@ Implemented the main `mimeo create` command that orchestrates the complete site 
 - Production-ready documentation
 - Example config file template
 - Troubleshooting guide
+
+## Entry 6: Config Fix and E2E Success (2026-02-14)
+
+**What**: Fixed config format mismatch, added workflow/README generation, completed successful E2E deployment of pepito.lol.
+
+**Why**: Config code expected [providers.X] but example used [porkbun]/[github]. GitHub Pages needs workflow file for Actions deployment.
+
+**How**:
+- Updated config.py to read [porkbun], [github], [defaults] sections
+- Updated all tests to use new format
+- Added workflow file (.github/workflows/static.yml) generation to content.py
+- Added README.md generation to content.py
+- Removed GitHubHost fallback logic (workflow mode only)
+- Removed test for fallback (no longer needed)
+
+**Issues Found**:
+- DNS record matching bug: Porkbun returns apex as "domain.com" but we check for ""
+- Porkbun adds default parking records (ALIAS/CNAME to pixie.porkbun.com)
+- gh CLI needs workflow scope to push workflow files
+- DNS auto-cleanup doesn't work due to name mismatch
+
+**Files**: mimeo/config.py, mimeo/content.py, mimeo/providers/host/github.py, tests/test_config.py, tests/providers/host/test_github.py, config.toml.example
+
+**Result**: ✅ pepito.lol deployed and live at https://pepito.lol - full E2E success! 131 tests passing.

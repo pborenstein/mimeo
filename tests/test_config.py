@@ -17,15 +17,12 @@ def temp_config_file(tmp_path: Path) -> Path:
     config_file = config_dir / "config.toml"
     config_file.write_text(
         """
-[mimeo]
-workspace = "~/.mimeo/sites"
-
-[providers.porkbun]
+[porkbun]
 api_key = "pk1_test_key"
-api_secret = "sk1_test_secret"
+secret_key = "sk1_test_secret"
 
-[providers.github]
-username = "testuser"
+[github]
+default_org = "testuser"
 """
     )
     return config_file
@@ -39,12 +36,12 @@ def minimal_config_file(tmp_path: Path) -> Path:
     config_file = config_dir / "config.toml"
     config_file.write_text(
         """
-[providers.porkbun]
+[porkbun]
 api_key = "pk1_test"
-api_secret = "sk1_test"
+secret_key = "sk1_test"
 
-[providers.github]
-username = "testuser"
+[github]
+default_org = "testuser"
 """
     )
     return config_file

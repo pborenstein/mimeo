@@ -220,25 +220,6 @@ class TestGitHubHost:
             # Only one call to check if Pages exists
             assert mock_api.call_count == 1
 
-    def test_enable_github_pages_fallback(self, host: GitHubHost) -> None:
-        """Test enabling GitHub Pages with fallback when workflow not supported."""
-        with patch.object(host, "_gh_api") as mock_api:
-            # First call: check (not found)
-            # Second call: try with workflow (fails)
-            # Third call: retry without workflow (succeeds)
-            mock_api.side_effect = [
-                HostError("Not Found"),
-                HostError("build_type not supported"),
-                {"status": "built"},
-            ]
-
-            host._enable_github_pages("testorg/example.com")
-
-            assert mock_api.call_count == 3
-            # Verify fallback didn't include build_type
-            fallback_call = mock_api.call_args_list[2]
-            assert "build_type" not in fallback_call[1]["data"]
-
     def test_set_custom_domain(self, host: GitHubHost) -> None:
         """Test setting custom domain for GitHub Pages."""
         with patch.object(host, "_gh_api") as mock_api:

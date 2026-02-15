@@ -200,6 +200,41 @@ Architectural decisions for Mimeo. Search with `grep -i "keyword" docs/DECISIONS
 
 ---
 
+### DEC-012: Flat Config Structure (2026-02-14)
+
+**Status**: Active
+
+**Context**: Config file structure needed to be user-friendly and match documentation terminology. Initial implementation used nested `[providers.porkbun]` structure but config.toml.example used flat `[porkbun]`.
+
+**Decision**: Use flat config structure: `[porkbun]`, `[github]`, `[defaults]` (not `[providers.X]`).
+
+**Alternatives considered**:
+
+- Nested structure `[providers.porkbun]`: More hierarchical but doesn't match DNS provider documentation terminology
+- Support both formats: Unnecessary complexity
+
+**Consequences**: Config matches how Porkbun/GitHub documentation refers to these sections. Simpler for users to understand. Aligns config.toml.example with actual code expectations. Required updating all tests and config loading logic.
+
+---
+
+### DEC-013: Generate GitHub Actions Workflow (2026-02-14)
+
+**Status**: Active
+
+**Context**: GitHub Pages supports two deployment modes: legacy (branch-based) and workflow (GitHub Actions). Workflow mode is the modern approach and supports more customization.
+
+**Decision**: Generate `.github/workflows/static.yml` file as part of content generation. Use GitHub Actions workflow deployment for all sites.
+
+**Alternatives considered**:
+
+- Legacy branch-based deployment: Simpler but deprecated path
+- No workflow file: Would force users to manual setup
+- Template-based workflow: Over-engineered for simple static deployment
+
+**Consequences**: Sites deploy via GitHub Actions (modern, supported path). Requires `workflow` scope in gh CLI authentication. Generates standard workflow file copied from reference repo (mimeo.lol). Trade-off is slight complexity in content generation, but aligns with GitHub's recommended approach.
+
+---
+
 ## Superseded/Deprecated
 
 [No superseded decisions yet]

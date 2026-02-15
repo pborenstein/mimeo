@@ -225,7 +225,7 @@ class GitHubHost(Host):
             # Pages not enabled yet, continue to enable it
             pass
 
-        # Enable GitHub Pages with GitHub Actions as build source
+        # Enable GitHub Pages with GitHub Actions workflow deployment
         data = {
             "source": {
                 "branch": branch,
@@ -234,29 +234,11 @@ class GitHubHost(Host):
             "build_type": "workflow",
         }
 
-        try:
-            self._gh_api(
-                f"repos/{repo_full_name}/pages",
-                method="POST",
-                data=data,
-            )
-        except HostError as e:
-            # If it fails because of "workflow" build_type not being accepted yet,
-            # try with legacy build type
-            if "build_type" in str(e).lower() or "workflow" in str(e).lower():
-                data = {
-                    "source": {
-                        "branch": branch,
-                        "path": "/",
-                    },
-                }
-                self._gh_api(
-                    f"repos/{repo_full_name}/pages",
-                    method="POST",
-                    data=data,
-                )
-            else:
-                raise
+        self._gh_api(
+            f"repos/{repo_full_name}/pages",
+            method="POST",
+            data=data,
+        )
 
     def _set_custom_domain(self, repo_full_name: str, domain: str) -> None:
         """Set custom domain for GitHub Pages.

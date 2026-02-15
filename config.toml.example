@@ -36,13 +36,12 @@ secret_key = "sk1_your_secret_key_here"
 # GitHub Configuration
 # =============================================================================
 [github]
-# Personal Access Token from https://github.com/settings/tokens
-# Required scopes: repo, workflow (for GitHub Pages deployment)
-token = "ghp_your_personal_access_token_here"
+# GitHub username or organization for repository creation
+# Required - this is where repositories will be created
+default_org = "your-username-or-org"
 
-# Optional: Default GitHub organization/user for repository creation
-# If not specified, uses the authenticated user's account
-# default_org = "your-username-or-org"
+# Note: Authentication uses gh CLI (run 'gh auth login' first)
+# No personal access token needed in this file
 
 # Optional: Make repositories private by default
 # Default is false (public repositories)

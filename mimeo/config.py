@@ -50,12 +50,12 @@ class Config:
             raise ConfigurationError(f"Failed to parse config file {config_path}: {e}")
 
         # Extract configuration with environment variable overrides
-        mimeo_config = data.get("mimeo", {})
-        porkbun_config = data.get("providers", {}).get("porkbun", {})
-        github_config = data.get("providers", {}).get("github", {})
+        defaults_config = data.get("defaults", {})
+        porkbun_config = data.get("porkbun", {})
+        github_config = data.get("github", {})
 
         # Workspace directory
-        workspace_str = os.getenv("MIMEO_WORKSPACE") or mimeo_config.get("workspace")
+        workspace_str = os.getenv("MIMEO_WORKSPACE")
         if not workspace_str:
             workspace_str = "~/.mimeo/sites"
         workspace = Path(workspace_str).expanduser()
@@ -65,22 +65,22 @@ class Config:
             "api_key"
         )
         porkbun_secret = os.getenv("MIMEO_PORKBUN_SECRET") or porkbun_config.get(
-            "api_secret"
+            "secret_key"
         )
 
-        # GitHub username
+        # GitHub username (use default_org from config, or get from gh CLI)
         github_username = os.getenv("MIMEO_GITHUB_USERNAME") or github_config.get(
-            "username"
+            "default_org"
         )
 
         # Validate required credentials
         missing = []
         if not porkbun_api_key:
-            missing.append("Porkbun API key (providers.porkbun.api_key or MIMEO_PORKBUN_API_KEY)")
+            missing.append("Porkbun API key (porkbun.api_key or MIMEO_PORKBUN_API_KEY)")
         if not porkbun_secret:
-            missing.append("Porkbun API secret (providers.porkbun.api_secret or MIMEO_PORKBUN_SECRET)")
+            missing.append("Porkbun secret key (porkbun.secret_key or MIMEO_PORKBUN_SECRET)")
         if not github_username:
-            missing.append("GitHub username (providers.github.username or MIMEO_GITHUB_USERNAME)")
+            missing.append("GitHub username (github.default_org or MIMEO_GITHUB_USERNAME)")
 
         if missing:
             raise ConfigurationError(
@@ -92,6 +92,6 @@ class Config:
             porkbun_api_key=porkbun_api_key,
             porkbun_secret=porkbun_secret,
             github_username=github_username,
-            default_registrar=mimeo_config.get("default_registrar", "porkbun"),
-            default_host=mimeo_config.get("default_host", "github"),
+            default_registrar=defaults_config.get("registrar", "porkbun"),
+            default_host=defaults_config.get("host", "github"),
         )

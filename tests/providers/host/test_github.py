@@ -139,15 +139,17 @@ class TestGitHubHost:
         with patch.object(host, "_gh_api") as mock_api:
             # First call checks if repo exists (raises error = doesn't exist)
             # Second call creates the repo
+            # Third call sets topics
             mock_api.side_effect = [
                 HostError("Not Found"),
                 {"full_name": "testorg/example.com"},
+                {"names": ["mimeo", "landing-page", "github-pages"]},
             ]
 
             result = host._create_repository("example.com", org="testorg")
 
             assert result == "testorg/example.com"
-            assert mock_api.call_count == 2
+            assert mock_api.call_count == 3
 
     def test_create_repository_already_exists(self, host: GitHubHost) -> None:
         """Test creating a repository that already exists."""
@@ -169,6 +171,7 @@ class TestGitHubHost:
                 mock_api.side_effect = [
                     HostError("Not Found"),
                     {"full_name": "testuser/example.com"},
+                    {"names": ["mimeo", "landing-page", "github-pages"]},
                 ]
 
                 result = host._create_repository("example.com", org=None)
@@ -184,6 +187,7 @@ class TestGitHubHost:
             mock_api.side_effect = [
                 HostError("Not Found"),
                 {"full_name": "testorg/example.com"},
+                {"names": ["mimeo", "landing-page", "github-pages"]},
             ]
 
             host._create_repository("example.com", org="testorg", private=True)
@@ -406,3 +410,34 @@ class TestGitHubHost:
                 host._enable_https_enforcement("testorg/example.com")
 
             assert "Some other error" in str(exc_info.value)
+
+    def test_set_repository_topics(self, host: GitHubHost) -> None:
+        """Test setting repository topics."""
+        with patch.object(host, "_gh_api") as mock_api:
+            topics = ["mimeo", "landing-page", "github-pages"]
+            host._set_repository_topics("testorg/example.com", topics)
+
+            mock_api.assert_called_once_with(
+                "repos/testorg/example.com/topics",
+                method="PUT",
+                data={"names": topics},
+            )
+
+    def test_create_repository_sets_topics(self, host: GitHubHost) -> None:
+        """Test that creating a repository automatically sets mimeo topics."""
+        with patch.object(host, "_gh_api") as mock_api:
+            with patch.object(host, "_set_repository_topics") as mock_topics:
+                # First call checks if repo exists (raises HostError)
+                # Second call creates the repo
+                mock_api.side_effect = [
+                    HostError("Not found"),
+                    {"full_name": "testorg/test-repo"},
+                ]
+
+                result = host._create_repository("test-repo")
+
+                assert result == "testorg/test-repo"
+                mock_topics.assert_called_once_with(
+                    "testorg/test-repo",
+                    ["mimeo", "landing-page", "github-pages"],
+                )

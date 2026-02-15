@@ -200,7 +200,30 @@ class GitHubHost(Host):
         if not full_name:
             raise HostError("Repository created but full_name not in response")
 
+        # Add topics to mark this as a mimeo-managed repository
+        self._set_repository_topics(str(full_name), ["mimeo", "landing-page", "github-pages"])
+
         return str(full_name)
+
+    def _set_repository_topics(self, repo_full_name: str, topics: list[str]) -> None:
+        """Set topics (tags) for a repository.
+
+        Args:
+            repo_full_name: Full repository name (owner/repo)
+            topics: List of topic strings (lowercase, no spaces)
+
+        Raises:
+            HostError: If setting topics fails
+        """
+        data = {
+            "names": topics,
+        }
+
+        self._gh_api(
+            f"repos/{repo_full_name}/topics",
+            method="PUT",
+            data=data,
+        )
 
     def _enable_github_pages(
         self,

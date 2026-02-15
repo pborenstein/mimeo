@@ -2,7 +2,7 @@
 
 Living document tracking progress on the domain landing page provisioning tool.
 
-**Last updated**: 2026-02-14
+**Last updated**: 2026-02-15
 
 ---
 
@@ -77,7 +77,13 @@ Living document tracking progress on the domain landing page provisioning tool.
 - [x] Write 15 tests for CLI integration
 - [x] Verify all 132 tests pass
 - [x] Type checking and linting clean
-- [ ] Manual end-to-end testing with real domain
+- [x] Manual end-to-end testing with real domain (pepito.lol deployed)
+- [x] Fix DNS record matching for Porkbun API responses (apex/subdomain normalization)
+- [x] Handle ALIAS/A record conflicts automatically
+- [x] Add HTTPS enforcement on GitHub Pages (when cert ready)
+- [x] Add 8 new tests for DNS normalization and HTTPS enforcement
+- [x] Verify all 139 tests pass
+- [x] E2E testing with mellowtimesphere.com (successful deployment)
 
 **Success Criteria**: ✅ All criteria met
 
@@ -85,10 +91,13 @@ Living document tracking progress on the domain landing page provisioning tool.
 - Progress indicators show each step (loading config, generating content, deploying, configuring DNS)
 - Error handling for configuration, deployment, and DNS errors
 - Success message displays site URL and repository URL
-- 132 tests passing (Phase 1: 38, Phase 2: 38, Phase 3: 30, Phase 4: 11, Phase 5: 15)
+- 139 tests passing (includes DNS normalization and HTTPS enforcement tests)
 - Type checking and linting clean
+- DNS record matching works with Porkbun's actual API format
+- HTTPS enforcement enabled automatically when certificate ready
+- Multiple successful E2E deployments verified
 
-**Next Steps**: Phase 6 - Polish, documentation, and production readiness.
+**Next Steps**: Documentation improvements, configuration options for HTTPS enforcement.
 
 ---
 

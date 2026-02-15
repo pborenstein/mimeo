@@ -146,3 +146,21 @@ Implemented the main `mimeo create` command that orchestrates the complete site 
 **Files**: mimeo/config.py, mimeo/content.py, mimeo/providers/host/github.py, tests/test_config.py, tests/providers/host/test_github.py, config.toml.example
 
 **Result**: ✅ pepito.lol deployed and live at https://pepito.lol - full E2E success! 131 tests passing.
+
+## Entry 7: DNS Fix and HTTPS Enforcement (2026-02-15)
+
+**What**: Fixed DNS record matching bug and added automatic HTTPS enforcement during deployment.
+
+**Why**: Porkbun API returns apex records as full domain names instead of empty strings, preventing parking record cleanup. HTTPS enforcement improves security for deployed sites.
+
+**How**:
+- Added _normalize_record_name() to handle apex ("domain.com" → "") and subdomain ("www.domain.com" → "www") normalization
+- Updated configure_dns() to normalize both existing and managed record names before comparison
+- Added ALIAS/A conflict handling (Porkbun doesn't allow both at same location)
+- Added _enable_https_enforcement() to GitHubHost with graceful handling when cert not ready
+- Updated CLI to show message when HTTPS can't be enabled immediately
+- Added 8 new tests (5 DNS, 3 HTTPS)
+
+**Files**: Commits 211c0a3 (DNS fix), 8644527 (HTTPS enforcement)
+
+**Result**: ✅ mellowtimesphere.com deployed successfully with parking records auto-deleted. HTTPS enforcement works on sites with certificates. 139 tests passing.

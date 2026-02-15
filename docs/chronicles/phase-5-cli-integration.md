@@ -164,3 +164,21 @@ Implemented the main `mimeo create` command that orchestrates the complete site 
 **Files**: Commits 211c0a3 (DNS fix), 8644527 (HTTPS enforcement)
 
 **Result**: ✅ mellowtimesphere.com deployed successfully with parking records auto-deleted. HTTPS enforcement works on sites with certificates. 139 tests passing.
+
+## Entry 8: Repository Topics and List Command (2026-02-15)
+
+**What**: Added automatic repository tagging with topics and a CLI command to list all managed sites.
+
+**Why**: Need a way to identify and discover mimeo-managed sites. GitHub topics enable filtering and the list command provides a convenient CLI interface.
+
+**How**:
+- Added _set_repository_topics() to GitHubHost for setting topics via API
+- Updated _create_repository() to auto-tag repos with 'mimeo', 'landing-page', 'github-pages'
+- Added list_mimeo_repositories() that searches GitHub for topic:mimeo
+- Implemented 'mimeo list' CLI command with formatted output (repo URL, site URL, update date)
+- Fixed dark mode visibility with dim white text for dates
+- Added 5 new tests (2 GitHubHost, 3 CLI)
+
+**Files**: Commits febd67b (topics), 8a9e04e (list command), eb0d38b (color fix)
+
+**Result**: ✅ All mimeo sites now tagged automatically. 'mimeo list' command shows managed sites with clean formatted output. 145 tests passing.

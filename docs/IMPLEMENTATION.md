@@ -84,20 +84,27 @@ Living document tracking progress on the domain landing page provisioning tool.
 - [x] Add 8 new tests for DNS normalization and HTTPS enforcement
 - [x] Verify all 139 tests pass
 - [x] E2E testing with mellowtimesphere.com (successful deployment)
+- [x] Add repository topics to mark mimeo-managed sites
+- [x] Add 'mimeo list' command to show all managed sites
+- [x] Add 5 new tests for topics and list command
+- [x] Verify all 145 tests pass
+- [x] Multiple successful deployments (pepito.lol, mellowtimesphere.com, laminar.rodeo)
 
 **Success Criteria**: ✅ All criteria met
 
 - CLI command `mimeo create domain.com` orchestrates full deployment
+- CLI command `mimeo list` shows all mimeo-managed sites
 - Progress indicators show each step (loading config, generating content, deploying, configuring DNS)
 - Error handling for configuration, deployment, and DNS errors
 - Success message displays site URL and repository URL
-- 139 tests passing (includes DNS normalization and HTTPS enforcement tests)
+- 145 tests passing (includes DNS, HTTPS, topics, and list command tests)
 - Type checking and linting clean
 - DNS record matching works with Porkbun's actual API format
 - HTTPS enforcement enabled automatically when certificate ready
+- Repository topics enable easy discovery of managed sites
 - Multiple successful E2E deployments verified
 
-**Next Steps**: Documentation improvements, configuration options for HTTPS enforcement.
+**Next Steps**: Documentation improvements, configuration options for HTTPS enforcement, setup guide for global CLI installation.
 
 ---
 

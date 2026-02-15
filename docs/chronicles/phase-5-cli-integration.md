@@ -199,3 +199,26 @@ Implemented the main `mimeo create` command that orchestrates the complete site 
 **Files**: mimeo/providers/host/github.py (1 line changed)
 
 **Result**: ✅ Repositories now created in configured organization. Verified with xhosi.dev deployment.
+
+## Entry 10: Multi-Domain Support with Concurrent Processing (2026-02-15)
+
+**What**: Enhanced create command to accept multiple domains and process them concurrently for faster provisioning.
+
+**Why**: User wanted to create multiple sites without reloading config each time. Sequential processing would be slow (30s per site × N sites). Concurrent processing provides ~3x speedup.
+
+**How**:
+- Changed create command to accept multiple domains: `DOMAINS...` with `nargs=-1`
+- Added --dry-run flag to preview operations without execution
+- Added --stop-on-error flag (default: continue processing all domains)
+- Added --sequential flag for one-at-a-time processing with detailed logs
+- Implemented ThreadPoolExecutor with max 5 workers to avoid overwhelming APIs
+- Show "→ domain started" as work begins, "✓ domain completed" when done
+- Comprehensive summary shows success/failure count and per-domain status
+- DNS failures no longer abort deployment (site still accessible via github.io)
+- Detailed operation logging stored in result dict, selectively displayed based on mode
+
+**Decisions**: Concurrent by default for speed, sequential available for debugging. Dry-run always sequential to show detailed logs.
+
+**Files**: Commits c3e9300 (multi-domain), e76f65e (concurrent), 3961ef3 (start feedback)
+
+**Result**: ✅ Can now create multiple sites in one command. Concurrent mode ~3x faster. 147 tests passing (added 2 new tests).

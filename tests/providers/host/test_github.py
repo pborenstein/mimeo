@@ -441,3 +441,18 @@ class TestGitHubHost:
                     "testorg/test-repo",
                     ["mimeo", "landing-page", "github-pages"],
                 )
+
+    def test_list_mimeo_repositories(self, host: GitHubHost) -> None:
+        """Test listing mimeo-managed repositories."""
+        with patch.object(host, "_run_gh_command") as mock_gh:
+            mock_gh.return_value = '[{"name":"example.com","url":"https://github.com/testorg/example.com","homepage":"https://example.com","updatedAt":"2026-02-15"}]'
+
+            repos = host.list_mimeo_repositories()
+
+            assert len(repos) == 1
+            assert repos[0]["name"] == "example.com"
+            mock_gh.assert_called_once()
+            call_args = mock_gh.call_args[0][0]
+            assert "search" in call_args
+            assert "repos" in call_args
+            assert "topic:mimeo" in call_args

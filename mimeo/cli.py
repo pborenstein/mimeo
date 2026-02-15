@@ -112,5 +112,61 @@ def create(domain: str, config: Path | None) -> None:
         raise click.Abort()
 
 
+@main.command()
+@click.option(
+    "--config",
+    type=click.Path(exists=True, path_type=Path),
+    help="Path to config file (default: ~/.config/mimeo/config.toml)",
+)
+def list(config: Path | None) -> None:
+    """List all mimeo-managed sites.
+
+    Shows repositories tagged with the 'mimeo' topic.
+
+    Example:
+        mimeo list
+    """
+    try:
+        # Load configuration
+        cfg = Config.load(config)
+
+        # Get mimeo-tagged repositories from GitHub
+        with GitHubHost(default_org=cfg.github_username) as host:
+            repos = host.list_mimeo_repositories()
+
+        if not repos:
+            click.echo("No mimeo-managed sites found.")
+            click.echo()
+            click.echo("Create your first site with: mimeo create example.com")
+            return
+
+        # Display results
+        click.echo()
+        click.secho(f"Mimeo-managed sites ({len(repos)}):", bold=True)
+        click.echo()
+
+        for repo in repos:
+            name = repo.get("name", "")
+            url = repo.get("url", "")
+            pages_url = repo.get("homepage") or f"https://{name}"
+            updated = repo.get("updatedAt", "")[:10]  # Just the date part
+
+            click.secho(f"  • {name}", fg="cyan", bold=True)
+            click.echo(f"    Repository: {url}")
+            click.echo(f"    Site: {pages_url}")
+            click.secho(f"    Updated: {updated}", fg="bright_black")
+            click.echo()
+
+    except ConfigurationError as e:
+        click.secho(f"Configuration error: {e}", fg="red", err=True)
+        raise click.Abort()
+    except HostError as e:
+        click.secho(f"Error: {e}", fg="red", err=True)
+        raise click.Abort()
+    except Exception as e:
+        click.secho(f"Unexpected error: {e}", fg="red", err=True)
+        raise click.Abort()
+
+
 if __name__ == "__main__":
     main()

@@ -476,6 +476,32 @@ class GitHubHost(Host):
                 raise
             raise HostError(f"Failed to deploy site for {domain}: {e}") from e
 
+    def list_mimeo_repositories(self) -> list[Dict[str, Any]]:
+        """List all repositories tagged with the 'mimeo' topic.
+
+        Returns:
+            List of repository data dictionaries
+
+        Raises:
+            HostError: If listing repositories fails
+        """
+        owner = self.default_org or self._get_authenticated_user()
+
+        # Use GitHub search API to find repos with mimeo topic
+        try:
+            result = self._run_gh_command([
+                "search", "repos",
+                f"user:{owner}",
+                "topic:mimeo",
+                "--json", "name,url,homepage,updatedAt",
+                "--jq", ".",
+            ])
+            import json
+            repos: list[Dict[str, Any]] = json.loads(result)
+            return repos
+        except Exception as e:
+            raise HostError(f"Failed to list mimeo repositories: {e}") from e
+
     def configure_custom_domain(self, domain: str) -> None:
         """Configure custom domain in GitHub Pages settings.
 

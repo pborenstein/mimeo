@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
-from mimeo.cli import create, main
+from mimeo.cli import create, list, main
 from mimeo.config import Config
 from mimeo.exceptions import ConfigurationError, HostError, RegistrarError
 from mimeo.models import DNSRecord
@@ -422,3 +422,83 @@ class TestCreateCommand:
 
         assert result.exit_code == 0
         mock_registrar_class.assert_called_with("pk1_test", "sk1_test")
+
+
+class TestListCommand:
+    """Tests for list CLI command."""
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.GitHubHost")
+    def test_list_shows_repositories(
+        self,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """Test list command shows mimeo repositories."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.list_mimeo_repositories.return_value = [
+            {
+                "name": "example.com",
+                "url": "https://github.com/testuser/example.com",
+                "homepage": "https://example.com",
+                "updatedAt": "2026-02-15T12:00:00Z",
+            },
+            {
+                "name": "test.com",
+                "url": "https://github.com/testuser/test.com",
+                "homepage": None,
+                "updatedAt": "2026-02-14T10:00:00Z",
+            },
+        ]
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        result = runner.invoke(list, [])
+
+        assert result.exit_code == 0
+        assert "Mimeo-managed sites (2)" in result.output
+        assert "example.com" in result.output
+        assert "test.com" in result.output
+        assert "https://github.com/testuser/example.com" in result.output
+        assert "https://example.com" in result.output
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.GitHubHost")
+    def test_list_no_repositories(
+        self,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """Test list command when no repositories exist."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.list_mimeo_repositories.return_value = []
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        result = runner.invoke(list, [])
+
+        assert result.exit_code == 0
+        assert "No mimeo-managed sites found" in result.output
+        assert "mimeo create example.com" in result.output
+
+    @patch("mimeo.cli.Config.load")
+    def test_list_config_error(
+        self,
+        mock_config_load: Any,
+        runner: CliRunner,
+    ) -> None:
+        """Test list command with configuration error."""
+        mock_config_load.side_effect = ConfigurationError("Config not found")
+
+        result = runner.invoke(list, [])
+
+        assert result.exit_code == 1
+        assert "Configuration error" in result.output

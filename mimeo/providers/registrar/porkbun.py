@@ -143,6 +143,34 @@ class PorkbunRegistrar(Registrar):
             payload,
         )
 
+    def _normalize_record_name(self, name: str, domain: str) -> str:
+        """Normalize record name for comparison.
+
+        Porkbun API can return:
+        - Apex records as "" or the full domain name
+        - Subdomains as "www" or "www.domain.com"
+
+        We normalize to our internal representation (empty string for apex,
+        subdomain part only for subdomains).
+
+        Args:
+            name: Record name from API or internal representation
+            domain: Domain name
+
+        Returns:
+            Normalized name (empty string for apex, subdomain only otherwise)
+        """
+        # Apex records can be represented as "", "@", or the full domain
+        if name in ("", "@", domain):
+            return ""
+
+        # If the name ends with the domain, strip it off
+        # e.g., "www.example.com" -> "www"
+        if name.endswith(f".{domain}"):
+            return name[: -len(domain) - 1]
+
+        return name
+
     def configure_dns(self, domain: str, records: List[DNSRecord]) -> None:
         """Configure DNS records for a domain.
 
@@ -163,7 +191,11 @@ class PorkbunRegistrar(Registrar):
             existing_records = self._get_domain_records(domain)
 
             # Build set of (type, name) tuples we want to manage
-            managed_records = {(r.type, r.name) for r in records}
+            # Normalize names for consistent comparison
+            managed_records = {
+                (r.type, self._normalize_record_name(r.name, domain))
+                for r in records
+            }
 
             # Delete conflicting existing records
             for existing in existing_records:
@@ -171,8 +203,19 @@ class PorkbunRegistrar(Registrar):
                 record_name = existing.get("name", "")
                 record_id = existing.get("id", "")
 
+                # Normalize the existing record name for comparison
+                normalized_name = self._normalize_record_name(record_name, domain)
+
                 # Delete if this record type/name combination is in our managed set
-                if (record_type, record_name) in managed_records:
+                if (record_type, normalized_name) in managed_records:
+                    self._delete_record(domain, record_id)
+                # Also delete ALIAS records at apex when creating A records
+                # (Porkbun doesn't allow both at the same location)
+                elif (
+                    record_type == "ALIAS"
+                    and normalized_name == ""
+                    and ("A", "") in managed_records
+                ):
                     self._delete_record(domain, record_id)
 
             # Create new records

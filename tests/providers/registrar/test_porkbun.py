@@ -383,3 +383,201 @@ class TestPorkbunRegistrar:
             registrar.configure_dns("example.com", [record])
 
         assert "Domain not found" in str(exc_info.value)
+
+    @responses.activate
+    def test_configure_dns_apex_with_full_domain_name(
+        self, registrar: PorkbunRegistrar
+    ) -> None:
+        """Test that apex records are matched when API returns full domain name.
+
+        Porkbun API returns apex records with name="domain.com" instead of "".
+        This test verifies that we normalize both representations for matching.
+        Also tests that ALIAS records are deleted when creating A records.
+        """
+        # Mock retrieving existing records with full domain name for apex
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/retrieve/example.com",
+            json={
+                "status": "SUCCESS",
+                "records": [
+                    {
+                        "id": "123",
+                        "type": "A",
+                        "name": "example.com",  # Full domain, not ""
+                        "content": "5.6.7.8",
+                    },
+                    {
+                        "id": "124",
+                        "type": "ALIAS",
+                        "name": "example.com",  # Parking record
+                        "content": "pixie.porkbun.com",
+                    },
+                ],
+            },
+            status=200,
+        )
+
+        # Mock deleting both old records
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/delete/example.com/123",
+            json={"status": "SUCCESS"},
+            status=200,
+        )
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/delete/example.com/124",
+            json={"status": "SUCCESS"},
+            status=200,
+        )
+
+        # Mock creating new A record
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/create/example.com",
+            json={"status": "SUCCESS", "id": "456"},
+            status=200,
+        )
+
+        # Configure with apex A record (using "" as name)
+        record = DNSRecord(type="A", name="", content="1.2.3.4", ttl=600)
+        registrar.configure_dns("example.com", [record])
+
+        # Verify: 1 retrieve + 2 deletes (A + ALIAS) + 1 create = 4 total
+        assert len(responses.calls) == 4
+
+    @responses.activate
+    def test_configure_dns_deletes_parking_records(
+        self, registrar: PorkbunRegistrar
+    ) -> None:
+        """Test that Porkbun parking records are deleted when deploying.
+
+        Porkbun adds ALIAS/CNAME parking records pointing to pixie.porkbun.com.
+        When we configure apex A records and www CNAME, both parking records
+        are deleted (ALIAS conflicts with A records at apex).
+        """
+        # Mock retrieving existing parking records
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/retrieve/example.com",
+            json={
+                "status": "SUCCESS",
+                "records": [
+                    {
+                        "id": "parking-1",
+                        "type": "ALIAS",
+                        "name": "example.com",  # Apex parking - conflicts with A
+                        "content": "pixie.porkbun.com",
+                    },
+                    {
+                        "id": "parking-2",
+                        "type": "CNAME",
+                        "name": "www.example.com",  # www parking - matches
+                        "content": "pixie.porkbun.com",
+                    },
+                ],
+            },
+            status=200,
+        )
+
+        # Mock deleting both parking records
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/delete/example.com/parking-1",
+            json={"status": "SUCCESS"},
+            status=200,
+        )
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/delete/example.com/parking-2",
+            json={"status": "SUCCESS"},
+            status=200,
+        )
+
+        # Mock creating new records (4 A + 1 CNAME)
+        for _ in range(5):
+            responses.add(
+                responses.POST,
+                "https://api-ipv4.porkbun.com/api/json/v3/dns/create/example.com",
+                json={"status": "SUCCESS", "id": "new-record"},
+                status=200,
+            )
+
+        # Configure GitHub Pages records
+        records = PorkbunRegistrar.github_pages_records("example.com", "testuser")
+        registrar.configure_dns("example.com", records)
+
+        # Verify: 1 retrieve + 2 deletes (ALIAS + CNAME) + 5 creates = 8 total
+        assert len(responses.calls) == 8
+
+    def test_normalize_record_name_apex(self, registrar: PorkbunRegistrar) -> None:
+        """Test normalizing apex record names."""
+        domain = "example.com"
+
+        # All these should normalize to empty string
+        assert registrar._normalize_record_name("", domain) == ""
+        assert registrar._normalize_record_name("@", domain) == ""
+        assert registrar._normalize_record_name("example.com", domain) == ""
+
+    def test_normalize_record_name_subdomain(self, registrar: PorkbunRegistrar) -> None:
+        """Test normalizing subdomain record names."""
+        domain = "example.com"
+
+        # Short form subdomains should remain unchanged
+        assert registrar._normalize_record_name("www", domain) == "www"
+        assert registrar._normalize_record_name("api", domain) == "api"
+
+        # Fully qualified subdomains should be normalized to short form
+        assert registrar._normalize_record_name("www.example.com", domain) == "www"
+        assert registrar._normalize_record_name("api.example.com", domain) == "api"
+
+    @responses.activate
+    def test_configure_dns_deletes_alias_when_creating_a_records(
+        self, registrar: PorkbunRegistrar
+    ) -> None:
+        """Test that ALIAS records at apex are deleted when creating A records.
+
+        Porkbun doesn't allow ALIAS and A records at the same location.
+        Even though they have different types, ALIAS must be deleted.
+        """
+        # Mock retrieving existing ALIAS record
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/retrieve/example.com",
+            json={
+                "status": "SUCCESS",
+                "records": [
+                    {
+                        "id": "alias-123",
+                        "type": "ALIAS",
+                        "name": "example.com",
+                        "content": "uixie.porkbun.com",
+                    },
+                ],
+            },
+            status=200,
+        )
+
+        # Mock deleting ALIAS record
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/delete/example.com/alias-123",
+            json={"status": "SUCCESS"},
+            status=200,
+        )
+
+        # Mock creating A record
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/create/example.com",
+            json={"status": "SUCCESS", "id": "a-456"},
+            status=200,
+        )
+
+        # Configure with A record at apex
+        record = DNSRecord(type="A", name="", content="1.2.3.4", ttl=600)
+        registrar.configure_dns("example.com", [record])
+
+        # Verify: 1 retrieve + 1 delete (ALIAS) + 1 create (A) = 3 total
+        assert len(responses.calls) == 3

@@ -58,6 +58,13 @@ def create(domain: str, config: Path | None) -> None:
                 site_url = host.deploy_site(domain, content_path)
                 click.secho(f"✓ Deployed to {site_url}", fg="green")
 
+                # Check if HTTPS enforcement was enabled
+                if hasattr(host, '_https_enabled') and not host._https_enabled:
+                    click.secho(
+                        "  Note: HTTPS enforcement will be enabled once GitHub provisions an SSL certificate",
+                        fg="yellow"
+                    )
+
             # Configure DNS
             click.echo("Configuring DNS records...")
             dns_records = PorkbunRegistrar.github_pages_records(

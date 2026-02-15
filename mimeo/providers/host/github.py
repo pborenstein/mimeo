@@ -260,6 +260,39 @@ class GitHubHost(Host):
             data=data,
         )
 
+    def _enable_https_enforcement(self, repo_full_name: str) -> bool:
+        """Enable HTTPS enforcement for GitHub Pages.
+
+        This can only be enabled after GitHub provisions an SSL certificate
+        for the custom domain, which typically takes a few minutes.
+
+        Args:
+            repo_full_name: Full repository name (owner/repo)
+
+        Returns:
+            True if HTTPS enforcement was enabled, False if certificate not ready
+
+        Raises:
+            HostError: If API call fails for reasons other than missing certificate
+        """
+        data = {
+            "https_enforced": True,
+        }
+
+        try:
+            self._gh_api(
+                f"repos/{repo_full_name}/pages",
+                method="PUT",
+                data=data,
+            )
+            return True
+        except HostError as e:
+            # Certificate not ready yet - this is expected for new sites
+            if "certificate does not exist" in str(e).lower():
+                return False
+            # Other errors should be raised
+            raise
+
     def _init_and_push_repository(
         self,
         repo_full_name: str,
@@ -374,6 +407,7 @@ class GitHubHost(Host):
         3. Push content to GitHub
         4. Enable GitHub Pages
         5. Configure custom domain
+        6. Enable HTTPS enforcement (if certificate is ready)
 
         Args:
             domain: Domain name for the site
@@ -407,6 +441,10 @@ class GitHubHost(Host):
 
             # Configure custom domain
             self._set_custom_domain(repo_full_name, domain)
+
+            # Try to enable HTTPS enforcement
+            # This will fail if certificate isn't ready yet (expected for new sites)
+            self._https_enabled = self._enable_https_enforcement(repo_full_name)
 
             return f"https://{domain}"
 

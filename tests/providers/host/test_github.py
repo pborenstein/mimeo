@@ -375,3 +375,34 @@ class TestGitHubHost:
                 host.configure_custom_domain("example.com")
 
             assert "failed to configure" in str(exc_info.value).lower()
+
+    def test_enable_https_enforcement_success(self, host: GitHubHost) -> None:
+        """Test enabling HTTPS enforcement when certificate is ready."""
+        with patch.object(host, "_gh_api") as mock_api:
+            result = host._enable_https_enforcement("testorg/example.com")
+
+            assert result is True
+            mock_api.assert_called_once_with(
+                "repos/testorg/example.com/pages",
+                method="PUT",
+                data={"https_enforced": True},
+            )
+
+    def test_enable_https_enforcement_certificate_not_ready(self, host: GitHubHost) -> None:
+        """Test enabling HTTPS enforcement when certificate is not ready."""
+        with patch.object(host, "_gh_api") as mock_api:
+            mock_api.side_effect = HostError("The certificate does not exist yet")
+
+            result = host._enable_https_enforcement("testorg/example.com")
+
+            assert result is False
+
+    def test_enable_https_enforcement_other_error(self, host: GitHubHost) -> None:
+        """Test that other errors during HTTPS enforcement are raised."""
+        with patch.object(host, "_gh_api") as mock_api:
+            mock_api.side_effect = HostError("Some other error")
+
+            with pytest.raises(HostError) as exc_info:
+                host._enable_https_enforcement("testorg/example.com")
+
+            assert "Some other error" in str(exc_info.value)

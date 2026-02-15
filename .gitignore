@@ -58,3 +58,6 @@ config.toml
 
 # Logs
 *.log
+
+# Data directory
+data/

@@ -233,17 +233,18 @@ def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on
     else:
         # Concurrent processing (non-verbose to avoid garbled output)
         click.echo()
-        click.secho(f"Processing {len(domains)} domains concurrently...", fg="cyan", bold=True)
-        click.echo()
 
         # Use ThreadPoolExecutor for concurrent processing
         # Limit to 5 workers to avoid overwhelming APIs
         with ThreadPoolExecutor(max_workers=min(len(domains), 5)) as executor:
-            # Submit all tasks
-            future_to_domain = {
-                executor.submit(_process_single_domain, domain, cfg, dry_run, verbose=False): domain
-                for domain in domains
-            }
+            # Submit all tasks and show as they start
+            future_to_domain = {}
+            for domain in domains:
+                future = executor.submit(_process_single_domain, domain, cfg, dry_run, verbose=False)
+                future_to_domain[future] = domain
+                click.secho(f"→ {domain} started", fg="cyan")
+
+            click.echo()
 
             # Process results as they complete
             for future in as_completed(future_to_domain):

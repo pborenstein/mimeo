@@ -456,11 +456,15 @@ class TestCreateCommand:
         result = runner.invoke(create, ["site1.com", "site2.com", "site3.com"])
 
         assert result.exit_code == 0
-        assert "Processing 3 domains concurrently" in result.output
+        # Check for start messages
+        assert "site1.com started" in result.output
+        assert "site2.com started" in result.output
+        assert "site3.com started" in result.output
+        # Check for completion messages
+        assert "site1.com completed" in result.output
+        assert "site2.com completed" in result.output
+        assert "site3.com completed" in result.output
         assert "Successfully created: 3/3 domain(s)" in result.output
-        assert "site1.com" in result.output
-        assert "site2.com" in result.output
-        assert "site3.com" in result.output
 
         # Verify all three domains were processed
         assert mock_host.deploy_site.call_count == 3

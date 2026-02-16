@@ -493,6 +493,7 @@ class GitHubHost(Host):
                 "search", "repos",
                 f"user:{owner}",
                 "topic:mimeo",
+                "--limit", "1000",  # Maximum allowed by GitHub search API
                 "--json", "name,url,homepage,updatedAt",
                 "--jq", ".",
             ])

@@ -456,3 +456,5 @@ class TestGitHubHost:
             assert "search" in call_args
             assert "repos" in call_args
             assert "topic:mimeo" in call_args
+            assert "--limit" in call_args
+            assert "1000" in call_args

@@ -1,5 +1,8 @@
 """Command-line interface for Mimeo."""
 
+import csv
+import json
+import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -316,13 +319,21 @@ def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on
     type=click.Path(exists=True, path_type=Path),
     help="Path to config file (default: ~/.config/mimeo/config.toml)",
 )
-def list(config: Path | None) -> None:
+@click.option(
+    "--format",
+    type=click.Choice(["text", "json", "csv"], case_sensitive=False),
+    default="text",
+    help="Output format (default: text)",
+)
+def list(config: Path | None, format: str) -> None:
     """List all mimeo-managed sites.
 
     Shows repositories tagged with the 'mimeo' topic.
 
-    Example:
+    Examples:
         mimeo list
+        mimeo list --format json
+        mimeo list --format csv
     """
     try:
         # Load configuration
@@ -333,27 +344,58 @@ def list(config: Path | None) -> None:
             repos = host.list_mimeo_repositories()
 
         if not repos:
-            click.echo("No mimeo-managed sites found.")
-            click.echo()
-            click.echo("Create your first site with: mimeo create example.com")
+            if format == "json":
+                click.echo("[]")
+            elif format == "csv":
+                # Still output CSV header even if empty
+                writer = csv.DictWriter(
+                    sys.stdout,
+                    fieldnames=["name", "repository", "site", "updated"],
+                )
+                writer.writeheader()
+            else:
+                click.echo("No mimeo-managed sites found.")
+                click.echo()
+                click.echo("Create your first site with: mimeo create example.com")
             return
 
-        # Display results
-        click.echo()
-        click.secho(f"Mimeo-managed sites ({len(repos)}):", bold=True)
-        click.echo()
-
+        # Normalize repository data
+        normalized_repos = []
         for repo in repos:
             name = repo.get("name", "")
             url = repo.get("url", "")
             pages_url = repo.get("homepage") or f"https://{name}"
             updated = repo.get("updatedAt", "")[:10]  # Just the date part
 
-            click.secho(f"  • {name}", fg="cyan", bold=True)
-            click.echo(f"    Repository: {url}")
-            click.echo(f"    Site: {pages_url}")
-            click.secho(f"    Updated: {updated}", fg="white", dim=True)
+            normalized_repos.append({
+                "name": name,
+                "repository": url,
+                "site": pages_url,
+                "updated": updated,
+            })
+
+        # Display results based on format
+        if format == "json":
+            click.echo(json.dumps(normalized_repos, indent=2))
+        elif format == "csv":
+            writer = csv.DictWriter(
+                sys.stdout,
+                fieldnames=["name", "repository", "site", "updated"],
+            )
+            writer.writeheader()
+            writer.writerows(normalized_repos)
+        else:
+            # Text format (default)
             click.echo()
+            click.secho(f"Mimeo-managed sites ({len(repos)}):", bold=True)
+            click.echo()
+
+            for repo_data in normalized_repos:
+                click.secho(f"  • {repo_data['name']}", fg="cyan", bold=True)
+                click.echo(f"    Repository: {repo_data['repository']}")
+                click.echo(f"    Site: {repo_data['site']}")
+                click.secho(f"    Updated: {repo_data['updated']}", fg="white", dim=True)
+                click.echo()
 
     except ConfigurationError as e:
         click.secho(f"Configuration error: {e}", fg="red", err=True)

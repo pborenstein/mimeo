@@ -584,3 +584,131 @@ class TestListCommand:
 
         assert result.exit_code == 1
         assert "Configuration error" in result.output
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.GitHubHost")
+    def test_list_json_format(
+        self,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """Test list command with JSON output format."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.list_mimeo_repositories.return_value = [
+            {
+                "name": "example.com",
+                "url": "https://github.com/testuser/example.com",
+                "homepage": "https://example.com",
+                "updatedAt": "2026-02-15T12:00:00Z",
+            },
+            {
+                "name": "test.com",
+                "url": "https://github.com/testuser/test.com",
+                "homepage": None,
+                "updatedAt": "2026-02-14T10:00:00Z",
+            },
+        ]
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        result = runner.invoke(list, ["--format", "json"])
+
+        assert result.exit_code == 0
+
+        import json
+        output_data = json.loads(result.output)
+        assert len(output_data) == 2
+        assert output_data[0]["name"] == "example.com"
+        assert output_data[0]["repository"] == "https://github.com/testuser/example.com"
+        assert output_data[0]["site"] == "https://example.com"
+        assert output_data[0]["updated"] == "2026-02-15"
+        assert output_data[1]["name"] == "test.com"
+        assert output_data[1]["site"] == "https://test.com"  # Fallback when homepage is None
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.GitHubHost")
+    def test_list_json_format_empty(
+        self,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """Test list command with JSON format when no repositories exist."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.list_mimeo_repositories.return_value = []
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        result = runner.invoke(list, ["--format", "json"])
+
+        assert result.exit_code == 0
+        assert result.output.strip() == "[]"
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.GitHubHost")
+    def test_list_csv_format(
+        self,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """Test list command with CSV output format."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.list_mimeo_repositories.return_value = [
+            {
+                "name": "example.com",
+                "url": "https://github.com/testuser/example.com",
+                "homepage": "https://example.com",
+                "updatedAt": "2026-02-15T12:00:00Z",
+            },
+            {
+                "name": "test.com",
+                "url": "https://github.com/testuser/test.com",
+                "homepage": None,
+                "updatedAt": "2026-02-14T10:00:00Z",
+            },
+        ]
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        result = runner.invoke(list, ["--format", "csv"])
+
+        assert result.exit_code == 0
+        lines = result.output.strip().split("\n")
+        assert len(lines) == 3  # Header + 2 data rows
+        assert lines[0] == "name,repository,site,updated"
+        assert "example.com,https://github.com/testuser/example.com,https://example.com,2026-02-15" in lines[1]
+        assert "test.com,https://github.com/testuser/test.com,https://test.com,2026-02-14" in lines[2]
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.GitHubHost")
+    def test_list_csv_format_empty(
+        self,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """Test list command with CSV format when no repositories exist."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.list_mimeo_repositories.return_value = []
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        result = runner.invoke(list, ["--format", "csv"])
+
+        assert result.exit_code == 0
+        # Should still output header even with no data
+        assert result.output.strip() == "name,repository,site,updated"

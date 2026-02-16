@@ -330,10 +330,41 @@ def list(config: Path | None, format: str) -> None:
 
     Shows repositories tagged with the 'mimeo' topic.
 
-    Examples:
-        mimeo list
-        mimeo list --format json
-        mimeo list --format csv
+    \b
+    Basic usage:
+        mimeo list                    # Human-readable text format
+        mimeo list --format json      # JSON output
+        mimeo list --format csv       # CSV output
+
+    \b
+    Extracting specific data:
+        # Just domain names
+        mimeo list --format csv | tail -n +2 | cut -d, -f1
+
+        # Just site URLs
+        mimeo list --format json | jq -r '.[].site'
+
+        # Just repository URLs
+        mimeo list --format csv | tail -n +2 | cut -d, -f2
+
+    \b
+    Processing with jq:
+        # Count total sites
+        mimeo list --format json | jq 'length'
+
+        # Filter by update date
+        mimeo list --format json | jq '.[] | select(.updated == "2026-02-15")'
+
+        # Get names of recently updated sites
+        mimeo list --format json | jq -r '.[] | select(.updated >= "2026-02-01") | .name'
+
+    \b
+    Importing data:
+        # Export to CSV file
+        mimeo list --format csv > sites.csv
+
+        # Create simple list for scripts
+        mimeo list --format csv | tail -n +2 | cut -d, -f1 > domains.txt
     """
     try:
         # Load configuration

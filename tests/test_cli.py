@@ -109,7 +109,7 @@ class TestCreateCommand:
         assert result.exit_code == 0
         assert "Loading configuration" in result.output
         assert "Generating site content" in result.output
-        assert "Creating GitHub repository" in result.output
+        assert "Configuring GitHub repository" in result.output
         assert "Configuring DNS records" in result.output
         assert "Successfully created: 1/1 domain(s)" in result.output
         assert "https://example.com" in result.output

@@ -86,15 +86,21 @@ def _process_single_domain(domain: str, cfg: Config, dry_run: bool, verbose: boo
                 raise
 
             # Deploy to GitHub Pages
-            log("Creating GitHub repository")
+            log("Configuring GitHub repository")
             try:
                 with GitHubHost(default_org=cfg.github_username) as host:
                     site_url = host.deploy_site(domain, content_path)
                     result["url"] = site_url
                     result["repo_url"] = f"https://github.com/{cfg.github_username}/{domain}"
 
-                    log(f"Repository created: {cfg.github_username}/{domain}", "success")
-                    log("Content pushed to GitHub", "success")
+                    # Check if repo was newly created or already existed
+                    if hasattr(host, '_repo_was_created') and host._repo_was_created:
+                        log(f"Repository created: {cfg.github_username}/{domain}", "success")
+                        log("Content pushed to GitHub", "success")
+                    else:
+                        log(f"Repository exists: {cfg.github_username}/{domain}", "info")
+                        log("Skipped content push (using existing content)", "info")
+
                     log("GitHub Pages enabled", "success")
                     log(f"Custom domain configured: {domain}", "success")
 

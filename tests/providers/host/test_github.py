@@ -302,23 +302,57 @@ class TestGitHubHost:
             content_path = Path(tmpdir)
             (content_path / "index.html").write_text("<h1>Test</h1>")
 
-            with patch.object(host, "_create_repository") as mock_create:
-                with patch.object(host, "_init_and_push_repository") as mock_push:
-                    with patch.object(host, "_enable_github_pages") as mock_pages:
-                        with patch.object(host, "_set_custom_domain") as mock_domain:
-                            mock_create.return_value = "testorg/example.com"
+            with patch.object(host, "_gh_api") as mock_api:
+                with patch.object(host, "_create_repository") as mock_create:
+                    with patch.object(host, "_init_and_push_repository") as mock_push:
+                        with patch.object(host, "_enable_github_pages") as mock_pages:
+                            with patch.object(host, "_set_custom_domain") as mock_domain:
+                                with patch.object(host, "_enable_https_enforcement") as mock_https:
+                                    # Simulate repo doesn't exist yet (raises HostError on first check)
+                                    mock_api.side_effect = HostError("Not Found")
+                                    mock_create.return_value = "testorg/example.com"
+                                    mock_https.return_value = True
 
-                            url = host.deploy_site("example.com", content_path)
+                                    url = host.deploy_site("example.com", content_path)
 
-                            assert url == "https://example.com"
-                            mock_create.assert_called_once_with("example.com", org="testorg")
-                            mock_push.assert_called_once_with(
-                                "testorg/example.com", content_path
-                            )
-                            mock_pages.assert_called_once_with("testorg/example.com")
-                            mock_domain.assert_called_once_with(
-                                "testorg/example.com", "example.com"
-                            )
+                                    assert url == "https://example.com"
+                                    mock_create.assert_called_once_with("example.com", org="testorg")
+                                    mock_push.assert_called_once_with(
+                                        "testorg/example.com", content_path
+                                    )
+                                    mock_pages.assert_called_once_with("testorg/example.com")
+                                    mock_domain.assert_called_once_with(
+                                        "testorg/example.com", "example.com"
+                                    )
+
+    def test_deploy_site_existing_repository(self, host: GitHubHost) -> None:
+        """Test deploying to an existing repository skips content push."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            content_path = Path(tmpdir)
+            (content_path / "index.html").write_text("<h1>Test</h1>")
+
+            with patch.object(host, "_gh_api") as mock_api:
+                with patch.object(host, "_create_repository") as mock_create:
+                    with patch.object(host, "_init_and_push_repository") as mock_push:
+                        with patch.object(host, "_enable_github_pages") as mock_pages:
+                            with patch.object(host, "_set_custom_domain") as mock_domain:
+                                with patch.object(host, "_enable_https_enforcement") as mock_https:
+                                    # Simulate repo already exists (returns data on first check)
+                                    mock_api.return_value = {"full_name": "testorg/example.com"}
+                                    mock_create.return_value = "testorg/example.com"
+                                    mock_https.return_value = True
+
+                                    url = host.deploy_site("example.com", content_path)
+
+                                    assert url == "https://example.com"
+                                    mock_create.assert_called_once_with("example.com", org="testorg")
+                                    # Should NOT push content for existing repo
+                                    mock_push.assert_not_called()
+                                    # But should still configure Pages and domain
+                                    mock_pages.assert_called_once_with("testorg/example.com")
+                                    mock_domain.assert_called_once_with(
+                                        "testorg/example.com", "example.com"
+                                    )
 
     def test_deploy_site_nonexistent_path(self, host: GitHubHost) -> None:
         """Test deployment fails with nonexistent content path."""

@@ -432,6 +432,9 @@ class GitHubHost(Host):
         5. Configure custom domain
         6. Enable HTTPS enforcement (if certificate is ready)
 
+        If the repository already exists with content, it will skip the push
+        step and only configure GitHub Pages settings and custom domain.
+
         Args:
             domain: Domain name for the site
             content_path: Path to site content directory
@@ -452,12 +455,29 @@ class GitHubHost(Host):
             # Convert domain to repository name (replace dots with hyphens if needed)
             # For GitHub, we can actually use the domain name directly
             repo_name = domain
+            owner = self.default_org or self._get_authenticated_user()
+            repo_full_name = f"{owner}/{repo_name}"
 
-            # Create repository
+            # Check if repository already exists with content
+            repo_exists = False
+            try:
+                self._gh_api(f"repos/{repo_full_name}")
+                repo_exists = True
+            except HostError:
+                # Repository doesn't exist, we'll create it
+                pass
+
+            # Create repository (or get existing)
             repo_full_name = self._create_repository(repo_name, org=self.default_org)
 
-            # Initialize and push content
-            self._init_and_push_repository(repo_full_name, content_path)
+            # Only initialize and push if repository is new
+            if not repo_exists:
+                # Initialize and push content
+                self._init_and_push_repository(repo_full_name, content_path)
+                self._repo_was_created = True
+            else:
+                # Repository already exists, skip content push
+                self._repo_was_created = False
 
             # Enable GitHub Pages
             self._enable_github_pages(repo_full_name)

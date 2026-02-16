@@ -2,19 +2,20 @@
 phase: 5
 phase_name: CLI Integration
 updated: 2026-02-15
-last_commit: 3961ef3
+last_commit: 6e187e0
 ---
 
 ## Current Focus
 
-Enhanced create command with multi-domain support, comprehensive logging, and concurrent processing.
+Enhanced list command with JSON/CSV output formats and comprehensive documentation.
 
 ## Active Tasks
 
-- [x] Add multi-domain support to create command
-- [x] Add comprehensive operation logging
-- [x] Add dry-run mode
-- [x] Add concurrent processing
+- [x] Fix list command pagination (30 → 1000 repo limit)
+- [x] Add JSON output format to list command
+- [x] Add CSV output format to list command
+- [x] Add practical examples to help text
+- [x] Create LIST_COMMAND.md reference guide
 - [ ] Document workflow scope requirement in setup docs
 - [ ] Add configuration option for HTTPS enforcement
 - [ ] Document uv tool install for global CLI access
@@ -25,15 +26,13 @@ None.
 
 ## Context
 
-- create command now accepts multiple domains: `mimeo create site1.com site2.com site3.com`
-- Concurrent processing by default (ThreadPoolExecutor, max 5 workers)
-- --sequential flag for one-at-a-time processing with detailed logs
-- --dry-run flag shows what would be created without making changes
-- --stop-on-error flag to halt on first failure (default: continue)
-- Shows "→ domain started" as work begins, "✓ domain completed" when done
-- DNS failures no longer abort deployment (site still accessible via github.io)
-- Comprehensive summary shows success/failure count and per-domain status
-- 147 tests passing (added 2 new tests for concurrent/sequential modes)
+- list command now supports --format: text (default), json, csv
+- Fixed pagination: shows all 63 repos (was only showing 30)
+- JSON format enables programmatic processing with jq
+- CSV format allows spreadsheet import and Unix tool processing
+- Help text includes practical examples for data extraction
+- docs/LIST_COMMAND.md has comprehensive usage guide
+- 151 tests passing (added 4 new tests for JSON/CSV formats)
 
 ## Next Session
 

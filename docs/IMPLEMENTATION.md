@@ -99,20 +99,29 @@ Living document tracking progress on the domain landing page provisioning tool.
 - [x] Add start/completion feedback for concurrent mode
 - [x] Add 2 new tests for concurrent/sequential modes
 - [x] Verify all 147 tests pass
+- [x] Fix list command pagination (increase limit to 1000)
+- [x] Add --format option to list command (text, json, csv)
+- [x] Add JSON output format with structured data
+- [x] Add CSV output format with headers
+- [x] Add practical examples to list command help text
+- [x] Create docs/LIST_COMMAND.md reference guide
+- [x] Add 4 new tests for JSON/CSV formats
+- [x] Verify all 151 tests pass
 
 **Success Criteria**: ✅ All criteria met
 
 - CLI command `mimeo create domain.com` orchestrates full deployment
-- CLI command `mimeo list` shows all mimeo-managed sites
+- CLI command `mimeo list` shows all mimeo-managed sites with format options
 - Progress indicators show each step (loading config, generating content, deploying, configuring DNS)
 - Error handling for configuration, deployment, and DNS errors
 - Success message displays site URL and repository URL
-- 145 tests passing (includes DNS, HTTPS, topics, and list command tests)
+- 151 tests passing (includes JSON/CSV formats, pagination fix)
 - Type checking and linting clean
 - DNS record matching works with Porkbun's actual API format
 - HTTPS enforcement enabled automatically when certificate ready
 - Repository topics enable easy discovery of managed sites
 - Multiple successful E2E deployments verified
+- JSON/CSV output formats enable programmatic processing and data export
 
 **Next Steps**: Documentation improvements, configuration options for HTTPS enforcement, setup guide for global CLI installation.
 

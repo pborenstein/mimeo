@@ -222,3 +222,22 @@ Implemented the main `mimeo create` command that orchestrates the complete site 
 **Files**: Commits c3e9300 (multi-domain), e76f65e (concurrent), 3961ef3 (start feedback)
 
 **Result**: ✅ Can now create multiple sites in one command. Concurrent mode ~3x faster. 147 tests passing (added 2 new tests).
+
+## Entry 11: List Command Output Formats and Documentation (2026-02-15)
+
+**What**: Enhanced list command with JSON/CSV output formats, fixed pagination bug, and added comprehensive documentation with practical examples.
+
+**Why**: User discovered list command only showed 30 repos despite having 60+ in organization (gh search repos default limit). Needed machine-readable formats for scripting and data export.
+
+**How**:
+- Fixed pagination: Added `--limit 1000` to gh search repos command (GitHub API max)
+- Added --format option with choices: text (default), json, csv
+- JSON format outputs structured array for programmatic processing with jq
+- CSV format outputs comma-separated values with headers for spreadsheets/Unix tools
+- Enhanced help text with practical examples (extract domains, count sites, filter by date)
+- Created docs/LIST_COMMAND.md comprehensive reference guide
+- Added 4 new tests for JSON/CSV formats (empty and with data)
+
+**Files**: Commits ee445b2 (pagination fix), 6d109d9 (formats), 6e187e0 (docs)
+
+**Result**: ✅ Now shows all 63 repos. JSON/CSV enable scripting (`mimeo list --format csv | tail -n +2 | cut -d, -f1` for domain list). 151 tests passing.

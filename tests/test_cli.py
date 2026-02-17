@@ -7,7 +7,17 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
-from mimeo.cli import create, list, main
+from mimeo.cli import (
+    _check_config,
+    _check_gh_auth,
+    _check_gh_installed,
+    _check_gh_workflow_scope,
+    _check_python_version,
+    create,
+    doctor,
+    list,
+    main,
+)
 from mimeo.config import Config
 from mimeo.exceptions import ConfigurationError, HostError, RegistrarError
 from mimeo.models import DNSRecord
@@ -908,3 +918,189 @@ class TestListCommand:
         mock_host._enable_https_enforcement.assert_not_called()
         # No "Fixed HTTPS enforcement" section since nothing was fixed
         assert "Fixed HTTPS enforcement" not in result.output
+
+
+class TestDoctorHelpers:
+    """Tests for doctor check helper functions."""
+
+    def test_python_version_passes(self) -> None:
+        """Current Python is >= 3.11 (required by pyproject.toml)."""
+        ok, detail, fix = _check_python_version()
+        assert ok is True
+        assert "Python" in detail
+        assert fix == ""
+
+    def test_gh_installed_present(self) -> None:
+        """gh is available when subprocess returns version output."""
+        mock_result = MagicMock()
+        mock_result.stdout = "gh version 2.40.0 (2024-01-01)\n"
+        with patch("mimeo.cli.subprocess.run", return_value=mock_result):
+            ok, detail, fix = _check_gh_installed()
+        assert ok is True
+        assert "gh version" in detail
+        assert fix == ""
+
+    def test_gh_installed_missing(self) -> None:
+        """gh missing when FileNotFoundError is raised."""
+        with patch("mimeo.cli.subprocess.run", side_effect=FileNotFoundError):
+            ok, detail, fix = _check_gh_installed()
+        assert ok is False
+        assert "not found" in detail
+        assert "cli.github.com" in fix
+
+    def test_gh_auth_authenticated(self) -> None:
+        """gh authenticated when returncode is 0."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        with patch("mimeo.cli.subprocess.run", return_value=mock_result):
+            ok, detail, fix = _check_gh_auth()
+        assert ok is True
+        assert fix == ""
+
+    def test_gh_auth_not_authenticated(self) -> None:
+        """gh not authenticated when returncode is non-zero."""
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        with patch("mimeo.cli.subprocess.run", return_value=mock_result):
+            ok, detail, fix = _check_gh_auth()
+        assert ok is False
+        assert "gh auth login" in fix
+
+    def test_gh_auth_gh_missing(self) -> None:
+        """Returns failure when gh is not installed."""
+        with patch("mimeo.cli.subprocess.run", side_effect=FileNotFoundError):
+            ok, detail, fix = _check_gh_auth()
+        assert ok is False
+
+    def test_workflow_scope_present(self) -> None:
+        """Workflow scope detected when present in auth status output."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "  - Token scopes: 'repo', 'workflow'\n"
+        mock_result.stderr = ""
+        with patch("mimeo.cli.subprocess.run", return_value=mock_result):
+            ok, detail, fix = _check_gh_workflow_scope()
+        assert ok is True
+        assert fix == ""
+
+    def test_workflow_scope_missing(self) -> None:
+        """Failure when workflow scope absent from token scopes."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "  - Token scopes: 'repo', 'read:org'\n"
+        mock_result.stderr = ""
+        with patch("mimeo.cli.subprocess.run", return_value=mock_result):
+            ok, detail, fix = _check_gh_workflow_scope()
+        assert ok is False
+        assert "workflow" in fix
+
+    def test_workflow_scope_not_authenticated(self) -> None:
+        """Failure when gh is not authenticated."""
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stdout = ""
+        mock_result.stderr = ""
+        with patch("mimeo.cli.subprocess.run", return_value=mock_result):
+            ok, detail, fix = _check_gh_workflow_scope()
+        assert ok is False
+
+    def test_workflow_scope_gh_missing(self) -> None:
+        """Failure when gh is not installed."""
+        with patch("mimeo.cli.subprocess.run", side_effect=FileNotFoundError):
+            ok, detail, fix = _check_gh_workflow_scope()
+        assert ok is False
+
+    def test_check_config_valid(self, tmp_path: Path) -> None:
+        """Config check passes with a valid config file."""
+        cfg_file = tmp_path / "config.toml"
+        cfg_file.write_text(
+            "[porkbun]\napi_key = \"pk1_test\"\nsecret_key = \"sk1_test\"\n"
+            "[github]\ndefault_org = \"testuser\"\n"
+        )
+        ok, detail, fix = _check_config(cfg_file)
+        assert ok is True
+        assert fix == ""
+
+    def test_check_config_missing_file(self, tmp_path: Path) -> None:
+        """Config check fails when file does not exist."""
+        cfg_file = tmp_path / "missing.toml"
+        ok, detail, fix = _check_config(cfg_file)
+        assert ok is False
+        assert "not found" in detail
+
+    def test_check_config_missing_keys(self, tmp_path: Path) -> None:
+        """Config check fails when required keys are absent."""
+        cfg_file = tmp_path / "config.toml"
+        cfg_file.write_text("[porkbun]\n")
+        ok, detail, fix = _check_config(cfg_file)
+        assert ok is False
+
+
+class TestDoctorCommand:
+    """Tests for the doctor CLI command."""
+
+    def test_doctor_help(self, runner: CliRunner) -> None:
+        """Doctor command shows help."""
+        result = runner.invoke(doctor, ["--help"])
+        assert result.exit_code == 0
+        assert "prerequisites" in result.output.lower() or "check" in result.output.lower()
+
+    def test_doctor_all_pass(self, runner: CliRunner, tmp_path: Path) -> None:
+        """Doctor exits 0 when all checks pass."""
+        cfg_file = tmp_path / "config.toml"
+        cfg_file.write_text(
+            "[porkbun]\napi_key = \"pk1_test\"\nsecret_key = \"sk1_test\"\n"
+            "[github]\ndefault_org = \"testuser\"\n"
+        )
+
+        def fake_run(cmd: list, **kwargs: Any) -> MagicMock:
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            if "--version" in cmd:
+                mock_result.stdout = "gh version 2.40.0\n"
+                mock_result.stderr = ""
+            else:
+                mock_result.stdout = "  - Token scopes: 'repo', 'workflow'\n"
+                mock_result.stderr = ""
+            return mock_result
+
+        with patch("mimeo.cli.subprocess.run", side_effect=fake_run):
+            result = runner.invoke(doctor, ["--config", str(cfg_file)])
+
+        assert result.exit_code == 0
+        assert "All checks passed" in result.output
+
+    def test_doctor_fails_on_missing_gh(self, runner: CliRunner, tmp_path: Path) -> None:
+        """Doctor exits non-zero and prints remediation when gh is missing."""
+        cfg_file = tmp_path / "config.toml"
+        cfg_file.write_text(
+            "[porkbun]\napi_key = \"pk1_test\"\nsecret_key = \"sk1_test\"\n"
+            "[github]\ndefault_org = \"testuser\"\n"
+        )
+
+        with patch("mimeo.cli.subprocess.run", side_effect=FileNotFoundError):
+            result = runner.invoke(doctor, ["--config", str(cfg_file)])
+
+        assert result.exit_code != 0
+        assert "cli.github.com" in result.output
+
+    def test_doctor_fails_on_bad_config(self, runner: CliRunner, tmp_path: Path) -> None:
+        """Doctor exits non-zero when config file is missing."""
+
+        def fake_run(cmd: list, **kwargs: Any) -> MagicMock:
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            if "--version" in cmd:
+                mock_result.stdout = "gh version 2.40.0\n"
+                mock_result.stderr = ""
+            else:
+                mock_result.stdout = "  - Token scopes: 'repo', 'workflow'\n"
+                mock_result.stderr = ""
+            return mock_result
+
+        missing = tmp_path / "no-such.toml"
+        with patch("mimeo.cli.subprocess.run", side_effect=fake_run):
+            result = runner.invoke(doctor, ["--config", str(missing)])
+
+        assert result.exit_code != 0
+        assert "not found" in result.output

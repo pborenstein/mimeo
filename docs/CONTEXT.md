@@ -2,12 +2,12 @@
 phase: 6
 phase_name: Hardening
 updated: 2026-02-17
-last_commit: a8f9db2
+last_commit: to-be-set
 ---
 
 ## Current Focus
 
-Documentation refresh to match current state. README rewritten from scratch (current commands, config, known limitations). IMPLEMENTATION.md collapsed to compact summaries for completed phases; Phase 6 task list added based on CODEX-SPEAKS assessment. PLAN.md marked as archived.
+Phase 6 Hardening underway. `mimeo doctor` preflight command implemented and tested (177 tests passing).
 
 ## Active Tasks
 
@@ -16,9 +16,11 @@ Documentation refresh to match current state. README rewritten from scratch (cur
 - [x] Document uv tool install for global CLI access
 - [x] Archive PLAN.md with historical notice
 - [x] Update IMPLEMENTATION.md with Phase 6 plan
-- [ ] Add `mimeo doctor` preflight command
+- [x] Add `mimeo doctor` preflight command
 - [ ] Improve failure taxonomy and exit codes
 - [ ] Reconciliation / DNS drift detection
+- [ ] Add `--workers` option to `create`
+- [ ] Retry with jitter for transient failures
 
 ## Blockers
 
@@ -26,11 +28,11 @@ None.
 
 ## Context
 
-- Phase 5 is fully complete (160 tests, create + list + health + fix all working)
-- CODEX-SPEAKS assessment identified doc accuracy (4/10) as top priority — now addressed
-- Phase 6 priorities from CODEX-SPEAKS: doctor command, error taxonomy, reconcile, --workers, retry/jitter, E2E test lane
+- `mimeo doctor` checks: Python >=3.11, gh installed, gh authenticated, workflow scope, config valid
+- Each check returns (ok, detail, fix) tuple — helper functions are independently testable
+- 177 tests total (was 160, +17 for doctor)
 - Pre-existing mypy warning in cli.py (heterogeneous dict) — known, not blocking
 
 ## Next Session
 
-Implement `mimeo doctor`: check Python >=3.11, gh installed + authenticated, workflow scope present, config file exists and is valid, network reachability optional. Output actionable remediation for each failure.
+Continue Phase 6: improve failure taxonomy and exit codes (config / auth / rate-limit / transient / provider), or discuss template feature.

@@ -13,3 +13,18 @@
 - CONTEXT.md updated to Phase 6 with next session pointing at `mimeo doctor`
 
 **Files**: README.md, docs/IMPLEMENTATION.md, docs/CONTEXT.md, docs/archive/PLAN.md (moved)
+
+## Entry 16: mimeo doctor command (2026-02-17)
+
+**What**: Added `mimeo doctor` preflight command that checks all prerequisites before running mimeo.
+
+**Why**: CODEX-SPEAKS identified this as top Phase 6 priority. Users hitting silent failures from missing gh auth or wrong token scopes needed actionable diagnostics upfront.
+
+**How**:
+- Five checks: Python >=3.11, gh installed, gh authenticated, workflow scope, config valid
+- Each check is a standalone `_check_*` helper returning `(ok, detail, fix)` — independently testable
+- Command prints colored pass/fail rows with yellow remediation hints for failures
+- Exits 0 only when all checks pass
+- 17 new tests added (177 total); all passing
+
+**Files**: mimeo/cli.py, tests/test_cli.py

@@ -2,6 +2,7 @@
 
 import csv
 import json
+import subprocess
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -534,6 +535,138 @@ def list(config: Path | None, format: str, health: bool, fix: bool) -> None:
         raise click.Abort()
     except Exception as e:
         click.secho(f"Unexpected error: {e}", fg="red", err=True)
+        raise click.Abort()
+
+
+def _check_python_version() -> tuple[bool, str, str]:
+    """Check that Python is >= 3.11."""
+    major, minor = sys.version_info[:2]
+    if major >= 3 and minor >= 11:
+        return True, f"Python {major}.{minor}", ""
+    return False, f"Python {major}.{minor}", "Install Python 3.11 or later."
+
+
+def _check_gh_installed() -> tuple[bool, str, str]:
+    """Check that the gh CLI is installed."""
+    try:
+        result = subprocess.run(
+            ["gh", "--version"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        version_line = result.stdout.splitlines()[0] if result.stdout else "gh"
+        return True, version_line, ""
+    except FileNotFoundError:
+        return False, "not found", "Install gh from https://cli.github.com"
+
+
+def _check_gh_auth() -> tuple[bool, str, str]:
+    """Check that gh is authenticated."""
+    try:
+        result = subprocess.run(
+            ["gh", "auth", "status"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            return True, "authenticated", ""
+        return False, "not authenticated", "Run 'gh auth login' to authenticate."
+    except FileNotFoundError:
+        return False, "gh not installed", "Install gh from https://cli.github.com"
+
+
+def _check_gh_workflow_scope() -> tuple[bool, str, str]:
+    """Check that the gh token has the 'workflow' scope."""
+    try:
+        result = subprocess.run(
+            ["gh", "auth", "status"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            return False, "cannot check (not authenticated)", "Run 'gh auth login' first."
+        output = result.stdout + result.stderr
+        for line in output.splitlines():
+            if "Token scopes" in line:
+                if "'workflow'" in line or '"workflow"' in line:
+                    return True, "workflow scope present", ""
+                return (
+                    False,
+                    "workflow scope missing",
+                    "Re-authenticate with workflow scope: "
+                    "gh auth login --scopes repo,workflow",
+                )
+        return False, "could not determine scopes", "Re-authenticate: gh auth login --scopes repo,workflow"
+    except FileNotFoundError:
+        return False, "gh not installed", "Install gh from https://cli.github.com"
+
+
+def _check_config(config_path: Path | None) -> tuple[bool, str, str]:
+    """Check that the config file exists and is valid."""
+    if config_path is None:
+        config_path = Path.home() / ".config" / "mimeo" / "config.toml"
+    if not config_path.exists():
+        return (
+            False,
+            f"not found: {config_path}",
+            f"Create {config_path} with your API credentials. See README for format.",
+        )
+    try:
+        Config.load(config_path)
+        return True, str(config_path), ""
+    except ConfigurationError as e:
+        first_line = str(e).splitlines()[0]
+        return False, first_line, "Fix the configuration issues listed above."
+
+
+@main.command()
+@click.option(
+    "--config",
+    type=click.Path(path_type=Path),
+    help="Path to config file (default: ~/.config/mimeo/config.toml)",
+)
+def doctor(config: Path | None) -> None:
+    """Check that all prerequisites for mimeo are met.
+
+    Verifies:
+      - Python version >= 3.11
+      - gh CLI is installed
+      - gh CLI is authenticated
+      - GitHub token has the 'workflow' scope
+      - Config file exists and is valid
+
+    Prints a pass/fail result for each check with remediation
+    instructions for any failures.
+    """
+    checks = [
+        ("Python >= 3.11", _check_python_version),
+        ("gh installed", _check_gh_installed),
+        ("gh authenticated", _check_gh_auth),
+        ("workflow scope", _check_gh_workflow_scope),
+        ("config file", lambda: _check_config(config)),
+    ]
+
+    all_ok = True
+    click.echo()
+    for label, check_fn in checks:
+        ok, detail, fix = check_fn()
+        if ok:
+            click.secho(f"  ok  ", fg="green", nl=False, bold=True)
+        else:
+            click.secho(f" fail ", fg="red", nl=False, bold=True)
+            all_ok = False
+        click.echo(f"  {label:<22} {detail}")
+        if not ok and fix:
+            click.secho(f"            -> {fix}", fg="yellow")
+
+    click.echo()
+    if all_ok:
+        click.secho("All checks passed.", fg="green", bold=True)
+    else:
+        click.secho("Some checks failed. Address the issues above before running mimeo.", fg="red")
         raise click.Abort()
 
 

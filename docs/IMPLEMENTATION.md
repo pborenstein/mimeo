@@ -28,7 +28,7 @@ Living document tracking progress on the domain landing page provisioning tool.
 
 **Tasks**:
 
-- [ ] Add `mimeo doctor` preflight command (Python version, gh auth/scope, config validity)
+- [x] Add `mimeo doctor` preflight command (Python version, gh auth/scope, config validity)
 - [ ] Improve failure taxonomy and exit codes (config / auth / rate-limit / transient / provider)
 - [ ] Add reconciliation support (`mimeo list --fix` exists; extend for DNS drift)
 - [ ] Add `--workers` option to `create` for configurable concurrency

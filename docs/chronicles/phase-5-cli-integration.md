@@ -277,3 +277,23 @@ Implemented the main `mimeo create` command that orchestrates the complete site 
 **Files**: Commit 75c27c1 (github.py, cli.py, 2 test files)
 
 **Result**: ✅ create command is now idempotent. Tested with caponislands.com. 152 tests passing.
+
+## Entry 14: Health Check and HTTPS Fix for List Command (2026-02-16)
+
+**What**: Added `--health` and `--fix` flags to `mimeo list`. Rewrote text output as a sortable table.
+
+**Why**: Real data from 64 managed repos showed 16 sites with approved certs but HTTPS not enforced — fixable but invisible. The card-per-site format didn't scale; needed something readable at 64+ rows.
+
+**How**:
+- Added `get_pages_health(repo_full_name)` to GitHubHost: calls Pages API, returns pages_configured, https_enforced, cert_state, pages_status; returns "not configured" dict on HostError
+- Added `_health_status(health)` module-level helper mapping health dict to: pages_error, no_cert, cert_pending, fixable, healthy
+- `--health`: fetches health data concurrently (ThreadPoolExecutor, max 10 workers), adds status to all output formats
+- `--fix`: implies `--health`, calls `_enable_https_enforcement()` serially for fixable repos, prints fix summary
+- Text output: aligned table (NAME / SITE / UPDATED / STATUS) with color-coded status; repo URL dropped (redundant)
+- Sort: by severity first (errors top, healthy bottom), then name within group
+- JSON/CSV: adds health, https_enforced, cert_state columns when --health given
+- 15 new tests added (3 get_pages_health, 7 _health_status, 5 CLI)
+
+**Files**: mimeo/providers/host/github.py, mimeo/cli.py, tests/providers/host/test_github.py, tests/test_cli.py
+
+**Result**: ✅ 160 tests passing. `mimeo list --fix` can now bulk-enable HTTPS for all sites with approved certs in one command.

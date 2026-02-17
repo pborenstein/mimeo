@@ -7,6 +7,7 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from threading import Lock
+from typing import Any, Dict, List
 
 import click
 
@@ -14,7 +15,7 @@ from . import __version__
 from .config import Config
 from .content import generate_minimal_site
 from .exceptions import ConfigurationError, HostError, RegistrarError
-from .providers.host.github import GitHubHost
+from .providers.host.github import GitHubHost, _health_status
 from .providers.registrar.porkbun import PorkbunRegistrar
 
 # Lock for thread-safe console output
@@ -329,7 +330,9 @@ def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on
     default="text",
     help="Output format (default: text)",
 )
-def list(config: Path | None, format: str) -> None:
+@click.option("--health", is_flag=True, help="Check Pages configuration health for each site")
+@click.option("--fix", is_flag=True, help="Enable HTTPS for sites with approved certificates (implies --health)")
+def list(config: Path | None, format: str, health: bool, fix: bool) -> None:
     """List all mimeo-managed sites.
 
     Shows repositories tagged with the 'mimeo' topic.
@@ -370,6 +373,10 @@ def list(config: Path | None, format: str) -> None:
         # Create simple list for scripts
         mimeo list --format csv | tail -n +2 | cut -d, -f1 > domains.txt
     """
+    # --fix implies --health
+    if fix:
+        health = True
+
     try:
         # Load configuration
         cfg = Config.load(config)
@@ -378,58 +385,145 @@ def list(config: Path | None, format: str) -> None:
         with GitHubHost(default_org=cfg.github_username) as host:
             repos = host.list_mimeo_repositories()
 
-        if not repos:
-            if format == "json":
-                click.echo("[]")
-            elif format == "csv":
-                # Still output CSV header even if empty
-                writer = csv.DictWriter(
-                    sys.stdout,
-                    fieldnames=["name", "repository", "site", "updated"],
-                )
-                writer.writeheader()
-            else:
-                click.echo("No mimeo-managed sites found.")
-                click.echo()
-                click.echo("Create your first site with: mimeo create example.com")
-            return
+            if not repos:
+                if format == "json":
+                    click.echo("[]")
+                elif format == "csv":
+                    fieldnames = ["name", "repository", "site", "updated"]
+                    if health:
+                        fieldnames += ["health", "https_enforced", "cert_state"]
+                    writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
+                    writer.writeheader()
+                else:
+                    click.echo("No mimeo-managed sites found.")
+                    click.echo()
+                    click.echo("Create your first site with: mimeo create example.com")
+                return
 
-        # Normalize repository data
-        normalized_repos = []
-        for repo in repos:
-            name = repo.get("name", "")
-            url = repo.get("url", "")
-            pages_url = repo.get("homepage") or f"https://{name}"
-            updated = repo.get("updatedAt", "")[:10]  # Just the date part
+            # Normalize repository data
+            owner = cfg.github_username
+            normalized_repos = []
+            for repo in repos:
+                name = repo.get("name", "")
+                url = repo.get("url", "")
+                pages_url = repo.get("homepage") or f"https://{name}"
+                updated = repo.get("updatedAt", "")[:10]
 
-            normalized_repos.append({
-                "name": name,
-                "repository": url,
-                "site": pages_url,
-                "updated": updated,
-            })
+                normalized_repos.append({
+                    "name": name,
+                    "repository": url,
+                    "site": pages_url,
+                    "updated": updated,
+                })
+
+            # Fetch health data concurrently if requested
+            if health:
+                health_map: Dict[str, Dict[str, Any]] = {}
+                with ThreadPoolExecutor(max_workers=10) as executor:
+                    future_to_name = {
+                        executor.submit(host.get_pages_health, f"{owner}/{r['name']}"): r["name"]
+                        for r in normalized_repos
+                    }
+                    for future in as_completed(future_to_name):
+                        name = future_to_name[future]
+                        health_map[name] = future.result()
+
+                for repo_data in normalized_repos:
+                    h = health_map.get(repo_data["name"], {
+                        "pages_configured": False,
+                        "https_enforced": False,
+                        "cert_state": None,
+                        "pages_status": None,
+                    })
+                    repo_data["health"] = _health_status(h)
+                    repo_data["https_enforced"] = h["https_enforced"]
+                    repo_data["cert_state"] = h["cert_state"]
+
+            # Run fixes for fixable repos
+            fix_results: List[Dict[str, Any]] = []
+            if fix:
+                fixable = [r for r in normalized_repos if r.get("health") == "fixable"]
+                for repo_data in fixable:
+                    repo_full_name = f"{owner}/{repo_data['name']}"
+                    try:
+                        host._enable_https_enforcement(repo_full_name)
+                        fix_results.append({"name": repo_data["name"], "success": True, "error": None})
+                        repo_data["health"] = "healthy"
+                        repo_data["https_enforced"] = True
+                    except HostError as e:
+                        fix_results.append({"name": repo_data["name"], "success": False, "error": str(e)})
+
+        # Sort order: with health, group by severity then name; otherwise by name
+        _status_order = {"pages_error": 0, "no_cert": 1, "cert_pending": 2, "fixable": 3, "healthy": 4}
+        if health:
+            normalized_repos.sort(key=lambda r: (_status_order.get(r.get("health", "pages_error"), 0), r["name"]))
+        else:
+            normalized_repos.sort(key=lambda r: r["name"])
 
         # Display results based on format
         if format == "json":
             click.echo(json.dumps(normalized_repos, indent=2))
         elif format == "csv":
-            writer = csv.DictWriter(
-                sys.stdout,
-                fieldnames=["name", "repository", "site", "updated"],
-            )
+            fieldnames = ["name", "repository", "site", "updated"]
+            if health:
+                fieldnames += ["health", "https_enforced", "cert_state"]
+            writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(normalized_repos)
         else:
-            # Text format (default)
-            click.echo()
-            click.secho(f"Mimeo-managed sites ({len(repos)}):", bold=True)
+            # Text format: tabular layout
+            _health_colors = {
+                "healthy": "green",
+                "fixable": "yellow",
+                "cert_pending": "yellow",
+                "no_cert": "red",
+                "pages_error": "red",
+            }
+            _health_labels = {
+                "healthy": "ok",
+                "fixable": "fixable",
+                "cert_pending": "pending",
+                "no_cert": "no cert",
+                "pages_error": "error",
+            }
+
+            # Calculate column widths
+            name_w = max(len(r["name"]) for r in normalized_repos)
+            site_w = max(len(r["site"]) for r in normalized_repos)
+
             click.echo()
 
+            # Header
+            if health:
+                header = f"  {'NAME':<{name_w}}  {'SITE':<{site_w}}  {'UPDATED':<10}  STATUS"
+            else:
+                header = f"  {'NAME':<{name_w}}  {'SITE':<{site_w}}  UPDATED"
+            click.secho(header, bold=True)
+            click.secho("  " + "-" * (len(header) - 2), fg="white", dim=True)
+
             for repo_data in normalized_repos:
-                click.secho(f"  • {repo_data['name']}", fg="cyan", bold=True)
-                click.echo(f"    Repository: {repo_data['repository']}")
-                click.echo(f"    Site: {repo_data['site']}")
-                click.secho(f"    Updated: {repo_data['updated']}", fg="white", dim=True)
+                name = repo_data["name"]
+                site = repo_data["site"]
+                updated = repo_data["updated"]
+                if health:
+                    status = repo_data.get("health", "pages_error")
+                    color = _health_colors.get(status, "white")
+                    label = _health_labels.get(status, status)
+                    row = f"  {name:<{name_w}}  {site:<{site_w}}  {updated:<10}  "
+                    click.echo(row, nl=False)
+                    click.secho(label, fg=color)
+                else:
+                    click.echo(f"  {name:<{name_w}}  {site:<{site_w}}  {updated}")
+
+            click.echo()
+
+            if fix_results:
+                click.secho("Fixed HTTPS enforcement:", bold=True)
+                for r in fix_results:
+                    if r["success"]:
+                        click.secho(f"  ✓ {r['name']}", fg="green")
+                    else:
+                        click.secho(f"  ✗ {r['name']} ({r['error']})", fg="red")
                 click.echo()
 
     except ConfigurationError as e:

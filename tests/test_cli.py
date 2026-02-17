@@ -542,10 +542,9 @@ class TestListCommand:
         result = runner.invoke(list, [])
 
         assert result.exit_code == 0
-        assert "Mimeo-managed sites (2)" in result.output
+        assert "NAME" in result.output
         assert "example.com" in result.output
         assert "test.com" in result.output
-        assert "https://github.com/testuser/example.com" in result.output
         assert "https://example.com" in result.output
 
     @patch("mimeo.cli.Config.load")
@@ -712,3 +711,200 @@ class TestListCommand:
         assert result.exit_code == 0
         # Should still output header even with no data
         assert result.output.strip() == "name,repository,site,updated"
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.GitHubHost")
+    def test_list_health_text_format(
+        self,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """Test list --health shows health status in text output."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.list_mimeo_repositories.return_value = [
+            {
+                "name": "example.com",
+                "url": "https://github.com/testuser/example.com",
+                "homepage": "https://example.com",
+                "updatedAt": "2026-02-15T12:00:00Z",
+            },
+        ]
+        mock_host.get_pages_health.return_value = {
+            "pages_configured": True,
+            "https_enforced": False,
+            "cert_state": "approved",
+            "pages_status": None,
+        }
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        result = runner.invoke(list, ["--health"])
+
+        assert result.exit_code == 0
+        assert "example.com" in result.output
+        assert "fixable" in result.output
+        mock_host.get_pages_health.assert_called_once_with("testuser/example.com")
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.GitHubHost")
+    def test_list_health_json_format(
+        self,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """Test list --health adds health fields to JSON output."""
+        import json as json_mod
+
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.list_mimeo_repositories.return_value = [
+            {
+                "name": "example.com",
+                "url": "https://github.com/testuser/example.com",
+                "homepage": "https://example.com",
+                "updatedAt": "2026-02-15T12:00:00Z",
+            },
+        ]
+        mock_host.get_pages_health.return_value = {
+            "pages_configured": True,
+            "https_enforced": True,
+            "cert_state": "approved",
+            "pages_status": None,
+        }
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        result = runner.invoke(list, ["--health", "--format", "json"])
+
+        assert result.exit_code == 0
+        data = json_mod.loads(result.output)
+        assert len(data) == 1
+        assert data[0]["health"] == "healthy"
+        assert data[0]["https_enforced"] is True
+        assert data[0]["cert_state"] == "approved"
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.GitHubHost")
+    def test_list_health_csv_format(
+        self,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """Test list --health adds extra columns to CSV output."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.list_mimeo_repositories.return_value = [
+            {
+                "name": "example.com",
+                "url": "https://github.com/testuser/example.com",
+                "homepage": "https://example.com",
+                "updatedAt": "2026-02-15T12:00:00Z",
+            },
+        ]
+        mock_host.get_pages_health.return_value = {
+            "pages_configured": False,
+            "https_enforced": False,
+            "cert_state": None,
+            "pages_status": None,
+        }
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        result = runner.invoke(list, ["--health", "--format", "csv"])
+
+        assert result.exit_code == 0
+        lines = result.output.strip().split("\n")
+        assert lines[0] == "name,repository,site,updated,health,https_enforced,cert_state"
+        assert "pages_error" in lines[1]
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.GitHubHost")
+    def test_list_fix_enables_https(
+        self,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """Test list --fix calls _enable_https_enforcement for fixable repos."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.list_mimeo_repositories.return_value = [
+            {
+                "name": "fixable.com",
+                "url": "https://github.com/testuser/fixable.com",
+                "homepage": "https://fixable.com",
+                "updatedAt": "2026-02-15T12:00:00Z",
+            },
+        ]
+        mock_host.get_pages_health.return_value = {
+            "pages_configured": True,
+            "https_enforced": False,
+            "cert_state": "approved",
+            "pages_status": None,
+        }
+        mock_host._enable_https_enforcement.return_value = True
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        result = runner.invoke(list, ["--fix"])
+
+        assert result.exit_code == 0
+        mock_host._enable_https_enforcement.assert_called_once_with("testuser/fixable.com")
+        assert "fixable.com" in result.output
+        assert "Fixed HTTPS enforcement" in result.output
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.GitHubHost")
+    def test_list_fix_skips_non_fixable(
+        self,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """Test list --fix does not call _enable_https_enforcement for non-fixable repos."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.list_mimeo_repositories.return_value = [
+            {
+                "name": "healthy.com",
+                "url": "https://github.com/testuser/healthy.com",
+                "homepage": "https://healthy.com",
+                "updatedAt": "2026-02-15T12:00:00Z",
+            },
+            {
+                "name": "nocert.com",
+                "url": "https://github.com/testuser/nocert.com",
+                "homepage": "https://nocert.com",
+                "updatedAt": "2026-02-15T12:00:00Z",
+            },
+        ]
+
+        def health_side_effect(repo_full_name: str) -> dict:
+            if "healthy" in repo_full_name:
+                return {"pages_configured": True, "https_enforced": True, "cert_state": "approved", "pages_status": None}
+            return {"pages_configured": True, "https_enforced": False, "cert_state": None, "pages_status": None}
+
+        mock_host.get_pages_health.side_effect = health_side_effect
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        result = runner.invoke(list, ["--fix"])
+
+        assert result.exit_code == 0
+        mock_host._enable_https_enforcement.assert_not_called()
+        # No "Fixed HTTPS enforcement" section since nothing was fixed
+        assert "Fixed HTTPS enforcement" not in result.output

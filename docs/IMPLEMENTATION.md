@@ -115,6 +115,14 @@ Living document tracking progress on the domain landing page provisioning tool.
 - [x] Refactor: remove configure_custom_domain from Host ABC and GitHubHost
 - [x] Refactor: replace instance flag pattern with DeployResult dataclass
 - [x] Verify all 145 tests pass (7 removed for deleted code)
+- [x] Add get_pages_health() to GitHubHost (concurrent-safe, returns health dict)
+- [x] Add _health_status() module-level helper (5 status values)
+- [x] Add --health flag to list command (concurrent Pages API fetch per repo)
+- [x] Add --fix flag to list command (enables HTTPS for fixable repos)
+- [x] Rewrite text output as sortable table (severity-first sort, color-coded status)
+- [x] Extend JSON/CSV output with health fields when --health given
+- [x] Add 15 new tests (get_pages_health, _health_status, CLI flags)
+- [x] Verify all 160 tests pass
 
 **Success Criteria**: ✅ All criteria met
 

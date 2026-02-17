@@ -9,6 +9,20 @@ from mimeo.exceptions import HostError
 from mimeo.providers.base import DeployResult, Host
 
 
+def _health_status(health: Dict[str, Any]) -> str:
+    """Derive a human-readable health status from a get_pages_health() result."""
+    if not health["pages_configured"]:
+        return "pages_error"
+    if health["https_enforced"]:
+        return "healthy"
+    cert = health["cert_state"]
+    if cert == "approved":
+        return "fixable"
+    if cert in ("new", "authorization_created", "issued"):
+        return "cert_pending"
+    return "no_cert"
+
+
 class GitHubHost(Host):
     """GitHub Pages host provider for static site hosting.
 
@@ -491,6 +505,32 @@ class GitHubHost(Host):
             if isinstance(e, HostError):
                 raise
             raise HostError(f"Failed to deploy site for {domain}: {e}") from e
+
+    def get_pages_health(self, repo_full_name: str) -> Dict[str, Any]:
+        """Fetch Pages configuration health for a repository.
+
+        Args:
+            repo_full_name: Full repository name (owner/repo)
+
+        Returns:
+            Dict with keys: pages_configured, https_enforced, cert_state, pages_status
+        """
+        try:
+            data = self._gh_api(f"repos/{repo_full_name}/pages")
+            cert = data.get("https_certificate") or {}
+            return {
+                "pages_configured": True,
+                "https_enforced": data.get("https_enforced", False),
+                "cert_state": cert.get("state"),
+                "pages_status": data.get("status"),
+            }
+        except HostError:
+            return {
+                "pages_configured": False,
+                "https_enforced": False,
+                "cert_state": None,
+                "pages_status": None,
+            }
 
     def list_mimeo_repositories(self) -> list[Dict[str, Any]]:
         """List all repositories tagged with the 'mimeo' topic.

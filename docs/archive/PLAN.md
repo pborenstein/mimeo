@@ -1,5 +1,11 @@
 # Mimeo Implementation Plan
 
+> **Archived**: This was the pre-implementation spec written before any code existed (Phase 0, 2026-02-14). The project has since progressed through Phase 5. Module names, file paths, and workflow details here reflect the original design and may differ from the actual implementation. For current state, see [IMPLEMENTATION.md](../IMPLEMENTATION.md) and the source code.
+
+---
+
+# Mimeo Implementation Plan (Original, 2026-02-14)
+
 ## Context
 
 Mimeo addresses a common problem: 70+ domains sitting dormant because manual provisioning overhead (DNS setup, hosting configuration, page creation) creates too much friction. This tool automates the complete workflow via APIs—zero manual steps from domain name to live landing page.

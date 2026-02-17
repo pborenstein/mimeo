@@ -1,24 +1,24 @@
 ---
-phase: 5
-phase_name: CLI Integration
-updated: 2026-02-16
-last_commit: ebb9d67
+phase: 6
+phase_name: Hardening
+updated: 2026-02-17
+last_commit: 9ac7c65
 ---
 
 ## Current Focus
 
-Added `--health` and `--fix` flags to `mimeo list`. Health check fetches Pages API data per repo concurrently; fix enables HTTPS enforcement for sites with approved certs. Tabular output replaces card format for readability at scale.
+Documentation refresh to match current state. README rewritten from scratch (current commands, config, known limitations). IMPLEMENTATION.md collapsed to compact summaries for completed phases; Phase 6 task list added based on CODEX-SPEAKS assessment. PLAN.md marked as archived.
 
 ## Active Tasks
 
-- [x] Add get_pages_health() to GitHubHost
-- [x] Add _health_status() helper (pages_error/no_cert/cert_pending/fixable/healthy)
-- [x] Add --health flag: concurrent Pages API fetch, adds status to all output formats
-- [x] Add --fix flag: enables HTTPS for fixable repos, prints fix summary
-- [x] Tabular text output sorted by severity then name
-- [x] 160 tests passing
-- [ ] Document workflow scope requirement in setup docs
-- [ ] Document uv tool install for global CLI access
+- [x] Refresh README to current state
+- [x] Document workflow scope requirement
+- [x] Document uv tool install for global CLI access
+- [x] Archive PLAN.md with historical notice
+- [x] Update IMPLEMENTATION.md with Phase 6 plan
+- [ ] Add `mimeo doctor` preflight command
+- [ ] Improve failure taxonomy and exit codes
+- [ ] Reconciliation / DNS drift detection
 
 ## Blockers
 
@@ -26,14 +26,11 @@ None.
 
 ## Context
 
-- get_pages_health() returns pages_configured, https_enforced, cert_state, pages_status
-- _health_status() is module-level (exported), used by CLI layer
-- --fix implies --health; fix runs serially after concurrent health fetch
-- Sort order: pages_error, no_cert, cert_pending, fixable, healthy (problems first)
-- Text table: NAME / SITE / UPDATED / STATUS (status color-coded); repo URL dropped (redundant)
-- JSON/CSV include health, https_enforced, cert_state fields when --health given
-- Pre-existing mypy error in cli.py (heterogeneous dict, unrelated to this work)
+- Phase 5 is fully complete (160 tests, create + list + health + fix all working)
+- CODEX-SPEAKS assessment identified doc accuracy (4/10) as top priority — now addressed
+- Phase 6 priorities from CODEX-SPEAKS: doctor command, error taxonomy, reconcile, --workers, retry/jitter, E2E test lane
+- Pre-existing mypy warning in cli.py (heterogeneous dict) — known, not blocking
 
 ## Next Session
 
-Documentation: setup guide covering workflow scope token requirement and uv tool install. Consider Phase 6 polish (rollback, integration tests, README).
+Implement `mimeo doctor`: check Python >=3.11, gh installed + authenticated, workflow scope present, config file exists and is valid, network reachability optional. Output actionable remediation for each failure.

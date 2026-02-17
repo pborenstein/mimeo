@@ -2,7 +2,7 @@
 
 import pytest
 
-from mimeo.models import DNSRecord, DeploymentConfig, Domain
+from mimeo.models import DNSRecord, Domain
 
 
 class TestDomain:
@@ -84,41 +84,3 @@ class TestDNSRecord:
             DNSRecord(type="A", name="@", content="")
 
 
-class TestDeploymentConfig:
-    """Tests for DeploymentConfig model."""
-
-    def test_default_values(self) -> None:
-        """DeploymentConfig should use correct defaults."""
-        domain = Domain("example.com")
-        config = DeploymentConfig(domain=domain)
-
-        assert config.domain == domain
-        assert config.registrar == "porkbun"
-        assert config.host == "github"
-        assert config.template == "minimal"
-        assert config.force is False
-        assert config.dry_run is False
-        assert config.verbose is False
-        assert config.no_verify is False
-
-    def test_custom_values(self) -> None:
-        """DeploymentConfig should accept custom values."""
-        domain = Domain("example.com")
-        config = DeploymentConfig(
-            domain=domain,
-            registrar="custom",
-            host="netlify",
-            template="fancy",
-            force=True,
-            dry_run=True,
-            verbose=True,
-            no_verify=True,
-        )
-
-        assert config.registrar == "custom"
-        assert config.host == "netlify"
-        assert config.template == "fancy"
-        assert config.force is True
-        assert config.dry_run is True
-        assert config.verbose is True
-        assert config.no_verify is True

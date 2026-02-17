@@ -242,6 +242,26 @@ Implemented the main `mimeo create` command that orchestrates the complete site 
 
 **Result**: ✅ Now shows all 63 repos. JSON/CSV enable scripting (`mimeo list --format csv | tail -n +2 | cut -d, -f1` for domain list). 151 tests passing.
 
+## Entry 13: Remove Dead Abstractions and Structured DeployResult (2026-02-16)
+
+**What**: Removed unused code that accumulated during initial design phase, replaced instance flag side-channel with a proper return type.
+
+**Why**: Periodic alignment check revealed drift: DeploymentConfig, workspace in Config, and configure_custom_domain were all designed upfront but never used in the actual implementation. Instance flags (_repo_was_created, _https_enabled) communicated state from deploy_site() to the CLI via hasattr() checks — a fragile side-channel pattern.
+
+**How**:
+- Removed DeploymentConfig dataclass from models.py
+- Removed workspace field from Config (content goes to tempfile, never a workspace)
+- Removed configure_custom_domain from Host ABC and GitHubHost (redundant with deploy_site)
+- Added DeployResult(url, repo_created, https_enabled) dataclass to providers/base.py
+- deploy_site() returns DeployResult instead of str + side-effect flags
+- Updated all call sites and tests (7 tests removed for deleted code)
+
+**Decisions**: See DEC-006
+
+**Files**: mimeo/models.py, mimeo/config.py, mimeo/providers/base.py, mimeo/providers/host/github.py, mimeo/cli.py, all test files
+
+**Result**: ✅ 145 tests passing. Ruff clean. No mypy regressions (pre-existing issue in cli.py heterogeneous dict).
+
 ## Entry 12: Idempotent Create Command for Existing Repos (2026-02-16)
 
 **What**: Fixed create command to handle existing repositories gracefully instead of failing on push rejection.

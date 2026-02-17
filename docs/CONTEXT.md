@@ -2,18 +2,20 @@
 phase: 5
 phase_name: CLI Integration
 updated: 2026-02-16
-last_commit: 75c27c1
+last_commit: a210f41
 ---
 
 ## Current Focus
 
-Made create command idempotent: handles existing repos by skipping content push, still configures GitHub Pages and DNS.
+Refactored dead abstractions: removed DeploymentConfig, workspace from Config, and configure_custom_domain. Replaced instance flag pattern on GitHubHost with structured DeployResult return value.
 
 ## Active Tasks
 
-- [x] Fix create command for existing repositories (skip push, configure DNS)
+- [x] Remove DeploymentConfig (unused model)
+- [x] Remove workspace field from Config (unused)
+- [x] Remove configure_custom_domain from Host ABC and GitHubHost
+- [x] Replace _repo_was_created/_https_enabled instance flags with DeployResult dataclass
 - [ ] Document workflow scope requirement in setup docs
-- [ ] Add configuration option for HTTPS enforcement
 - [ ] Document uv tool install for global CLI access
 
 ## Blockers
@@ -22,13 +24,12 @@ None.
 
 ## Context
 
-- create command now detects existing repos via _gh_api check before push
-- New repos: creates repo + pushes content + configures Pages + DNS
-- Existing repos: skips push, still configures Pages settings + DNS
-- _repo_was_created flag on GitHubHost communicates this to CLI
-- CLI shows "Repository exists / Skipped content push" for existing repos
-- 152 tests passing (added 1 new test for existing repo case)
+- DeployResult(url, repo_created, https_enabled) now returned from deploy_site()
+- DeployResult lives in providers/base.py alongside Host ABC
+- CLI reads result fields directly — no more hasattr() checks
+- 145 tests passing (removed 7 tests for deleted code)
+- Ruff linting clean, mypy pre-existing error in cli.py (heterogeneous dict)
 
 ## Next Session
 
-Document setup requirements (workflow scope, uv tool install). Consider adding config options for HTTPS enforcement behavior.
+Documentation: setup guide covering workflow scope token requirement and uv tool install for global CLI access. Consider Phase 6 polish work.

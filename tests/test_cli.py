@@ -11,6 +11,7 @@ from mimeo.cli import create, list, main
 from mimeo.config import Config
 from mimeo.exceptions import ConfigurationError, HostError, RegistrarError
 from mimeo.models import DNSRecord
+from mimeo.providers.base import DeployResult
 
 
 @pytest.fixture
@@ -20,10 +21,9 @@ def runner() -> CliRunner:
 
 
 @pytest.fixture
-def mock_config(tmp_path: Path) -> Config:
+def mock_config() -> Config:
     """Create mock config."""
     return Config(
-        workspace=tmp_path,
         porkbun_api_key="pk1_test",
         porkbun_secret="sk1_test",
         github_username="testuser",
@@ -92,7 +92,7 @@ class TestCreateCommand:
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
-        mock_host.deploy_site.return_value = "https://example.com"
+        mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
@@ -144,7 +144,7 @@ class TestCreateCommand:
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
-        mock_host.deploy_site.return_value = "https://example.com"
+        mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
@@ -216,7 +216,7 @@ class TestCreateCommand:
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
-        mock_host.deploy_site.return_value = "https://example.com"
+        mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
@@ -275,7 +275,7 @@ class TestCreateCommand:
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
-        mock_host.deploy_site.return_value = "https://example.com"
+        mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
@@ -308,7 +308,7 @@ class TestCreateCommand:
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
-        mock_host.deploy_site.return_value = "https://example.com"
+        mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
@@ -344,7 +344,7 @@ class TestCreateCommand:
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
-        mock_host.deploy_site.return_value = "https://example.com"
+        mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
@@ -377,7 +377,7 @@ class TestCreateCommand:
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
-        mock_host.deploy_site.return_value = "https://example.com"
+        mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
@@ -410,7 +410,7 @@ class TestCreateCommand:
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
-        mock_host.deploy_site.return_value = "https://example.com"
+        mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
@@ -443,7 +443,7 @@ class TestCreateCommand:
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
-        mock_host.deploy_site.side_effect = lambda domain, _: f"https://{domain}"
+        mock_host.deploy_site.side_effect = lambda domain, _: DeployResult(url=f"https://{domain}", repo_created=True, https_enabled=True)
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
@@ -488,7 +488,7 @@ class TestCreateCommand:
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
-        mock_host.deploy_site.side_effect = lambda domain, _: f"https://{domain}"
+        mock_host.deploy_site.side_effect = lambda domain, _: DeployResult(url=f"https://{domain}", repo_created=True, https_enabled=True)
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 

@@ -62,7 +62,6 @@ def test_load_config_with_defaults(minimal_config_file: Path) -> None:
     """Config should use defaults for optional fields."""
     config = Config.load(minimal_config_file)
 
-    assert config.workspace == Path.home() / ".mimeo" / "sites"
     assert config.default_registrar == "porkbun"
     assert config.default_host == "github"
 
@@ -72,14 +71,12 @@ def test_env_var_overrides(temp_config_file: Path, monkeypatch: pytest.MonkeyPat
     monkeypatch.setenv("MIMEO_PORKBUN_API_KEY", "env_key")
     monkeypatch.setenv("MIMEO_PORKBUN_SECRET", "env_secret")
     monkeypatch.setenv("MIMEO_GITHUB_USERNAME", "envuser")
-    monkeypatch.setenv("MIMEO_WORKSPACE", "/tmp/custom")
 
     config = Config.load(temp_config_file)
 
     assert config.porkbun_api_key == "env_key"
     assert config.porkbun_secret == "env_secret"
     assert config.github_username == "envuser"
-    assert config.workspace == Path("/tmp/custom")
 
 
 def test_missing_config_file() -> None:
@@ -146,8 +143,3 @@ def test_invalid_toml(tmp_path: Path) -> None:
         Config.load(config_file)
 
 
-def test_workspace_expands_tilde(temp_config_file: Path) -> None:
-    """Workspace path should expand ~ to home directory."""
-    config = Config.load(temp_config_file)
-    assert str(config.workspace).startswith(str(Path.home()))
-    assert "~" not in str(config.workspace)

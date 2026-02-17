@@ -313,9 +313,10 @@ class TestGitHubHost:
                                     mock_create.return_value = "testorg/example.com"
                                     mock_https.return_value = True
 
-                                    url = host.deploy_site("example.com", content_path)
+                                    result = host.deploy_site("example.com", content_path)
 
-                                    assert url == "https://example.com"
+                                    assert result.url == "https://example.com"
+                                    assert result.repo_created is True
                                     mock_create.assert_called_once_with("example.com", org="testorg")
                                     mock_push.assert_called_once_with(
                                         "testorg/example.com", content_path
@@ -342,9 +343,10 @@ class TestGitHubHost:
                                     mock_create.return_value = "testorg/example.com"
                                     mock_https.return_value = True
 
-                                    url = host.deploy_site("example.com", content_path)
+                                    result = host.deploy_site("example.com", content_path)
 
-                                    assert url == "https://example.com"
+                                    assert result.url == "https://example.com"
+                                    assert result.repo_created is False
                                     mock_create.assert_called_once_with("example.com", org="testorg")
                                     # Should NOT push content for existing repo
                                     mock_push.assert_not_called()
@@ -385,34 +387,6 @@ class TestGitHubHost:
                     host.deploy_site("example.com", content_path)
 
                 assert "failed to deploy" in str(exc_info.value).lower()
-
-    def test_configure_custom_domain(self, host: GitHubHost) -> None:
-        """Test configuring custom domain."""
-        with patch.object(host, "_get_authenticated_user") as mock_user:
-            with patch.object(host, "_set_custom_domain") as mock_set:
-                mock_user.return_value = "testorg"
-
-                host.configure_custom_domain("example.com")
-
-                mock_set.assert_called_once_with("testorg/example.com", "example.com")
-
-    def test_configure_custom_domain_with_default_org(self, host: GitHubHost) -> None:
-        """Test configuring custom domain uses default_org."""
-        with patch.object(host, "_set_custom_domain") as mock_set:
-            # host fixture has default_org="testorg"
-            host.configure_custom_domain("example.com")
-
-            mock_set.assert_called_once_with("testorg/example.com", "example.com")
-
-    def test_configure_custom_domain_error(self, host: GitHubHost) -> None:
-        """Test error handling in configure_custom_domain."""
-        with patch.object(host, "_set_custom_domain") as mock_set:
-            mock_set.side_effect = Exception("Unexpected error")
-
-            with pytest.raises(HostError) as exc_info:
-                host.configure_custom_domain("example.com")
-
-            assert "failed to configure" in str(exc_info.value).lower()
 
     def test_enable_https_enforcement_success(self, host: GitHubHost) -> None:
         """Test enabling HTTPS enforcement when certificate is ready."""

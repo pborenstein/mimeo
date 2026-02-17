@@ -235,6 +235,23 @@ Architectural decisions for Mimeo. Search with `grep -i "keyword" docs/DECISIONS
 
 ---
 
+### DEC-014: DeployResult Dataclass as Return Value (2026-02-16)
+
+**Status**: Active
+
+**Context**: deploy_site() originally returned a bare string (the URL) and communicated additional state (repo_created, https_enabled) via instance flags set as side effects. CLI read these with hasattr() checks — a fragile pattern since the flags only existed if deploy_site() completed successfully.
+
+**Decision**: Return a DeployResult(url, repo_created, https_enabled) dataclass from deploy_site(). Place DeployResult in providers/base.py alongside the Host ABC so it's part of the provider contract.
+
+**Alternatives considered**:
+- Tuple return: (url, repo_created, https_enabled) — unreadable at call sites
+- Dict return: Loses type safety
+- Keep instance flags: Works but fragile; breaks if deploy_site() is called more than once per instance
+
+**Consequences**: deploy_site() signature changes from `-> str` to `-> DeployResult`. All callers and mocks must be updated. Type-safe, explicit, and no hidden side channels. The abstract Host.deploy_site() method now requires concrete implementations to return DeployResult.
+
+---
+
 ## Superseded/Deprecated
 
 [No superseded decisions yet]

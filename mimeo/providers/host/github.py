@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from mimeo.exceptions import HostError
-from mimeo.providers.base import Host
+from mimeo.providers.base import DeployResult, Host
 
 
 class GitHubHost(Host):
@@ -421,7 +421,7 @@ class GitHubHost(Host):
             stderr = e.stderr.decode() if e.stderr else ""
             raise HostError(f"Git operation failed: {stderr}") from e
 
-    def deploy_site(self, domain: str, content_path: Path) -> str:
+    def deploy_site(self, domain: str, content_path: Path) -> DeployResult:
         """Deploy a site to GitHub Pages.
 
         This will:
@@ -440,7 +440,7 @@ class GitHubHost(Host):
             content_path: Path to site content directory
 
         Returns:
-            Live URL of the deployed site (e.g., https://example.com)
+            DeployResult with url, repo_created, and https_enabled flags
 
         Raises:
             HostError: If deployment fails
@@ -452,32 +452,24 @@ class GitHubHost(Host):
             raise HostError(f"Content path is not a directory: {content_path}")
 
         try:
-            # Convert domain to repository name (replace dots with hyphens if needed)
-            # For GitHub, we can actually use the domain name directly
             repo_name = domain
             owner = self.default_org or self._get_authenticated_user()
             repo_full_name = f"{owner}/{repo_name}"
 
-            # Check if repository already exists with content
+            # Check if repository already exists
             repo_exists = False
             try:
                 self._gh_api(f"repos/{repo_full_name}")
                 repo_exists = True
             except HostError:
-                # Repository doesn't exist, we'll create it
                 pass
 
-            # Create repository (or get existing)
+            # Create repository (or confirm existing)
             repo_full_name = self._create_repository(repo_name, org=self.default_org)
 
             # Only initialize and push if repository is new
             if not repo_exists:
-                # Initialize and push content
                 self._init_and_push_repository(repo_full_name, content_path)
-                self._repo_was_created = True
-            else:
-                # Repository already exists, skip content push
-                self._repo_was_created = False
 
             # Enable GitHub Pages
             self._enable_github_pages(repo_full_name)
@@ -487,9 +479,13 @@ class GitHubHost(Host):
 
             # Try to enable HTTPS enforcement
             # This will fail if certificate isn't ready yet (expected for new sites)
-            self._https_enabled = self._enable_https_enforcement(repo_full_name)
+            https_enabled = self._enable_https_enforcement(repo_full_name)
 
-            return f"https://{domain}"
+            return DeployResult(
+                url=f"https://{domain}",
+                repo_created=not repo_exists,
+                https_enabled=https_enabled,
+            )
 
         except Exception as e:
             if isinstance(e, HostError):
@@ -522,34 +518,6 @@ class GitHubHost(Host):
             return repos
         except Exception as e:
             raise HostError(f"Failed to list mimeo repositories: {e}") from e
-
-    def configure_custom_domain(self, domain: str) -> None:
-        """Configure custom domain in GitHub Pages settings.
-
-        This sets the custom domain in the repository settings and creates
-        a CNAME file in the repository.
-
-        Args:
-            domain: Custom domain to configure
-
-        Raises:
-            HostError: If custom domain configuration fails
-        """
-        try:
-            # Repository name is the domain
-            repo_name = domain
-            owner = self.default_org or self._get_authenticated_user()
-            repo_full_name = f"{owner}/{repo_name}"
-
-            # Set custom domain in Pages settings
-            self._set_custom_domain(repo_full_name, domain)
-
-        except Exception as e:
-            if isinstance(e, HostError):
-                raise
-            raise HostError(
-                f"Failed to configure custom domain {domain}: {e}"
-            ) from e
 
     def __enter__(self) -> "GitHubHost":
         """Context manager entry."""

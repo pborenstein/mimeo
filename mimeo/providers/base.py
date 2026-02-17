@@ -1,6 +1,7 @@
 """Abstract base classes for providers."""
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from pathlib import Path
 
 from mimeo.models import DNSRecord
@@ -39,11 +40,20 @@ class Registrar(ABC):
         pass
 
 
+@dataclass
+class DeployResult:
+    """Result of a site deployment."""
+
+    url: str
+    repo_created: bool
+    https_enabled: bool
+
+
 class Host(ABC):
     """Abstract base class for hosting providers."""
 
     @abstractmethod
-    def deploy_site(self, domain: str, content_path: Path) -> str:
+    def deploy_site(self, domain: str, content_path: Path) -> DeployResult:
         """Deploy a site to the hosting provider.
 
         Args:
@@ -51,21 +61,9 @@ class Host(ABC):
             content_path: Path to site content directory
 
         Returns:
-            Live URL of the deployed site
+            DeployResult with url, repo_created, and https_enabled flags
 
         Raises:
             HostError: If deployment fails
-        """
-        pass
-
-    @abstractmethod
-    def configure_custom_domain(self, domain: str) -> None:
-        """Configure custom domain in hosting provider settings.
-
-        Args:
-            domain: Custom domain to configure
-
-        Raises:
-            HostError: If custom domain configuration fails
         """
         pass

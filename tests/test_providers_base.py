@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from mimeo.models import DNSRecord
-from mimeo.providers.base import Host, Registrar
+from mimeo.providers.base import DeployResult, Host, Registrar
 
 
 class ConcreteRegistrar(Registrar):
@@ -23,13 +23,9 @@ class ConcreteRegistrar(Registrar):
 class ConcreteHost(Host):
     """Concrete implementation of Host for testing."""
 
-    def deploy_site(self, domain: str, content_path: Path) -> str:
+    def deploy_site(self, domain: str, content_path: Path) -> DeployResult:
         """Test implementation."""
-        return f"https://{domain}"
-
-    def configure_custom_domain(self, domain: str) -> None:
-        """Test implementation."""
-        pass
+        return DeployResult(url=f"https://{domain}", repo_created=True, https_enabled=True)
 
 
 def test_registrar_can_be_instantiated() -> None:
@@ -62,14 +58,10 @@ def test_host_can_be_instantiated() -> None:
 def test_host_has_deploy_site_method() -> None:
     """Host should have deploy_site method."""
     host = ConcreteHost()
-    url = host.deploy_site("example.com", Path("/tmp/site"))
-    assert url == "https://example.com"
-
-
-def test_host_has_configure_custom_domain_method() -> None:
-    """Host should have configure_custom_domain method."""
-    host = ConcreteHost()
-    host.configure_custom_domain("example.com")
+    result = host.deploy_site("example.com", Path("/tmp/site"))
+    assert result.url == "https://example.com"
+    assert result.repo_created is True
+    assert result.https_enabled is True
 
 
 def test_cannot_instantiate_abstract_registrar() -> None:

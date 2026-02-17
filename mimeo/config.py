@@ -13,7 +13,6 @@ from mimeo.exceptions import ConfigurationError
 class Config:
     """Mimeo configuration."""
 
-    workspace: Path
     porkbun_api_key: str
     porkbun_secret: str
     github_username: str
@@ -54,12 +53,6 @@ class Config:
         porkbun_config = data.get("porkbun", {})
         github_config = data.get("github", {})
 
-        # Workspace directory
-        workspace_str = os.getenv("MIMEO_WORKSPACE")
-        if not workspace_str:
-            workspace_str = "~/.mimeo/sites"
-        workspace = Path(workspace_str).expanduser()
-
         # Porkbun credentials
         porkbun_api_key = os.getenv("MIMEO_PORKBUN_API_KEY") or porkbun_config.get(
             "api_key"
@@ -88,7 +81,6 @@ class Config:
             )
 
         return cls(
-            workspace=workspace,
             porkbun_api_key=porkbun_api_key,
             porkbun_secret=porkbun_secret,
             github_username=github_username,

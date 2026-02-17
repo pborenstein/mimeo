@@ -89,12 +89,11 @@ def _process_single_domain(domain: str, cfg: Config, dry_run: bool, verbose: boo
             log("Configuring GitHub repository")
             try:
                 with GitHubHost(default_org=cfg.github_username) as host:
-                    site_url = host.deploy_site(domain, content_path)
-                    result["url"] = site_url
+                    deploy = host.deploy_site(domain, content_path)
+                    result["url"] = deploy.url
                     result["repo_url"] = f"https://github.com/{cfg.github_username}/{domain}"
 
-                    # Check if repo was newly created or already existed
-                    if hasattr(host, '_repo_was_created') and host._repo_was_created:
+                    if deploy.repo_created:
                         log(f"Repository created: {cfg.github_username}/{domain}", "success")
                         log("Content pushed to GitHub", "success")
                     else:
@@ -104,8 +103,7 @@ def _process_single_domain(domain: str, cfg: Config, dry_run: bool, verbose: boo
                     log("GitHub Pages enabled", "success")
                     log(f"Custom domain configured: {domain}", "success")
 
-                    # Check if HTTPS enforcement was enabled
-                    if hasattr(host, '_https_enabled') and not host._https_enabled:
+                    if not deploy.https_enabled:
                         log("HTTPS enforcement pending SSL certificate", "warning")
                         result["https_pending"] = True
                     else:
@@ -306,9 +304,9 @@ def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on
                 click.echo(f"  URL: {result.get('url', 'N/A')}")
                 click.echo(f"  Repository: {result.get('repo_url', 'N/A')}")
                 if result.get("https_pending"):
-                    click.secho(f"  HTTPS: Pending SSL certificate", fg="yellow")
+                    click.secho("  HTTPS: Pending SSL certificate", fg="yellow")
                 if result.get("dns_pending"):
-                    click.secho(f"  DNS: Propagation pending", fg="yellow")
+                    click.secho("  DNS: Propagation pending", fg="yellow")
         else:
             click.secho(f"✗ {domain}", fg="red", bold=True)
             click.secho(f"  Error: {result.get('error', 'Unknown error')}", fg="red")

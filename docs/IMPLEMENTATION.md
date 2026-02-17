@@ -110,6 +110,11 @@ Living document tracking progress on the domain landing page provisioning tool.
 - [x] Fix create command for existing repositories (skip content push, configure DNS)
 - [x] Add test for existing repository deployment case
 - [x] Verify all 152 tests pass
+- [x] Refactor: remove DeploymentConfig (unused model)
+- [x] Refactor: remove workspace from Config (unused field)
+- [x] Refactor: remove configure_custom_domain from Host ABC and GitHubHost
+- [x] Refactor: replace instance flag pattern with DeployResult dataclass
+- [x] Verify all 145 tests pass (7 removed for deleted code)
 
 **Success Criteria**: ✅ All criteria met
 

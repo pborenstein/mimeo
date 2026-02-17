@@ -56,15 +56,3 @@ class DNSRecord:
             raise ValueError("DNS record content cannot be empty")
 
 
-@dataclass
-class DeploymentConfig:
-    """Configuration for a deployment."""
-
-    domain: Domain
-    registrar: str = "porkbun"
-    host: str = "github"
-    template: str = "minimal"
-    force: bool = False
-    dry_run: bool = False
-    verbose: bool = False
-    no_verify: bool = False

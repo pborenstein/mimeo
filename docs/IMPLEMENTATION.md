@@ -107,6 +107,9 @@ Living document tracking progress on the domain landing page provisioning tool.
 - [x] Create docs/LIST_COMMAND.md reference guide
 - [x] Add 4 new tests for JSON/CSV formats
 - [x] Verify all 151 tests pass
+- [x] Fix create command for existing repositories (skip content push, configure DNS)
+- [x] Add test for existing repository deployment case
+- [x] Verify all 152 tests pass
 
 **Success Criteria**: ✅ All criteria met
 

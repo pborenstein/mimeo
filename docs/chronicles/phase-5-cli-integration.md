@@ -241,3 +241,19 @@ Implemented the main `mimeo create` command that orchestrates the complete site 
 **Files**: Commits ee445b2 (pagination fix), 6d109d9 (formats), 6e187e0 (docs)
 
 **Result**: ✅ Now shows all 63 repos. JSON/CSV enable scripting (`mimeo list --format csv | tail -n +2 | cut -d, -f1` for domain list). 151 tests passing.
+
+## Entry 12: Idempotent Create Command for Existing Repos (2026-02-16)
+
+**What**: Fixed create command to handle existing repositories gracefully instead of failing on push rejection.
+
+**Why**: Running `mimeo create caponislands.com` on an existing repo failed with a git push rejection. User needed to configure DNS for existing sites without full redeployment.
+
+**How**:
+- deploy_site() checks if repo exists via `_gh_api(f"repos/{owner}/{repo_name}")` before pushing
+- Sets `_repo_was_created` flag to communicate new vs existing to CLI
+- Existing repos: skip content push, still configure GitHub Pages settings and DNS
+- CLI messaging distinguishes new ("Repository created") from existing ("Repository exists / Skipped content push")
+
+**Files**: Commit 75c27c1 (github.py, cli.py, 2 test files)
+
+**Result**: ✅ create command is now idempotent. Tested with caponislands.com. 152 tests passing.

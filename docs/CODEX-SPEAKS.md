@@ -200,3 +200,134 @@ If your next phase plan is organized around that, you'll preserve current moment
 - **Contributor ergonomics**: 5/10 (setup path too fragile)
 
 Overall: **promising project, now entering hardening phase**.
+
+---
+
+## Template strategy ideation (product + UX direction)
+
+You’re right: the current template model is intentionally minimal, but now it’s the constraint.
+
+If the next value unlock is “I can choose the *kind* of site I want,” treat templates as
+**site products** rather than just HTML variants.
+
+## Proposed template categories
+
+Start with explicit user-facing types:
+
+1. **Landing page**
+   - Goal: fast “this domain exists” presence
+   - Tech: static HTML/CSS (existing approach)
+   - Setup cost: very low
+
+2. **Single-page story** (Two Horses / Esther style)
+   - Goal: artful narrative + strong typography + motion
+   - Tech: static bundle (prebuilt CSS/JS), no backend
+   - Setup cost: low
+
+3. **Dashboard / link hub**
+   - Goal: personal command center with cards, links, statuses, embeds
+   - Tech: static app shell with JSON config-driven cards
+   - Setup cost: low-medium
+
+4. **Eleventy site**
+   - Goal: content-driven site with simple authoring and markdown
+   - Tech: 11ty scaffold + build workflow
+   - Setup cost: medium
+
+5. **Astro blog**
+   - Goal: richer blog/docs experience, modern component islands
+   - Tech: Astro scaffold + content collections + build workflow
+   - Setup cost: medium-high
+
+## UX model for template selection
+
+### CLI should express intent first, stack second
+
+Use semantic language:
+
+```bash
+mimeo create example.com --type landing
+mimeo create storydomain.lol --type story
+mimeo create notes.place --type eleventy
+mimeo create journal.zone --type astro-blog
+```
+
+Then optionally expose implementation details only for advanced users:
+
+```bash
+mimeo create journal.zone --type astro-blog --theme editorial-dark --preset minimal-nav
+```
+
+## “Template cards” mental model
+
+When users run `mimeo templates`, show a concise card list:
+
+- **Name** + one-line purpose
+- **Best for** (e.g., “writers”, “portfolio”, “quick launch”)
+- **Complexity** (low/med/high)
+- **Deploy time estimate**
+- **Customization level**
+- **Example URLs**
+
+This avoids a technical-first UX and helps non-engineering users choose confidently.
+
+## Information architecture: template manifest
+
+Each template should ship with a machine-readable manifest, e.g. conceptual fields:
+
+- `id`: `landing`, `story`, `dashboard`, `eleventy`, `astro-blog`
+- `display_name`
+- `description`
+- `tags`: `minimal`, `blog`, `narrative`, `portfolio`
+- `complexity`: `low|medium|high`
+- `requires_build`: `true|false`
+- `runtime`: `static|node-build`
+- `prompts`: questions to ask user (title, byline, nav style, accent, etc.)
+- `outputs`: files/workflows expected
+
+This gives you extensibility without hardcoding per-template logic in `cli.py`.
+
+## Recommended rollout path (to reduce risk)
+
+### Wave 1: “No-regrets” UX expansion
+
+- Keep current minimal site as `landing`.
+- Add one additional static type: `story`.
+- Add one config-driven type: `dashboard`.
+- Introduce template discovery (`mimeo templates`) and explicit `--type` selection.
+
+Why first: minimal new runtime complexity, maximum perceived product leap.
+
+### Wave 2: SSG-powered templates
+
+- Add `eleventy` scaffold with standard Pages workflow.
+- Add `astro-blog` scaffold with opinionated defaults.
+- Include starter content so generated sites feel complete on first deploy.
+
+Why second: adds Node/build complexity; better after template UX is proven.
+
+### Wave 3: ecosystem and polish
+
+- Theme presets per template type.
+- Template-specific validation (required fields, image ratios, etc.).
+- `mimeo template preview` for local screenshot/URL before deploy.
+
+## UI/UX quality bar (what “good” looks like)
+
+For each template type, ensure:
+
+1. **Strong default aesthetics** (ship opinionated, not blank)
+2. **Immediate readability** on mobile
+3. **Accessible typography and contrast**
+4. **Fast first paint** (especially for landing/story)
+5. **Minimal decisions required** for a first successful publish
+
+If users need to answer >5 questions to launch, the flow is likely too heavy.
+
+## Product framing recommendation
+
+Position Mimeo as:
+
+> “Domain-to-live-site automation with opinionated starter experiences.”
+
+That framing makes templates a first-class product feature (not an afterthought), and aligns with your original “kill paperwork” thesis.

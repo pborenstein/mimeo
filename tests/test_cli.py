@@ -179,8 +179,7 @@ class TestCreateCommand:
 
         result = runner.invoke(create, ["example.com"])
 
-        assert result.exit_code == 1
-        assert "Configuration error" in result.output
+        assert result.exit_code == 2
         assert "Config file not found" in result.output
 
     @patch("mimeo.cli.Config.load")
@@ -204,8 +203,7 @@ class TestCreateCommand:
 
         result = runner.invoke(create, ["example.com"])
 
-        assert result.exit_code == 1
-        assert "Deployment error" in result.output
+        assert result.exit_code == 5
         assert "GitHub API failed" in result.output
 
     @patch("mimeo.cli.Config.load")
@@ -259,8 +257,8 @@ class TestCreateCommand:
 
         result = runner.invoke(create, ["example.com"])
 
-        assert result.exit_code == 1
-        assert "Unexpected error" in result.output
+        assert result.exit_code == 5
+        assert "Failed to write file" in result.output
 
     @patch("mimeo.cli.Config.load")
     @patch("mimeo.cli.generate_minimal_site")
@@ -591,8 +589,8 @@ class TestListCommand:
 
         result = runner.invoke(list, [])
 
-        assert result.exit_code == 1
-        assert "Configuration error" in result.output
+        assert result.exit_code == 2
+        assert "Config not found" in result.output
 
     @patch("mimeo.cli.Config.load")
     @patch("mimeo.cli.GitHubHost")

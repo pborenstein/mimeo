@@ -15,12 +15,63 @@ import click
 from . import __version__
 from .config import Config
 from .content import generate_minimal_site
-from .exceptions import ConfigurationError, HostError, RegistrarError
+from .exceptions import (
+    EXIT_AUTH,
+    EXIT_CONFIG,
+    EXIT_PARTIAL,
+    EXIT_RATE_LIMIT,
+    EXIT_TRANSIENT,
+    APIError,
+    ConfigurationError,
+    HostError,
+    NetworkError,
+    RegistrarError,
+)
 from .providers.host.github import GitHubHost, _health_status
 from .providers.registrar.porkbun import PorkbunRegistrar
 
 # Lock for thread-safe console output
 _console_lock = Lock()
+
+_AUTH_KEYWORDS = ("unauthorized", "authentication", "forbidden", "invalid api key", "bad credentials")
+_RATE_LIMIT_KEYWORDS = ("rate limit", "429")
+_TRANSIENT_KEYWORDS = ("502", "503", "500", "timeout", "connection")
+
+
+def _categorize_error(exc: BaseException) -> tuple[int, str]:
+    """Return (exit_code, category_label) for an exception.
+
+    Args:
+        exc: The exception to categorize
+
+    Returns:
+        Tuple of exit code and short category label for display
+    """
+    if isinstance(exc, ConfigurationError):
+        return EXIT_CONFIG, "config"
+
+    msg = str(exc).lower()
+
+    if isinstance(exc, APIError):
+        if exc.status_code == 429 or any(k in msg for k in _RATE_LIMIT_KEYWORDS):
+            return EXIT_RATE_LIMIT, "rate-limit"
+        if exc.status_code in (500, 502, 503, 504):
+            return EXIT_TRANSIENT, "transient"
+        if any(k in msg for k in _AUTH_KEYWORDS):
+            return EXIT_AUTH, "auth"
+
+    if isinstance(exc, NetworkError):
+        return EXIT_TRANSIENT, "transient"
+
+    if isinstance(exc, (HostError, RegistrarError)):
+        if any(k in msg for k in _AUTH_KEYWORDS):
+            return EXIT_AUTH, "auth"
+        if any(k in msg for k in _RATE_LIMIT_KEYWORDS):
+            return EXIT_RATE_LIMIT, "rate-limit"
+        if any(k in msg for k in _TRANSIENT_KEYWORDS):
+            return EXIT_TRANSIENT, "transient"
+
+    return EXIT_TRANSIENT, "provider"
 
 
 def _process_single_domain(domain: str, cfg: Config, dry_run: bool, verbose: bool = True) -> dict:
@@ -38,6 +89,7 @@ def _process_single_domain(domain: str, cfg: Config, dry_run: bool, verbose: boo
         "domain": domain,
         "success": False,
         "error": None,
+        "error_category": None,
         "url": None,
         "repo_url": None,
         "https_pending": False,
@@ -144,17 +196,14 @@ def _process_single_domain(domain: str, cfg: Config, dry_run: bool, verbose: boo
                 log("Site deployed but DNS not configured", "warning")
                 # Don't raise - site is still accessible via github.io URL
                 result["dns_pending"] = True
+                result["error_category"] = "partial"
 
         result["success"] = True
 
-    except ConfigurationError as e:
-        result["error"] = f"Configuration error: {e}"
-        log(str(result["error"]), "error")
-    except HostError as e:
-        result["error"] = f"Deployment error: {e}"
-        log(str(result["error"]), "error")
     except Exception as e:
-        result["error"] = f"Unexpected error: {e}"
+        exit_code, category = _categorize_error(e)
+        result["error"] = f"[{category}] {e}"
+        result["error_category"] = category
         log(str(result["error"]), "error")
 
     return result
@@ -211,8 +260,8 @@ def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on
         click.echo("Loading configuration...")
         cfg = Config.load(config)
     except ConfigurationError as e:
-        click.secho(f"Configuration error: {e}", fg="red", err=True)
-        raise click.Abort()
+        click.secho(f"[config] {e}", fg="red", err=True)
+        sys.exit(EXIT_CONFIG)
 
     if dry_run:
         click.secho("DRY RUN MODE - No changes will be made", fg="cyan", bold=True)
@@ -314,9 +363,19 @@ def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on
             click.secho(f"  Error: {result.get('error', 'Unknown error')}", fg="red")
         click.echo()
 
-    # Exit with error if any failed
+    # Exit with error if any failed, using the most severe error category
     if success_count < total_count:
-        raise click.Abort()
+        _category_to_code = {
+            "config": EXIT_CONFIG,
+            "auth": EXIT_AUTH,
+            "rate-limit": EXIT_RATE_LIMIT,
+            "transient": EXIT_TRANSIENT,
+            "provider": EXIT_TRANSIENT,
+            "partial": EXIT_PARTIAL,
+        }
+        failed = [r for r in results if not r["success"]]
+        codes = [_category_to_code.get(r.get("error_category") or "transient", EXIT_TRANSIENT) for r in failed]
+        sys.exit(min(codes))  # lower code = more specific / severe
 
 
 @main.command()
@@ -527,15 +586,10 @@ def list(config: Path | None, format: str, health: bool, fix: bool) -> None:
                         click.secho(f"  ✗ {r['name']} ({r['error']})", fg="red")
                 click.echo()
 
-    except ConfigurationError as e:
-        click.secho(f"Configuration error: {e}", fg="red", err=True)
-        raise click.Abort()
-    except HostError as e:
-        click.secho(f"Error: {e}", fg="red", err=True)
-        raise click.Abort()
     except Exception as e:
-        click.secho(f"Unexpected error: {e}", fg="red", err=True)
-        raise click.Abort()
+        exit_code, category = _categorize_error(e)
+        click.secho(f"[{category}] {e}", fg="red", err=True)
+        sys.exit(exit_code)
 
 
 def _check_python_version() -> tuple[bool, str, str]:
@@ -667,7 +721,7 @@ def doctor(config: Path | None) -> None:
         click.secho("All checks passed.", fg="green", bold=True)
     else:
         click.secho("Some checks failed. Address the issues above before running mimeo.", fg="red")
-        raise click.Abort()
+        sys.exit(EXIT_CONFIG)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,13 @@
 """Exception hierarchy for Mimeo."""
 
+# Exit codes
+EXIT_OK = 0
+EXIT_CONFIG = 2
+EXIT_AUTH = 3
+EXIT_RATE_LIMIT = 4
+EXIT_TRANSIENT = 5
+EXIT_PARTIAL = 6
+
 
 class MimeoError(Exception):
     """Base exception for all Mimeo errors."""

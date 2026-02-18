@@ -28,3 +28,17 @@
 - 17 new tests added (177 total); all passing
 
 **Files**: mimeo/cli.py, tests/test_cli.py
+
+## Entry 17: Repo cleanup and baseline documentation (2026-02-17)
+
+**What**: Moved smoke test scripts from root into scripts/, then ran docs-artichoke to create a comprehensive documentation baseline.
+
+**Why**: Two interactive smoke test scripts at the repo root belonged with other dev utilities in scripts/. docs-artichoke was used to fill gaps in user-facing docs that had grown stale.
+
+**How**:
+- `smoke_test.py` -> `scripts/smoke_test_porkbun.py` (renamed for clarity)
+- `smoke_test_github.py` -> `scripts/smoke_test_github.py`
+- Created: CONTRIBUTING.md, docs/ARCHITECTURE.md, docs/TROUBLESHOOTING.md, docs/README.md
+- Updated: README.md (quick start, doctor command, architecture diagram, doc nav table)
+
+**Files**: commit 7efa101; CONTRIBUTING.md, docs/ARCHITECTURE.md, docs/TROUBLESHOOTING.md, docs/README.md, README.md

@@ -2,12 +2,12 @@
 phase: 6
 phase_name: Hardening
 updated: 2026-02-17
-last_commit: 23daf95
+last_commit: 7efa101
 ---
 
 ## Current Focus
 
-Phase 6 Hardening underway. `mimeo doctor` preflight command implemented and tested (177 tests passing).
+Phase 6 Hardening. Repo cleanup and baseline documentation pass completed this session.
 
 ## Active Tasks
 
@@ -28,11 +28,10 @@ None.
 
 ## Context
 
-- `mimeo doctor` checks: Python >=3.11, gh installed, gh authenticated, workflow scope, config valid
-- Each check returns (ok, detail, fix) tuple — helper functions are independently testable
-- 177 tests total (was 160, +17 for doctor)
-- Pre-existing mypy warning in cli.py (heterogeneous dict) — known, not blocking
+- 177 tests passing; pre-existing mypy warning in cli.py (heterogeneous dict), not blocking
+- New docs this session: CONTRIBUTING.md, docs/ARCHITECTURE.md, docs/TROUBLESHOOTING.md, docs/README.md
+- Smoke tests relocated: scripts/smoke_test_porkbun.py and scripts/smoke_test_github.py
 
 ## Next Session
 
-Continue Phase 6: improve failure taxonomy and exit codes (config / auth / rate-limit / transient / provider), or discuss template feature.
+Continue Phase 6: improve failure taxonomy and exit codes, or start on retry-with-jitter for transient API failures.

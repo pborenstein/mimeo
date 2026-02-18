@@ -508,6 +508,81 @@ class TestGitHubHost:
             assert "1000" in call_args
 
 
+class TestGitHubHostRetry:
+    """Tests for retry behaviour in GitHubHost._run_gh_command."""
+
+    @pytest.fixture
+    def mock_gh_auth(self) -> Mock:
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(returncode=0, stdout="", stderr="")
+            yield mock_run
+
+    @pytest.fixture
+    def host(self, mock_gh_auth: Mock) -> GitHubHost:
+        return GitHubHost(token="ghp_test_token", default_org="testorg")
+
+    @patch("mimeo.utils.retry.time.sleep")
+    def test_retries_on_502_error(self, mock_sleep, host: GitHubHost) -> None:
+        """Retries when gh CLI returns a 502 error message."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = [
+                Mock(returncode=1, stdout="", stderr="502 Bad Gateway"),
+                Mock(returncode=0, stdout='{"login":"user"}', stderr=""),
+            ]
+            result = host._run_gh_command(["api", "user"])
+            assert result == '{"login":"user"}'
+            assert mock_sleep.call_count == 1
+
+    @patch("mimeo.utils.retry.time.sleep")
+    def test_retries_on_503_error(self, mock_sleep, host: GitHubHost) -> None:
+        """Retries when gh CLI returns a 503 error message."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = [
+                Mock(returncode=1, stdout="", stderr="Service Unavailable 503"),
+                Mock(returncode=0, stdout="ok", stderr=""),
+            ]
+            result = host._run_gh_command(["api", "user"])
+            assert result == "ok"
+            assert mock_sleep.call_count == 1
+
+    @patch("mimeo.utils.retry.time.sleep")
+    def test_retries_on_rate_limit(self, mock_sleep, host: GitHubHost) -> None:
+        """Retries when gh CLI reports rate limit exceeded."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = [
+                Mock(returncode=1, stdout="", stderr="API rate limit exceeded for user"),
+                Mock(returncode=0, stdout="done", stderr=""),
+            ]
+            result = host._run_gh_command(["api", "rate_limit"])
+            assert result == "done"
+            assert mock_sleep.call_count == 1
+
+    @patch("mimeo.utils.retry.time.sleep")
+    def test_no_retry_on_auth_failure(self, mock_sleep, host: GitHubHost) -> None:
+        """Does not retry when gh CLI reports an authentication failure."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(
+                returncode=1, stdout="", stderr="authentication required"
+            )
+            with pytest.raises(Exception):
+                host._run_gh_command(["api", "user"])
+            # Non-transient error — subprocess called once, no retry
+            assert mock_run.call_count == 1
+            mock_sleep.assert_not_called()
+
+    @patch("mimeo.utils.retry.time.sleep")
+    def test_no_retry_on_repo_already_exists(self, mock_sleep, host: GitHubHost) -> None:
+        """Does not retry when gh CLI reports repository already exists."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(
+                returncode=1, stdout="", stderr="Name already exists on this account"
+            )
+            with pytest.raises(Exception):
+                host._run_gh_command(["repo", "create", "my-repo"])
+            assert mock_run.call_count == 1
+            mock_sleep.assert_not_called()
+
+
 class TestHealthStatus:
     """Tests for _health_status helper function."""
 

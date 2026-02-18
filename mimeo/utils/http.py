@@ -1,23 +1,22 @@
-"""HTTP client utilities with retry logic and error handling."""
+"""HTTP client utilities with error handling."""
 
 from typing import Any, Dict, Optional
 from urllib.parse import urljoin
 
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 from mimeo.exceptions import APIError, NetworkError
 
 
 class HTTPClient:
-    """HTTP client with automatic retries and error handling.
+    """HTTP client with error handling.
 
     Provides a simple interface for making HTTP requests with:
-    - Automatic retries with exponential backoff
     - Configurable timeouts
     - JSON request/response handling
     - Consistent error handling
+
+    Retry logic is handled at the provider layer via retry_with_jitter.
     """
 
     def __init__(
@@ -32,25 +31,12 @@ class HTTPClient:
         Args:
             base_url: Base URL for all requests
             timeout: Request timeout in seconds
-            max_retries: Maximum number of retry attempts
-            backoff_factor: Backoff factor for retries (delay = backoff_factor * (2 ** retry_number))
+            max_retries: Unused; kept for API compatibility
+            backoff_factor: Unused; kept for API compatibility
         """
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
-
-        # Configure retry strategy
-        retry_strategy = Retry(
-            total=max_retries,
-            backoff_factor=backoff_factor,
-            status_forcelist=[429, 500, 502, 503, 504],
-            allowed_methods=["HEAD", "GET", "POST", "PUT", "DELETE", "OPTIONS", "TRACE"],
-        )
-
-        # Create session with retry adapter
         self.session = requests.Session()
-        adapter = HTTPAdapter(max_retries=retry_strategy)
-        self.session.mount("http://", adapter)
-        self.session.mount("https://", adapter)
 
     def _build_url(self, path: str) -> str:
         """Build full URL from base URL and path.

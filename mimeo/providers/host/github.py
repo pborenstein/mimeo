@@ -7,6 +7,7 @@ from typing import Any, Dict
 
 from mimeo.exceptions import HostError
 from mimeo.providers.base import DeployResult, Host
+from mimeo.utils.retry import retry_with_jitter
 
 
 def _health_status(health: Dict[str, Any]) -> str:
@@ -73,7 +74,7 @@ class GitHubHost(Host):
             )
 
     def _run_gh_command(self, args: list[str], input_data: str | None = None) -> str:
-        """Run a gh CLI command.
+        """Run a gh CLI command with retry on transient errors.
 
         Args:
             args: Command arguments (without 'gh' prefix)
@@ -85,33 +86,35 @@ class GitHubHost(Host):
         Raises:
             HostError: If command fails
         """
-        try:
-            env = None
-            if self.token:
-                import os
-                env = os.environ.copy()
-                env["GH_TOKEN"] = self.token
+        import os
 
-            result = subprocess.run(
-                ["gh"] + args,
-                capture_output=True,
-                text=True,
-                check=False,
-                input=input_data,
-                env=env,
-            )
+        env = None
+        if self.token:
+            env = os.environ.copy()
+            env["GH_TOKEN"] = self.token
 
-            if result.returncode != 0:
-                error_msg = result.stderr.strip() or result.stdout.strip()
-                raise HostError(f"GitHub CLI command failed: {error_msg}")
+        def _attempt() -> str:
+            try:
+                result = subprocess.run(
+                    ["gh"] + args,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    input=input_data,
+                    env=env,
+                )
+                if result.returncode != 0:
+                    error_msg = result.stderr.strip() or result.stdout.strip()
+                    raise HostError(f"GitHub CLI command failed: {error_msg}")
+                return result.stdout.strip()
+            except FileNotFoundError:
+                raise HostError("GitHub CLI (gh) is not installed")
+            except Exception as e:
+                if isinstance(e, HostError):
+                    raise
+                raise HostError(f"Failed to run gh command: {e}") from e
 
-            return result.stdout.strip()
-        except FileNotFoundError:
-            raise HostError("GitHub CLI (gh) is not installed")
-        except Exception as e:
-            if isinstance(e, HostError):
-                raise
-            raise HostError(f"Failed to run gh command: {e}") from e
+        return retry_with_jitter(_attempt)
 
     def _gh_api(
         self,

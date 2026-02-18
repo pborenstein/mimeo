@@ -11,6 +11,74 @@ from mimeo.models import DNSRecord
 from mimeo.providers.registrar.porkbun import PorkbunRegistrar, GITHUB_PAGES_IPS
 
 
+class TestPorkbunRetry:
+    """Tests for retry behaviour in PorkbunRegistrar._make_request."""
+
+    @pytest.fixture
+    def registrar(self) -> PorkbunRegistrar:
+        return PorkbunRegistrar(api_key="pk1_test_key", secret_key="sk1_test_secret")
+
+    @patch("mimeo.utils.retry.time.sleep")
+    @responses.activate
+    def test_retries_on_429_then_succeeds(self, mock_sleep, registrar: PorkbunRegistrar) -> None:
+        """A 429 response is retried and the eventual success is returned."""
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/retrieve/example.com",
+            status=429,
+        )
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/retrieve/example.com",
+            json={"status": "SUCCESS", "records": []},
+            status=200,
+        )
+
+        result = registrar._make_request("/dns/retrieve/example.com", {})
+        assert result["status"] == "SUCCESS"
+        assert mock_sleep.call_count == 1
+
+    @patch("mimeo.utils.retry.time.sleep")
+    @responses.activate
+    def test_retries_on_503_then_succeeds(self, mock_sleep, registrar: PorkbunRegistrar) -> None:
+        """A 503 response is retried and the eventual success is returned."""
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/create/example.com",
+            status=503,
+        )
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/create/example.com",
+            json={"status": "SUCCESS", "id": "123"},
+            status=200,
+        )
+
+        from mimeo.models import DNSRecord
+        record = DNSRecord(type="A", name="", content="1.2.3.4", ttl=600)
+        registrar._create_record("example.com", record)
+        assert mock_sleep.call_count == 1
+
+    @patch("mimeo.utils.retry.time.sleep")
+    @responses.activate
+    def test_no_retry_on_api_level_error(self, mock_sleep, registrar: PorkbunRegistrar) -> None:
+        """A 200 response with status=ERROR (non-retryable) is not retried."""
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/retrieve/example.com",
+            json={"status": "ERROR", "message": "Invalid authentication"},
+            status=200,
+        )
+
+        with pytest.raises(RegistrarError) as exc_info:
+            registrar._make_request("/dns/retrieve/example.com", {})
+
+        assert "Invalid authentication" in str(exc_info.value)
+        # Only one HTTP call — no retry on application-level errors
+        assert len(responses.calls) == 1
+        mock_sleep.assert_not_called()
+
+
 class TestPorkbunRegistrar:
     """Tests for PorkbunRegistrar class."""
 

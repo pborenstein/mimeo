@@ -8,7 +8,7 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from threading import Lock
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 import click
 
@@ -47,7 +47,7 @@ def _process_single_domain(domain: str, cfg: Config, dry_run: bool, verbose: boo
 
     def log(message: str, level: str = "info") -> None:
         """Add to result log and optionally print to console."""
-        result["log"].append({"message": message, "level": level})
+        cast(List, result["log"]).append({"message": message, "level": level})
 
         # Only print to console in verbose mode (sequential/dry-run)
         if verbose:
@@ -654,9 +654,9 @@ def doctor(config: Path | None) -> None:
     for label, check_fn in checks:
         ok, detail, fix = check_fn()
         if ok:
-            click.secho(f"  ok  ", fg="green", nl=False, bold=True)
+            click.secho("  ok  ", fg="green", nl=False, bold=True)
         else:
-            click.secho(f" fail ", fg="red", nl=False, bold=True)
+            click.secho(" fail ", fg="red", nl=False, bold=True)
             all_ok = False
         click.echo(f"  {label:<22} {detail}")
         if not ok and fix:

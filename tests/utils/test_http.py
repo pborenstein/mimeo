@@ -7,6 +7,9 @@ from requests.exceptions import ConnectionError, Timeout
 from mimeo.exceptions import APIError, NetworkError
 from mimeo.utils.http import HTTPClient
 
+# NOTE: HTTPClient no longer has built-in retry logic. Retry behaviour is
+# handled at the provider layer via retry_with_jitter. See tests/utils/test_retry.py.
+
 
 class TestHTTPClient:
     """Tests for HTTPClient class."""
@@ -149,7 +152,6 @@ class TestHTTPClient:
     @responses.activate
     def test_http_error_without_json(self, client: HTTPClient) -> None:
         """Test HTTP error without JSON response."""
-        # Use 404 instead of 500 to avoid retry logic
         responses.add(
             responses.GET,
             "https://api.example.com/users",
@@ -207,35 +209,20 @@ class TestHTTPClient:
         assert "Network request failed" in str(exc_info.value)
 
     @responses.activate
-    def test_retry_on_server_error(self) -> None:
-        """Test that client retries on server errors."""
-        # First two requests fail, third succeeds
+    def test_server_error_raises_api_error(self) -> None:
+        """Test that server errors raise APIError (retry is the provider's responsibility)."""
         responses.add(
             responses.GET,
             "https://api.example.com/users",
             status=503,
         )
-        responses.add(
-            responses.GET,
-            "https://api.example.com/users",
-            status=503,
-        )
-        responses.add(
-            responses.GET,
-            "https://api.example.com/users",
-            json={"users": []},
-            status=200,
-        )
 
-        client = HTTPClient(
-            base_url="https://api.example.com",
-            max_retries=2,
-            backoff_factor=0.1,  # Fast retries for testing
-        )
+        client = HTTPClient(base_url="https://api.example.com")
 
-        result = client.get("/users")
-        assert result == {"users": []}
-        assert len(responses.calls) == 3  # Verify retry happened
+        with pytest.raises(APIError) as exc_info:
+            client.get("/users")
+
+        assert exc_info.value.status_code == 503
 
     def test_context_manager(self) -> None:
         """Test HTTP client as context manager."""

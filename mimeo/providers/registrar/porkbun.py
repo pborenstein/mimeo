@@ -9,6 +9,7 @@ from mimeo.exceptions import RegistrarError, DNSError
 from mimeo.models import DNSRecord
 from mimeo.providers.base import Registrar
 from mimeo.utils.http import HTTPClient
+from mimeo.utils.retry import retry_with_jitter
 
 
 # GitHub Pages IP addresses for A records
@@ -58,7 +59,7 @@ class PorkbunRegistrar(Registrar):
         }
 
     def _make_request(self, endpoint: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Make authenticated API request.
+        """Make authenticated API request with retry on transient errors.
 
         Args:
             endpoint: API endpoint path
@@ -70,11 +71,12 @@ class PorkbunRegistrar(Registrar):
         Raises:
             RegistrarError: If API request fails
         """
-        # Add authentication to payload
         full_payload = {**self._auth_payload(), **payload}
 
         try:
-            response = self.client.post(endpoint, json=full_payload)
+            response = retry_with_jitter(
+                lambda: self.client.post(endpoint, json=full_payload)
+            )
 
             # Check API status
             if response.get("status") != "SUCCESS":

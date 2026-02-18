@@ -1,6 +1,6 @@
 # Mimeo Scripts
 
-Utility scripts for Mimeo development and domain management.
+Utility and smoke test scripts for Mimeo development and domain management.
 
 ## fetch_porkbun_domains.py
 
@@ -53,3 +53,31 @@ Much faster than the web export which takes several hours.
 
 - Mimeo configuration file with Porkbun credentials at `~/.config/mimeo/config.toml`
 - Or environment variables: `MIMEO_PORKBUN_API_KEY` and `MIMEO_PORKBUN_SECRET`
+
+## smoke_test_porkbun.py
+
+Interactive smoke test for the Porkbun API integration. Reads credentials from config, prompts for a domain, and fetches DNS records to verify the connection is working.
+
+### Usage
+
+```bash
+uv run scripts/smoke_test_porkbun.py
+```
+
+### Requirements
+
+- Mimeo configuration file with Porkbun credentials at `~/.config/mimeo/config.toml`
+
+## smoke_test_github.py
+
+Interactive smoke test for the GitHub Pages integration. Creates a temporary repository, deploys a test page, verifies Pages configuration, and optionally cleans up.
+
+### Usage
+
+```bash
+uv run scripts/smoke_test_github.py
+```
+
+### Requirements
+
+- `gh` CLI installed and authenticated

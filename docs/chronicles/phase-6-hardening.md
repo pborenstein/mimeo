@@ -42,3 +42,20 @@
 - Updated: README.md (quick start, doctor command, architecture diagram, doc nav table)
 
 **Files**: commit 7efa101; CONTRIBUTING.md, docs/ARCHITECTURE.md, docs/TROUBLESHOOTING.md, docs/README.md, README.md
+
+## Entry 18: Retry with jitter for transient API failures (2026-02-17)
+
+**What**: Replaced urllib3 Retry adapter with a provider-layer retry_with_jitter helper. Fixed pre-existing mypy and ruff issues in cli.py.
+
+**Why**: Five concurrent workers in ThreadPoolExecutor could all fail simultaneously on rate-limit or transient errors, then retry at the same moment (thundering herd). urllib3 Retry used pure exponential backoff with no jitter; GitHub gh CLI had zero retry. Also cleaned up pre-existing lint issues caught by mypy/ruff while the files were open.
+
+**How**:
+- New `mimeo/utils/retry.py`: `retry_with_jitter(fn, retries, base, cap)` — `min(cap, base**attempt) + uniform(0,1)` sleep between attempts
+- Retryable: `APIError` 429/5xx, `NetworkError` (all), `HostError` with transient keywords (502, 503, 500, rate limit, timeout)
+- `HTTPClient`: removed `Retry`/`HTTPAdapter`; now a thin transport
+- `PorkbunRegistrar._make_request`: wraps `client.post()` with retry_with_jitter
+- `GitHubHost._run_gh_command`: wraps subprocess call via nested `_attempt` function
+- cli.py: `cast(List, result["log"])` to fix mypy; removed spurious `f` prefixes on two strings
+- 198 tests, mypy clean, ruff clean
+
+**Files**: commit 094bf6d; mimeo/utils/retry.py (new), mimeo/utils/http.py, mimeo/providers/registrar/porkbun.py, mimeo/providers/host/github.py, mimeo/cli.py, tests/utils/test_retry.py (new)

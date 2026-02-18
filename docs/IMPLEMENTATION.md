@@ -29,10 +29,10 @@ Living document tracking progress on the domain landing page provisioning tool.
 **Tasks**:
 
 - [x] Add `mimeo doctor` preflight command (Python version, gh auth/scope, config validity)
+- [x] Add retry with jitter for transient API failures
 - [ ] Improve failure taxonomy and exit codes (config / auth / rate-limit / transient / provider)
 - [ ] Add reconciliation support (`mimeo list --fix` exists; extend for DNS drift)
 - [ ] Add `--workers` option to `create` for configurable concurrency
-- [ ] Add retry with jitter for transient API failures
 - [ ] E2E integration test lane (separate from unit tests, gated, hits real APIs)
 - [ ] Config schema versioning and deprecation warnings
 - [ ] Structured logging option (`--log-format json`)
@@ -71,7 +71,7 @@ Living document tracking progress on the domain landing page provisioning tool.
 - `_health_status()` is module-level (exported); used by CLI layer
 - `--fix` implies `--health`; fix runs serially after concurrent health fetch
 - Health status values: `pages_error`, `no_cert`, `cert_pending`, `fixable`, `healthy`
-- One pre-existing mypy warning in cli.py (heterogeneous dict, not worth fixing now)
+- Pre-existing mypy/ruff issues in cli.py fixed in Phase 6 (cast + f-string cleanup)
 
 ### Phase 4: Content Generation (Complete)
 

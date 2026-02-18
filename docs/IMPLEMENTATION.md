@@ -30,7 +30,7 @@ Living document tracking progress on the domain landing page provisioning tool.
 
 - [x] Add `mimeo doctor` preflight command (Python version, gh auth/scope, config validity)
 - [x] Add retry with jitter for transient API failures
-- [ ] Improve failure taxonomy and exit codes (config / auth / rate-limit / transient / provider)
+- [x] Improve failure taxonomy and exit codes (config / auth / rate-limit / transient / partial)
 - [ ] Add reconciliation support (`mimeo list --fix` exists; extend for DNS drift)
 - [ ] Add `--workers` option to `create` for configurable concurrency
 - [ ] E2E integration test lane (separate from unit tests, gated, hits real APIs)

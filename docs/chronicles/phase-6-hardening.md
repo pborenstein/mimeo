@@ -59,3 +59,20 @@
 - 198 tests, mypy clean, ruff clean
 
 **Files**: commit 094bf6d; mimeo/utils/retry.py (new), mimeo/utils/http.py, mimeo/providers/registrar/porkbun.py, mimeo/providers/host/github.py, mimeo/cli.py, tests/utils/test_retry.py (new)
+
+## Entry 19: Failure taxonomy and exit codes (2026-02-17)
+
+**What**: Replaced uniform exit-1 with categorized exit codes so callers can distinguish failure types without parsing error messages.
+
+**Why**: Every failure — missing config, bad API key, rate limit, network timeout — exited 1 with "Aborted!". Scripting mimeo or diagnosing failures required reading prose output. Exit codes make failure type machine-readable.
+
+**How**:
+- EXIT_* constants in mimeo/exceptions.py: 2=config, 3=auth, 4=rate-limit, 5=transient, 6=partial
+- _categorize_error(exc) in cli.py inspects exception type and message keywords
+- Error messages prefixed [category] e.g. "[config] missing api key"
+- create picks most specific exit code across all failed domains
+- DNS-only failure (deploy succeeded) still exits 0; records error_category="partial" in result
+- doctor exits EXIT_CONFIG on check failure
+- 198 tests passing, mypy and ruff clean
+
+**Files**: commit 7a3f2e2; mimeo/exceptions.py, mimeo/cli.py, tests/test_cli.py

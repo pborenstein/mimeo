@@ -2,18 +2,18 @@
 phase: 6
 phase_name: Hardening
 updated: 2026-02-17
-last_commit: 094bf6d
+last_commit: 7a3f2e2
 ---
 
 ## Current Focus
 
-Phase 6 Hardening. Retry with jitter for transient API failures completed this session.
+Phase 6 Hardening complete. Failure taxonomy and exit codes landed this session.
 
 ## Active Tasks
 
 - [x] Add `mimeo doctor` preflight command
 - [x] Retry with jitter for transient failures
-- [ ] Improve failure taxonomy and exit codes
+- [x] Improve failure taxonomy and exit codes
 - [ ] Reconciliation / DNS drift detection
 - [ ] Add `--workers` option to `create`
 - [ ] E2E integration test lane
@@ -26,11 +26,13 @@ None.
 
 ## Context
 
-- 198 tests passing; mypy and ruff clean (fixed pre-existing cli.py issues this session)
-- retry_with_jitter in mimeo/utils/retry.py; retries at provider layer, not HTTP transport
-- HTTPClient is now a thin transport; urllib3 Retry adapter removed
-- Retryable: APIError 429/5xx, NetworkError, HostError with transient keywords
+- 198 tests passing; mypy and ruff clean
+- Exit codes: 2=config, 3=auth, 4=rate-limit, 5=transient, 6=partial
+- EXIT_* constants in mimeo/exceptions.py; _categorize_error() in cli.py
+- Error messages prefixed [category] e.g. "[config] missing api key"
+- Next big direction: --type / template system (eleventy, astro, landing)
 
 ## Next Session
 
-Continue Phase 6: improve failure taxonomy and exit codes, or add --workers option to create.
+Start template/type system: --type flag on create, multiple content generators,
+workflow variants (static.yml vs build workflows for SSGs).

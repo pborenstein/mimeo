@@ -76,3 +76,23 @@
 - 198 tests passing, mypy and ruff clean
 
 **Files**: commit 7a3f2e2; mimeo/exceptions.py, mimeo/cli.py, tests/test_cli.py
+
+## Entry 20: Hardening round 2 — workers, schema versioning, JSON logging, DNS drift (2026-02-18)
+
+**What**: Four hardening tasks in one session: configurable concurrency, config
+schema versioning, structured JSON logging, and DNS drift detection.
+
+**Why**: Remaining Phase 6 tasks. All improve operability for scripts and CI:
+`--workers` lets callers control load; schema versioning protects against silent
+config drift as fields evolve; `--log-format json` makes output parseable; `--dns-check`
+exposes DNS state without requiring manual Porkbun login.
+
+**How**:
+- `--workers N` on `create`: `click.IntRange(min=1)`, default 5, forwarded to ThreadPoolExecutor
+- `schema_version = 1` in config TOML; missing → DeprecationWarning, future → UserWarning, invalid → ConfigurationError; `CURRENT_SCHEMA_VERSION` constant in config.py
+- `--log-format text|json` on main group (global); JSON mode emits `{ts, level, message, domain?}` to stderr via `_emit()`; all text banners/tables suppressed in json mode
+- `PorkbunRegistrar.check_dns_drift(domain, expected)`: compares live Porkbun records against expected set; returns `{status: ok|drift|missing, missing: [...], extra: [...]}`
+- `mimeo list --dns-check`: fetches drift concurrently via ThreadPoolExecutor; text shows DNS column + drift details section; JSON includes full dns object; CSV adds dns_status column
+- 18 new tests (216 total); mypy and ruff clean throughout
+
+**Files**: mimeo/cli.py, mimeo/config.py, mimeo/providers/registrar/porkbun.py, tests/test_cli.py, tests/test_config.py, tests/providers/registrar/test_porkbun.py

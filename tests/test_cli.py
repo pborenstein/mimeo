@@ -1102,3 +1102,289 @@ class TestDoctorCommand:
 
         assert result.exit_code != 0
         assert "not found" in result.output
+
+
+class TestWorkersOption:
+    """Tests for --workers option on create command."""
+
+    def test_workers_help(self, runner: CliRunner) -> None:
+        """--workers appears in create help."""
+        result = runner.invoke(create, ["--help"])
+        assert result.exit_code == 0
+        assert "--workers" in result.output
+
+    def test_workers_invalid_zero(self, runner: CliRunner) -> None:
+        """--workers 0 is rejected."""
+        result = runner.invoke(create, ["example.com", "--workers", "0"])
+        assert result.exit_code != 0
+
+    def test_workers_invalid_negative(self, runner: CliRunner) -> None:
+        """Negative --workers is rejected."""
+        result = runner.invoke(create, ["example.com", "--workers", "-1"])
+        assert result.exit_code != 0
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.generate_minimal_site")
+    @patch("mimeo.cli.GitHubHost")
+    @patch("mimeo.cli.PorkbunRegistrar")
+    @patch("mimeo.cli.ThreadPoolExecutor")
+    def test_workers_passed_to_executor(
+        self,
+        mock_executor_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_generate: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+        mock_dns_records: List[DNSRecord],
+    ) -> None:
+        """--workers value is forwarded to ThreadPoolExecutor."""
+        mock_config_load.return_value = mock_config
+
+        # Make executor work as a context manager that yields an executor
+        mock_executor = MagicMock()
+        mock_future = MagicMock()
+        mock_future.result.return_value = {
+            "domain": "a.com",
+            "success": True,
+            "error": None,
+            "error_category": None,
+            "url": "https://a.com",
+            "repo_url": "https://github.com/testuser/a.com",
+            "https_pending": False,
+            "dns_pending": False,
+            "log": [],
+        }
+        mock_executor.submit.return_value = mock_future
+        mock_executor.__enter__ = MagicMock(return_value=mock_executor)
+        mock_executor.__exit__ = MagicMock(return_value=False)
+        mock_executor_class.return_value = mock_executor
+
+        with patch("mimeo.cli.as_completed", return_value=[mock_future]):
+            runner.invoke(create, ["a.com", "b.com", "--workers", "3"])
+
+        mock_executor_class.assert_called_once_with(max_workers=2)  # min(2 domains, 3 workers)
+
+
+class TestLogFormatOption:
+    """Tests for --log-format json option."""
+
+    def test_log_format_in_main_help(self, runner: CliRunner) -> None:
+        """--log-format appears in main help."""
+        result = runner.invoke(main, ["--help"])
+        assert result.exit_code == 0
+        assert "--log-format" in result.output
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.generate_minimal_site")
+    @patch("mimeo.cli.GitHubHost")
+    @patch("mimeo.cli.PorkbunRegistrar")
+    def test_json_log_format_no_text_summary(
+        self,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_generate: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+        mock_dns_records: List[DNSRecord],
+    ) -> None:
+        """--log-format json suppresses text SUMMARY banner."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.deploy_site.return_value = DeployResult(
+            url="https://example.com", repo_created=True, https_enabled=True
+        )
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        mock_registrar = MagicMock()
+        mock_registrar.verify_dns.return_value = True
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar_class.return_value = mock_registrar
+        mock_registrar_class.github_pages_records.return_value = mock_dns_records
+
+        result = runner.invoke(main, ["--log-format", "json", "create", "example.com"])
+
+        assert result.exit_code == 0
+        # Text-mode SUMMARY header should not appear
+        assert "SUMMARY" not in result.output
+        # JSON events go to stderr (mixed into output in test runner)
+        import json as json_mod
+        json_lines = [l for l in result.output.splitlines() if l.strip().startswith("{")]
+        assert len(json_lines) > 0
+        for line in json_lines:
+            record = json_mod.loads(line)
+            assert "ts" in record
+            assert "level" in record
+            assert "message" in record
+
+    def test_doctor_json_log_format(self, runner: CliRunner, tmp_path: Path) -> None:
+        """--log-format json doctor emits JSON records, no text table."""
+        import json as json_mod
+
+        cfg_file = tmp_path / "config.toml"
+        cfg_file.write_text(
+            "[porkbun]\napi_key = \"pk1_test\"\nsecret_key = \"sk1_test\"\n"
+            "[github]\ndefault_org = \"testuser\"\n"
+        )
+
+        def fake_run(cmd: list, **kwargs: Any) -> MagicMock:
+            m = MagicMock()
+            m.returncode = 0
+            if "--version" in cmd:
+                m.stdout = "gh version 2.40.0\n"
+                m.stderr = ""
+            else:
+                m.stdout = "  - Token scopes: 'repo', 'workflow'\n"
+                m.stderr = ""
+            return m
+
+        with patch("mimeo.cli.subprocess.run", side_effect=fake_run):
+            result = runner.invoke(
+                main,
+                ["--log-format", "json", "doctor", "--config", str(cfg_file)],
+            )
+
+        assert result.exit_code == 0
+        # No text table in output
+        assert "ok  " not in result.output
+        # JSON lines are emitted
+        json_lines = [l for l in result.output.splitlines() if l.strip().startswith("{")]
+        assert len(json_lines) > 0
+        for line in json_lines:
+            record = json_mod.loads(line)
+            assert "level" in record
+            assert "message" in record
+
+
+class TestDnsCheckOption:
+    """Tests for --dns-check option on list command."""
+
+    def test_dns_check_in_list_help(self, runner: CliRunner) -> None:
+        """--dns-check appears in list help."""
+        result = runner.invoke(list, ["--help"])
+        assert result.exit_code == 0
+        assert "--dns-check" in result.output
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.GitHubHost")
+    @patch("mimeo.cli.PorkbunRegistrar")
+    def test_dns_check_ok(
+        self,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """--dns-check shows DNS status in text output."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.list_mimeo_repositories.return_value = [
+            {
+                "name": "example.com",
+                "url": "https://github.com/testuser/example.com",
+                "homepage": "https://example.com",
+                "updatedAt": "2026-02-15T12:00:00Z",
+            },
+        ]
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        mock_registrar = MagicMock()
+        mock_registrar.check_dns_drift.return_value = {"status": "ok", "missing": [], "extra": []}
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar_class.return_value = mock_registrar
+
+        result = runner.invoke(list, ["--dns-check"])
+
+        assert result.exit_code == 0
+        assert "DNS" in result.output
+        assert "ok" in result.output
+        mock_registrar.check_dns_drift.assert_called_once()
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.GitHubHost")
+    @patch("mimeo.cli.PorkbunRegistrar")
+    def test_dns_check_missing_shows_details(
+        self,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """--dns-check reports missing records in drift details section."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.list_mimeo_repositories.return_value = [
+            {
+                "name": "example.com",
+                "url": "https://github.com/testuser/example.com",
+                "homepage": "https://example.com",
+                "updatedAt": "2026-02-15T12:00:00Z",
+            },
+        ]
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        mock_registrar = MagicMock()
+        mock_registrar.check_dns_drift.return_value = {
+            "status": "missing",
+            "missing": [{"type": "A", "name": "@", "content": "185.199.108.153"}],
+            "extra": [],
+        }
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar_class.return_value = mock_registrar
+
+        result = runner.invoke(list, ["--dns-check"])
+
+        assert result.exit_code == 0
+        assert "missing" in result.output
+        assert "185.199.108.153" in result.output
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.GitHubHost")
+    @patch("mimeo.cli.PorkbunRegistrar")
+    def test_dns_check_json_format(
+        self,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """--dns-check adds dns field to JSON output."""
+        import json as json_mod
+
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.list_mimeo_repositories.return_value = [
+            {
+                "name": "example.com",
+                "url": "https://github.com/testuser/example.com",
+                "homepage": "https://example.com",
+                "updatedAt": "2026-02-15T12:00:00Z",
+            },
+        ]
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        mock_registrar = MagicMock()
+        mock_registrar.check_dns_drift.return_value = {"status": "ok", "missing": [], "extra": []}
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar_class.return_value = mock_registrar
+
+        result = runner.invoke(list, ["--dns-check", "--format", "json"])
+
+        assert result.exit_code == 0
+        data = json_mod.loads(result.output)
+        assert len(data) == 1
+        assert "dns" in data[0]
+        assert data[0]["dns"]["status"] == "ok"

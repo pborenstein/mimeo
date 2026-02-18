@@ -143,3 +143,53 @@ def test_invalid_toml(tmp_path: Path) -> None:
         Config.load(config_file)
 
 
+def test_no_schema_version_warns(tmp_path: Path) -> None:
+    """Missing schema_version emits DeprecationWarning."""
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        "[porkbun]\napi_key = \"pk1_test\"\nsecret_key = \"sk1_test\"\n"
+        "[github]\ndefault_org = \"testuser\"\n"
+    )
+    with pytest.warns(DeprecationWarning, match="schema_version"):
+        Config.load(config_file)
+
+
+def test_current_schema_version_no_warning(tmp_path: Path) -> None:
+    """schema_version = 1 loads without warning."""
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        "schema_version = 1\n"
+        "[porkbun]\napi_key = \"pk1_test\"\nsecret_key = \"sk1_test\"\n"
+        "[github]\ndefault_org = \"testuser\"\n"
+    )
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        cfg = Config.load(config_file)
+    assert cfg.porkbun_api_key == "pk1_test"
+
+
+def test_future_schema_version_warns(tmp_path: Path) -> None:
+    """schema_version higher than current emits UserWarning."""
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        "schema_version = 999\n"
+        "[porkbun]\napi_key = \"pk1_test\"\nsecret_key = \"sk1_test\"\n"
+        "[github]\ndefault_org = \"testuser\"\n"
+    )
+    with pytest.warns(UserWarning, match="schema_version"):
+        Config.load(config_file)
+
+
+def test_invalid_schema_version_raises(tmp_path: Path) -> None:
+    """Non-positive schema_version raises ConfigurationError."""
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        "schema_version = 0\n"
+        "[porkbun]\napi_key = \"pk1_test\"\nsecret_key = \"sk1_test\"\n"
+        "[github]\ndefault_org = \"testuser\"\n"
+    )
+    with pytest.raises(ConfigurationError, match="Invalid schema_version"):
+        Config.load(config_file)
+
+

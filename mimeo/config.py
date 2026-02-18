@@ -2,11 +2,14 @@
 
 import os
 import tomllib
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 from mimeo.exceptions import ConfigurationError
+
+CURRENT_SCHEMA_VERSION = 1
 
 
 @dataclass
@@ -47,6 +50,28 @@ class Config:
                 data = tomllib.load(f)
         except Exception as e:
             raise ConfigurationError(f"Failed to parse config file {config_path}: {e}")
+
+        # Validate schema version
+        schema_version = data.get("schema_version")
+        if schema_version is None:
+            warnings.warn(
+                f"Config file {config_path} has no schema_version. "
+                f"Add 'schema_version = {CURRENT_SCHEMA_VERSION}' to suppress this warning.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        elif not isinstance(schema_version, int) or schema_version < 1:
+            raise ConfigurationError(
+                f"Invalid schema_version in {config_path}: must be a positive integer"
+            )
+        elif schema_version > CURRENT_SCHEMA_VERSION:
+            warnings.warn(
+                f"Config file {config_path} uses schema_version {schema_version}, "
+                f"but this version of mimeo only understands schema_version {CURRENT_SCHEMA_VERSION}. "
+                f"Some settings may be ignored.",
+                UserWarning,
+                stacklevel=2,
+            )
 
         # Extract configuration with environment variable overrides
         defaults_config = data.get("defaults", {})

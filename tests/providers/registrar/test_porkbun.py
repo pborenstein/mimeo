@@ -601,6 +601,76 @@ class TestPorkbunRegistrar:
         assert registrar._normalize_record_name("api.example.com", domain) == "api"
 
     @responses.activate
+    def test_check_dns_drift_ok(self, registrar: PorkbunRegistrar) -> None:
+        """check_dns_drift returns ok when all expected records are present."""
+        expected = PorkbunRegistrar.github_pages_records("example.com", "testuser")
+
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/retrieve/example.com",
+            json={
+                "status": "SUCCESS",
+                "records": [
+                    {"id": str(i), "type": "A", "name": "", "content": ip, "ttl": "600"}
+                    for i, ip in enumerate(GITHUB_PAGES_IPS)
+                ] + [
+                    {"id": "10", "type": "CNAME", "name": "www", "content": "testuser.github.io", "ttl": "600"},
+                ],
+            },
+            status=200,
+        )
+
+        result = registrar.check_dns_drift("example.com", expected)
+        assert result["status"] == "ok"
+        assert result["missing"] == []
+
+    @responses.activate
+    def test_check_dns_drift_missing(self, registrar: PorkbunRegistrar) -> None:
+        """check_dns_drift returns missing when expected records are absent."""
+        expected = PorkbunRegistrar.github_pages_records("example.com", "testuser")
+
+        # Only return some of the expected records
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/retrieve/example.com",
+            json={
+                "status": "SUCCESS",
+                "records": [
+                    {"id": "1", "type": "A", "name": "", "content": GITHUB_PAGES_IPS[0], "ttl": "600"},
+                ],
+            },
+            status=200,
+        )
+
+        result = registrar.check_dns_drift("example.com", expected)
+        assert result["status"] == "missing"
+        assert len(result["missing"]) > 0
+
+    @responses.activate
+    def test_check_dns_drift_extra(self, registrar: PorkbunRegistrar) -> None:
+        """check_dns_drift returns drift when live has extra records of managed types."""
+        expected = [DNSRecord(type="A", name="", content=GITHUB_PAGES_IPS[0], ttl=600)]
+
+        # Live has a different A record IP that is not in expected
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/retrieve/example.com",
+            json={
+                "status": "SUCCESS",
+                "records": [
+                    {"id": "1", "type": "A", "name": "", "content": GITHUB_PAGES_IPS[0], "ttl": "600"},
+                    {"id": "2", "type": "A", "name": "", "content": "1.2.3.4", "ttl": "600"},
+                ],
+            },
+            status=200,
+        )
+
+        result = registrar.check_dns_drift("example.com", expected)
+        # extra record present but nothing missing - status is drift
+        assert result["status"] == "drift"
+        assert len(result["extra"]) > 0
+
+    @responses.activate
     def test_configure_dns_deletes_alias_when_creating_a_records(
         self, registrar: PorkbunRegistrar
     ) -> None:

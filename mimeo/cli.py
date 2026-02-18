@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 from typing import Any, Dict, List, cast
@@ -32,6 +33,27 @@ from .providers.registrar.porkbun import PorkbunRegistrar
 
 # Lock for thread-safe console output
 _console_lock = Lock()
+
+# Set by main() group before subcommands run
+_log_format: str = "text"
+
+
+def _emit(level: str, message: str, domain: str | None = None) -> None:
+    """Emit a structured log line to stderr (JSON mode) or do nothing (text mode).
+
+    In text mode callers use click.echo/secho directly. This is for JSON mode only.
+    """
+    if _log_format != "json":
+        return
+    record: Dict[str, Any] = {
+        "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "level": level,
+        "message": message,
+    }
+    if domain is not None:
+        record["domain"] = domain
+    click.echo(json.dumps(record), err=True)
+
 
 _AUTH_KEYWORDS = ("unauthorized", "authentication", "forbidden", "invalid api key", "bad credentials")
 _RATE_LIMIT_KEYWORDS = ("rate limit", "429")
@@ -100,9 +122,10 @@ def _process_single_domain(domain: str, cfg: Config, dry_run: bool, verbose: boo
     def log(message: str, level: str = "info") -> None:
         """Add to result log and optionally print to console."""
         cast(List, result["log"]).append({"message": message, "level": level})
+        _emit(level, message, domain=domain)
 
         # Only print to console in verbose mode (sequential/dry-run)
-        if verbose:
+        if verbose and _log_format == "text":
             if level == "error":
                 click.secho(f"  ✗ {message}", fg="red")
             elif level == "warning":
@@ -211,9 +234,16 @@ def _process_single_domain(domain: str, cfg: Config, dry_run: bool, verbose: boo
 
 @click.group()
 @click.version_option(version=__version__, prog_name="Mimeo")
-def main() -> None:
+@click.option(
+    "--log-format",
+    type=click.Choice(["text", "json"], case_sensitive=False),
+    default="text",
+    help="Log output format (default: text)",
+)
+def main(log_format: str) -> None:
     """A tool to generate websites quickly"""
-    pass
+    global _log_format
+    _log_format = log_format.lower()
 
 
 @main.command()
@@ -238,7 +268,14 @@ def main() -> None:
     is_flag=True,
     help="Process domains sequentially instead of concurrently",
 )
-def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on_error: bool, sequential: bool) -> None:
+@click.option(
+    "--workers",
+    type=click.IntRange(min=1),
+    default=5,
+    show_default=True,
+    help="Maximum number of concurrent workers",
+)
+def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on_error: bool, sequential: bool, workers: int) -> None:
     """Create and deploy minimal landing pages for one or more domains.
 
     This command will:
@@ -254,6 +291,7 @@ def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on
         mimeo create site1.com site2.com site3.com
         mimeo create example.com --dry-run
         mimeo create site1.com site2.com --sequential
+        mimeo create site1.com site2.com site3.com --workers 3
     """
     # Load configuration once
     try:
@@ -275,7 +313,7 @@ def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on
     if dry_run or sequential or len(domains) == 1:
         # Sequential processing (verbose mode)
         for idx, domain in enumerate(domains, 1):
-            if len(domains) > 1:
+            if len(domains) > 1 and _log_format == "text":
                 click.echo()
                 click.secho(f"[{idx}/{len(domains)}] Processing {domain}", fg="cyan", bold=True)
                 click.secho("=" * 60, fg="cyan")
@@ -285,24 +323,31 @@ def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on
 
             # Stop on error if requested
             if stop_on_error and not result["success"]:
-                click.echo()
-                click.secho(f"Stopping due to error with {domain}", fg="red")
+                if _log_format == "text":
+                    click.echo()
+                    click.secho(f"Stopping due to error with {domain}", fg="red")
+                else:
+                    _emit("error", f"Stopping due to error with {domain}")
                 break
     else:
         # Concurrent processing (non-verbose to avoid garbled output)
-        click.echo()
+        if _log_format == "text":
+            click.echo()
 
         # Use ThreadPoolExecutor for concurrent processing
-        # Limit to 5 workers to avoid overwhelming APIs
-        with ThreadPoolExecutor(max_workers=min(len(domains), 5)) as executor:
+        with ThreadPoolExecutor(max_workers=min(len(domains), workers)) as executor:
             # Submit all tasks and show as they start
             future_to_domain = {}
             for domain in domains:
                 future = executor.submit(_process_single_domain, domain, cfg, dry_run, verbose=False)
                 future_to_domain[future] = domain
-                click.secho(f"→ {domain} started", fg="cyan")
+                if _log_format == "text":
+                    click.secho(f"→ {domain} started", fg="cyan")
+                else:
+                    _emit("info", f"{domain} started", domain=domain)
 
-            click.echo()
+            if _log_format == "text":
+                click.echo()
 
             # Process results as they complete
             for future in as_completed(future_to_domain):
@@ -312,14 +357,22 @@ def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on
                     results.append(result)
 
                     # Show completion status
-                    if result["success"]:
-                        click.secho(f"✓ {domain} completed", fg="green")
+                    if _log_format == "text":
+                        if result["success"]:
+                            click.secho(f"✓ {domain} completed", fg="green")
+                        else:
+                            click.secho(f"✗ {domain} failed: {result.get('error', 'Unknown error')}", fg="red")
                     else:
-                        click.secho(f"✗ {domain} failed: {result.get('error', 'Unknown error')}", fg="red")
+                        level = "info" if result["success"] else "error"
+                        msg = f"{domain} completed" if result["success"] else f"{domain} failed: {result.get('error', 'Unknown error')}"
+                        _emit(level, msg, domain=domain)
 
                 except Exception as e:
                     # Should not happen as exceptions are caught in _process_single_domain
-                    click.secho(f"✗ {domain} failed unexpectedly: {e}", fg="red")
+                    if _log_format == "text":
+                        click.secho(f"✗ {domain} failed unexpectedly: {e}", fg="red")
+                    else:
+                        _emit("error", f"{domain} failed unexpectedly: {e}", domain=domain)
                     results.append({
                         "domain": domain,
                         "success": False,
@@ -331,37 +384,49 @@ def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on
         results.sort(key=lambda r: domain_order.get(r["domain"], 999))
 
     # Print summary
-    click.echo()
-    click.secho("=" * 60, fg="white", bold=True)
-    click.secho("SUMMARY", fg="white", bold=True)
-    click.secho("=" * 60, fg="white", bold=True)
-    click.echo()
-
     success_count = sum(1 for r in results if r["success"])
     total_count = len(results)
 
-    if dry_run:
-        click.secho(f"DRY RUN: Would process {total_count} domain(s)", fg="cyan")
+    if _log_format == "json":
+        # Emit a summary event and one result event per domain
+        summary_msg = (
+            f"DRY RUN: Would process {total_count} domain(s)"
+            if dry_run
+            else f"Completed: {success_count}/{total_count} succeeded"
+        )
+        _emit("info", summary_msg)
+        for result in results:
+            level = "info" if result["success"] else "error"
+            _emit(level, "success" if result["success"] else result.get("error", "unknown error"), domain=result["domain"])
     else:
-        click.secho(f"Successfully created: {success_count}/{total_count} domain(s)", fg="green" if success_count == total_count else "yellow")
-
-    click.echo()
-
-    for result in results:
-        domain = result["domain"]
-        if result["success"]:
-            click.secho(f"✓ {domain}", fg="green", bold=True)
-            if not dry_run:
-                click.echo(f"  URL: {result.get('url', 'N/A')}")
-                click.echo(f"  Repository: {result.get('repo_url', 'N/A')}")
-                if result.get("https_pending"):
-                    click.secho("  HTTPS: Pending SSL certificate", fg="yellow")
-                if result.get("dns_pending"):
-                    click.secho("  DNS: Propagation pending", fg="yellow")
-        else:
-            click.secho(f"✗ {domain}", fg="red", bold=True)
-            click.secho(f"  Error: {result.get('error', 'Unknown error')}", fg="red")
         click.echo()
+        click.secho("=" * 60, fg="white", bold=True)
+        click.secho("SUMMARY", fg="white", bold=True)
+        click.secho("=" * 60, fg="white", bold=True)
+        click.echo()
+
+        if dry_run:
+            click.secho(f"DRY RUN: Would process {total_count} domain(s)", fg="cyan")
+        else:
+            click.secho(f"Successfully created: {success_count}/{total_count} domain(s)", fg="green" if success_count == total_count else "yellow")
+
+        click.echo()
+
+        for result in results:
+            domain = result["domain"]
+            if result["success"]:
+                click.secho(f"✓ {domain}", fg="green", bold=True)
+                if not dry_run:
+                    click.echo(f"  URL: {result.get('url', 'N/A')}")
+                    click.echo(f"  Repository: {result.get('repo_url', 'N/A')}")
+                    if result.get("https_pending"):
+                        click.secho("  HTTPS: Pending SSL certificate", fg="yellow")
+                    if result.get("dns_pending"):
+                        click.secho("  DNS: Propagation pending", fg="yellow")
+            else:
+                click.secho(f"✗ {domain}", fg="red", bold=True)
+                click.secho(f"  Error: {result.get('error', 'Unknown error')}", fg="red")
+            click.echo()
 
     # Exit with error if any failed, using the most severe error category
     if success_count < total_count:
@@ -392,7 +457,8 @@ def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on
 )
 @click.option("--health", is_flag=True, help="Check Pages configuration health for each site")
 @click.option("--fix", is_flag=True, help="Enable HTTPS for sites with approved certificates (implies --health)")
-def list(config: Path | None, format: str, health: bool, fix: bool) -> None:
+@click.option("--dns-check", is_flag=True, help="Check DNS records for drift against expected configuration")
+def list(config: Path | None, format: str, health: bool, fix: bool, dns_check: bool) -> None:
     """List all mimeo-managed sites.
 
     Shows repositories tagged with the 'mimeo' topic.
@@ -452,6 +518,8 @@ def list(config: Path | None, format: str, health: bool, fix: bool) -> None:
                     fieldnames = ["name", "repository", "site", "updated"]
                     if health:
                         fieldnames += ["health", "https_enforced", "cert_state"]
+                    if dns_check:
+                        fieldnames += ["dns"]
                     writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
                     writer.writeheader()
                 else:
@@ -499,6 +567,29 @@ def list(config: Path | None, format: str, health: bool, fix: bool) -> None:
                     repo_data["https_enforced"] = h["https_enforced"]
                     repo_data["cert_state"] = h["cert_state"]
 
+            # Fetch DNS drift data concurrently if requested
+            if dns_check:
+                with PorkbunRegistrar(cfg.porkbun_api_key, cfg.porkbun_secret) as registrar:
+                    dns_map: Dict[str, Dict[str, Any]] = {}
+                    with ThreadPoolExecutor(max_workers=10) as executor:
+                        def _fetch_drift(name: str) -> Dict[str, Any]:
+                            expected = PorkbunRegistrar.github_pages_records(name, owner)
+                            return registrar.check_dns_drift(name, expected)
+
+                        future_to_name_dns = {
+                            executor.submit(_fetch_drift, r["name"]): r["name"]
+                            for r in normalized_repos
+                        }
+                        for future in as_completed(future_to_name_dns):
+                            name = future_to_name_dns[future]
+                            try:
+                                dns_map[name] = future.result()
+                            except Exception as exc:
+                                dns_map[name] = {"status": "error", "missing": [], "extra": [], "error": str(exc)}
+
+                for repo_data in normalized_repos:
+                    repo_data["dns"] = dns_map.get(repo_data["name"], {"status": "unknown", "missing": [], "extra": []})
+
             # Run fixes for fixable repos
             fix_results: List[Dict[str, Any]] = []
             if fix:
@@ -513,12 +604,26 @@ def list(config: Path | None, format: str, health: bool, fix: bool) -> None:
                     except HostError as e:
                         fix_results.append({"name": repo_data["name"], "success": False, "error": str(e)})
 
-        # Sort order: with health, group by severity then name; otherwise by name
+        # Sort order: with health/dns-check, group by severity then name; otherwise by name
         _status_order = {"pages_error": 0, "no_cert": 1, "cert_pending": 2, "fixable": 3, "healthy": 4}
-        if health:
+        _dns_order = {"missing": 0, "drift": 1, "error": 2, "ok": 3, "unknown": 4}
+        if health and dns_check:
+            normalized_repos.sort(key=lambda r: (
+                _status_order.get(r.get("health", "pages_error"), 0),
+                _dns_order.get(r.get("dns", {}).get("status", "unknown"), 4),
+                r["name"],
+            ))
+        elif health:
             normalized_repos.sort(key=lambda r: (_status_order.get(r.get("health", "pages_error"), 0), r["name"]))
+        elif dns_check:
+            normalized_repos.sort(key=lambda r: (_dns_order.get(r.get("dns", {}).get("status", "unknown"), 4), r["name"]))
         else:
             normalized_repos.sort(key=lambda r: r["name"])
+
+        # Flatten dns field for csv (store status string only)
+        if dns_check:
+            for repo_data in normalized_repos:
+                repo_data["dns_status"] = repo_data.get("dns", {}).get("status", "unknown")
 
         # Display results based on format
         if format == "json":
@@ -527,7 +632,9 @@ def list(config: Path | None, format: str, health: bool, fix: bool) -> None:
             fieldnames = ["name", "repository", "site", "updated"]
             if health:
                 fieldnames += ["health", "https_enforced", "cert_state"]
-            writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
+            if dns_check:
+                fieldnames += ["dns_status"]
+            writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames, extrasaction="ignore")
             writer.writeheader()
             writer.writerows(normalized_repos)
         else:
@@ -546,6 +653,7 @@ def list(config: Path | None, format: str, health: bool, fix: bool) -> None:
                 "no_cert": "no cert",
                 "pages_error": "error",
             }
+            _dns_colors = {"ok": "green", "drift": "yellow", "missing": "red", "error": "red", "unknown": "white"}
 
             # Calculate column widths
             name_w = max(len(r["name"]) for r in normalized_repos)
@@ -554,28 +662,48 @@ def list(config: Path | None, format: str, health: bool, fix: bool) -> None:
             click.echo()
 
             # Header
+            header_parts = f"  {'NAME':<{name_w}}  {'SITE':<{site_w}}  {'UPDATED':<10}"
             if health:
-                header = f"  {'NAME':<{name_w}}  {'SITE':<{site_w}}  {'UPDATED':<10}  STATUS"
-            else:
-                header = f"  {'NAME':<{name_w}}  {'SITE':<{site_w}}  UPDATED"
-            click.secho(header, bold=True)
-            click.secho("  " + "-" * (len(header) - 2), fg="white", dim=True)
+                header_parts += "  HEALTH"
+            if dns_check:
+                header_parts += "  DNS"
+            click.secho(header_parts, bold=True)
+            click.secho("  " + "-" * (len(header_parts) - 2), fg="white", dim=True)
 
             for repo_data in normalized_repos:
                 name = repo_data["name"]
                 site = repo_data["site"]
                 updated = repo_data["updated"]
+                row = f"  {name:<{name_w}}  {site:<{site_w}}  {updated:<10}"
+                click.echo(row, nl=False)
                 if health:
                     status = repo_data.get("health", "pages_error")
                     color = _health_colors.get(status, "white")
                     label = _health_labels.get(status, status)
-                    row = f"  {name:<{name_w}}  {site:<{site_w}}  {updated:<10}  "
-                    click.echo(row, nl=False)
-                    click.secho(label, fg=color)
-                else:
-                    click.echo(f"  {name:<{name_w}}  {site:<{site_w}}  {updated}")
+                    click.echo("  ", nl=False)
+                    click.secho(f"{label:<8}", fg=color, nl=False)
+                if dns_check:
+                    dns_status = repo_data.get("dns", {}).get("status", "unknown")
+                    dns_color = _dns_colors.get(dns_status, "white")
+                    click.echo("  ", nl=False)
+                    click.secho(dns_status, fg=dns_color, nl=False)
+                click.echo()
 
             click.echo()
+
+            # DNS drift details
+            if dns_check:
+                drift_repos = [r for r in normalized_repos if r.get("dns", {}).get("status") in ("missing", "drift")]
+                if drift_repos:
+                    click.secho("DNS drift details:", bold=True)
+                    for repo_data in drift_repos:
+                        dns_info = repo_data.get("dns", {})
+                        click.secho(f"  {repo_data['name']} ({dns_info.get('status', 'unknown')})", fg="yellow")
+                        for rec in dns_info.get("missing", []):
+                            click.secho(f"    missing: {rec['type']} {rec['name']} -> {rec['content']}", fg="red")
+                        for rec in dns_info.get("extra", []):
+                            click.secho(f"    extra:   {rec['type']} {rec['name']} -> {rec['content']}", fg="yellow")
+                    click.echo()
 
             if fix_results:
                 click.secho("Fixed HTTPS enforcement:", bold=True)
@@ -704,23 +832,36 @@ def doctor(config: Path | None) -> None:
     ]
 
     all_ok = True
-    click.echo()
+    if _log_format == "text":
+        click.echo()
     for label, check_fn in checks:
         ok, detail, fix = check_fn()
-        if ok:
-            click.secho("  ok  ", fg="green", nl=False, bold=True)
-        else:
-            click.secho(" fail ", fg="red", nl=False, bold=True)
+        if not ok:
             all_ok = False
-        click.echo(f"  {label:<22} {detail}")
-        if not ok and fix:
-            click.secho(f"            -> {fix}", fg="yellow")
+        if _log_format == "json":
+            record: Dict[str, Any] = {"check": label, "ok": ok, "detail": detail}
+            if not ok and fix:
+                record["fix"] = fix
+            _emit("info" if ok else "error", json.dumps(record))
+        else:
+            if ok:
+                click.secho("  ok  ", fg="green", nl=False, bold=True)
+            else:
+                click.secho(" fail ", fg="red", nl=False, bold=True)
+            click.echo(f"  {label:<22} {detail}")
+            if not ok and fix:
+                click.secho(f"            -> {fix}", fg="yellow")
 
-    click.echo()
-    if all_ok:
-        click.secho("All checks passed.", fg="green", bold=True)
+    if _log_format == "text":
+        click.echo()
+        if all_ok:
+            click.secho("All checks passed.", fg="green", bold=True)
+        else:
+            click.secho("Some checks failed. Address the issues above before running mimeo.", fg="red")
     else:
-        click.secho("Some checks failed. Address the issues above before running mimeo.", fg="red")
+        _emit("info" if all_ok else "error", "all checks passed" if all_ok else "some checks failed")
+
+    if not all_ok:
         sys.exit(EXIT_CONFIG)
 
 

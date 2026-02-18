@@ -307,6 +307,56 @@ class PorkbunRegistrar(Registrar):
         # All attempts exhausted
         return False
 
+    def check_dns_drift(self, domain: str, expected: List[DNSRecord]) -> Dict[str, Any]:
+        """Compare expected DNS records against live Porkbun records.
+
+        Args:
+            domain: Domain name to check
+            expected: Expected DNS records (from github_pages_records)
+
+        Returns:
+            Dict with keys:
+              - status: "ok" | "drift" | "missing"
+              - missing: list of expected records not found in Porkbun
+              - extra: list of Porkbun records not in expected set
+        """
+        live_records = self._get_domain_records(domain)
+
+        # Build set of (type, normalized_name, content) for live records
+        live_set = {
+            (
+                r.get("type", ""),
+                self._normalize_record_name(r.get("name", ""), domain),
+                r.get("content", "").rstrip("."),
+            )
+            for r in live_records
+        }
+
+        # Build set for expected records
+        expected_set = {
+            (rec.type, self._normalize_record_name(rec.name, domain), rec.content.rstrip("."))
+            for rec in expected
+        }
+
+        missing = [
+            {"type": t, "name": n or "@", "content": c}
+            for t, n, c in expected_set - live_set
+        ]
+        extra = [
+            {"type": t, "name": n or "@", "content": c}
+            for t, n, c in live_set - expected_set
+            if t in {rec.type for rec in expected}  # only flag managed record types
+        ]
+
+        if missing:
+            status = "missing"
+        elif extra:
+            status = "drift"
+        else:
+            status = "ok"
+
+        return {"status": status, "missing": missing, "extra": extra}
+
     @staticmethod
     def github_pages_records(domain: str, github_user: str) -> List[DNSRecord]:
         """Generate DNS records for GitHub Pages.

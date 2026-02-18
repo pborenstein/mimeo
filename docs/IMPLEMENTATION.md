@@ -2,7 +2,7 @@
 
 Living document tracking progress on the domain landing page provisioning tool.
 
-**Last updated**: 2026-02-17
+**Last updated**: 2026-02-18
 
 ---
 
@@ -31,11 +31,11 @@ Living document tracking progress on the domain landing page provisioning tool.
 - [x] Add `mimeo doctor` preflight command (Python version, gh auth/scope, config validity)
 - [x] Add retry with jitter for transient API failures
 - [x] Improve failure taxonomy and exit codes (config / auth / rate-limit / transient / partial)
-- [ ] Add reconciliation support (`mimeo list --fix` exists; extend for DNS drift)
-- [ ] Add `--workers` option to `create` for configurable concurrency
+- [x] Add `--workers N` option to `create` for configurable concurrency
+- [x] Config schema versioning and deprecation warnings (`schema_version = 1`)
+- [x] Structured logging option (`--log-format json`) on main group
+- [x] DNS drift detection (`mimeo list --dns-check` via Porkbun API)
 - [ ] E2E integration test lane (separate from unit tests, gated, hits real APIs)
-- [ ] Config schema versioning and deprecation warnings
-- [ ] Structured logging option (`--log-format json`)
 - [x] Refresh README to current state
 - [x] Document workflow scope requirement
 - [x] Document `uv tool install` for global CLI access

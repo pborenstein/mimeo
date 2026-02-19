@@ -1,5 +1,6 @@
 # Contributing to Mimeo
 
+
 ## Getting Started
 
 ### Prerequisites
@@ -227,32 +228,3 @@ Include in the report:
 - Full error output
 - Output of `mimeo doctor`
 
-## Feature Requests
-
-Before opening a feature request:
-
-1. Check `docs/IMPLEMENTATION.md` for planned work
-2. Check `docs/DECISIONS.md` for relevant prior decisions
-3. Check existing issues
-
-When proposing a new feature, describe:
-
-- The problem it solves
-- Proposed command/API interface
-- Whether it requires a new provider or extends existing ones
-- Any relevant constraints (API limits, cost)
-
-## Documentation Updates
-
-When a change affects user-facing behavior, update:
-
-- `README.md` for command-line interface changes
-- `docs/LIST_COMMAND.md` for `list` command changes
-- `docs/ARCHITECTURE.md` for structural changes
-- `docs/DECISIONS.md` for architectural decisions
-
-At the end of a development session, update:
-
-- `docs/CONTEXT.md` with current state
-- `docs/IMPLEMENTATION.md` task checkboxes
-- `docs/chronicles/phase-X-name.md` with session notes

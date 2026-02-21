@@ -2,14 +2,13 @@
 phase: 6
 phase_name: Hardening
 updated: 2026-02-20
-last_commit: acb399b
+last_commit: a3f1805
 ---
 
 ## Current Focus
 
-Added `mimeo registrar list` subcommand: lists all domains in the Porkbun
-account with NS enrichment, optional DNS records, and text/JSON/CSV output.
-Also fixed `list` → `list_sites` function rename to stop shadowing the builtin.
+Polishing `mimeo registrar list`: fixed CLI command name regression (`list-sites` →
+`list`) and added alpha sort by domain. Both were post-merge fixups.
 
 ## Active Tasks
 
@@ -33,10 +32,10 @@ None.
 ## Context
 
 - 258 tests passing; mypy and ruff clean
-- `list` Click command renamed to `list_sites` in cli.py — avoids shadowing builtin `list`
-- `registrar list` enriches domains concurrently: NS via `check_nameservers()`, DNS via `_get_domain_records()`
-- `list_domains()` added to `Registrar` ABC and implemented in `PorkbunRegistrar`
-- `scripts/fetch_porkbun_domains.py` was the prototype; the CLI version shares no code with it
+- `list_sites` function name + `name="list"` on decorator — avoids builtin shadow, preserves CLI name
+- `registrar list` output sorted alpha by domain; concurrent enrichment preserves dict order via `enriched.values()`
+- Click command name comes from function name by default; use `name=` param to override
+- `list_domains()` on `Registrar` ABC + `PorkbunRegistrar`; enrichment in cli.py `_enrich()` closure
 
 ## Next Session
 

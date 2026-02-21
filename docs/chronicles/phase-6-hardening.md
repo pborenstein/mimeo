@@ -96,3 +96,31 @@ exposes DNS state without requiring manual Porkbun login.
 - 18 new tests (216 total); mypy and ruff clean throughout
 
 **Files**: mimeo/cli.py, mimeo/config.py, mimeo/providers/registrar/porkbun.py, tests/test_cli.py, tests/test_config.py, tests/providers/registrar/test_porkbun.py
+
+## Entry 21: Registrar/DNS/Host three-layer separation + doctor NS check (2026-02-20)
+
+**What**: Introduced `DNSProvider` ABC, split `PorkbunRegistrar` into separate registrar
+and DNS provider classes, moved DNS record knowledge to `Host`, and added NS verification
+to `mimeo doctor`.
+
+**Why**: `PorkbunRegistrar` conflated registration, DNS management, and host knowledge.
+When DNS is delegated elsewhere (Cloudflare, Netlify), mimeo would write records via the
+Porkbun API, succeed, but the world would never see them. The fix: NS check gates DNS
+config; warn-and-skip if NS doesn't point at Porkbun. See DEC-015, DEC-016.
+
+**How**:
+- `DNSProvider` ABC in `providers/base.py`: `configure_dns`, `verify_dns`, `check_nameservers`
+- `Registrar` trimmed to `check_nameservers` only
+- `Host` gains `required_dns_records(domain)` abstract method
+- `porkbun.py` split: `_PorkbunClient` (shared auth), `PorkbunRegistrar` (NS check), `PorkbunDNSProvider` (all DNS ops + drift)
+- `PORKBUN_NAMESERVERS` constant; `_lookup_nameservers()` module-level helper
+- `GitHubHost.required_dns_records()` replaces static `PorkbunRegistrar.github_pages_records()`
+- `create` flow: deploy → `host.required_dns_records()` → NS check → skip or configure DNS
+- `list --dns-check` uses `PorkbunDNSProvider` + `host.required_dns_records()`
+- `mimeo doctor [domain...]`: optional domain args; NS check row per domain; mismatch → exit non-zero
+- `NameserverCheckResult` dataclass, `NSMismatchError` exception added
+- 239 tests (up from 216); mypy and ruff clean
+
+**Decisions**: DEC-015, DEC-016
+
+**Files**: mimeo/providers/base.py, mimeo/providers/registrar/porkbun.py, mimeo/providers/host/github.py, mimeo/cli.py, mimeo/models.py, mimeo/exceptions.py, tests/

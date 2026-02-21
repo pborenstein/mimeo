@@ -56,3 +56,11 @@ class DNSRecord:
             raise ValueError("DNS record content cannot be empty")
 
 
+@dataclass
+class NameserverCheckResult:
+    """Result of a nameserver check for a domain."""
+
+    ok: bool
+    actual: list[str]
+    expected: list[str]
+

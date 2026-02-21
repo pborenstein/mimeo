@@ -4,11 +4,27 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 
-from mimeo.models import DNSRecord
+from mimeo.models import DNSRecord, NameserverCheckResult
 
 
 class Registrar(ABC):
     """Abstract base class for domain registrars."""
+
+    @abstractmethod
+    def check_nameservers(self, domain: str) -> NameserverCheckResult:
+        """Check whether the domain's nameservers match this registrar.
+
+        Args:
+            domain: Domain name to check
+
+        Returns:
+            NameserverCheckResult with ok flag and actual/expected nameservers
+        """
+        pass
+
+
+class DNSProvider(ABC):
+    """Abstract base class for DNS providers."""
 
     @abstractmethod
     def configure_dns(self, domain: str, records: list[DNSRecord]) -> None:
@@ -39,6 +55,18 @@ class Registrar(ABC):
         """
         pass
 
+    @abstractmethod
+    def check_nameservers(self, domain: str) -> NameserverCheckResult:
+        """Check whether the domain's nameservers point to this provider.
+
+        Args:
+            domain: Domain name to check
+
+        Returns:
+            NameserverCheckResult with ok flag and actual/expected nameservers
+        """
+        pass
+
 
 @dataclass
 class DeployResult:
@@ -65,5 +93,17 @@ class Host(ABC):
 
         Raises:
             HostError: If deployment fails
+        """
+        pass
+
+    @abstractmethod
+    def required_dns_records(self, domain: str) -> list[DNSRecord]:
+        """Return the DNS records required for this host to serve the domain.
+
+        Args:
+            domain: Domain name for the site
+
+        Returns:
+            List of DNSRecord objects that must be configured
         """
         pass

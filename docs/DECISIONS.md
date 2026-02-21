@@ -252,6 +252,43 @@ Architectural decisions for Mimeo. Search with `grep -i "keyword" docs/DECISIONS
 
 ---
 
+### DEC-015: Three-Layer Provider Model — Registrar / DNSProvider / Host (2026-02-20)
+
+**Status**: Active
+
+**Context**: `PorkbunRegistrar` was conflating three distinct responsibilities: domain registration/ownership, DNS record management, and knowledge of what DNS records a specific host needs. This caused a real bug: when DNS is delegated to Cloudflare or Netlify, mimeo would write records via the Porkbun API, get a SUCCESS response, but those records would be invisible because Porkbun's DNS is not authoritative for the domain.
+
+**Decision**: Introduce a three-layer model:
+- `Registrar` — who the domain is registered with; knows how to check NS records. Does NOT manage DNS records.
+- `DNSProvider` — who is authoritative for DNS; knows how to create/delete/verify records via that provider's API.
+- `Host` — where content is served; knows what DNS records it requires via `required_dns_records(domain)`.
+
+Porkbun is both a Registrar and a DNSProvider in the common case. When DNS is delegated, a different DNSProvider implementation is used.
+
+**Alternatives considered**:
+- Keep everything in `PorkbunRegistrar`, add a flag: Simpler short-term, but the flag becomes load-bearing and the class keeps growing.
+- Separate NS check into a utility function: Doesn't express the abstraction; future providers (Cloudflare, Netlify) still need the same interface.
+
+**Consequences**: `create` now does an NS check before touching DNS. Mismatch → warn and skip DNS config (site still deploys to .github.io). Adds `PorkbunDNSProvider` alongside `PorkbunRegistrar` in porkbun.py. All DNS test mocks updated to target `DNSProvider`. `Host` ABC gains `required_dns_records()` as a required abstract method.
+
+---
+
+### DEC-016: NS Check Warn-and-Skip Rather Than Hard-Fail (2026-02-20)
+
+**Status**: Active
+
+**Context**: When `create` detects that nameservers don't point to Porkbun, we have a choice: hard-fail the entire operation, or deploy the site and skip DNS config with a warning.
+
+**Decision**: Warn-and-skip. The site is deployed to GitHub Pages and accessible via the `.github.io` URL. A warning is logged explaining that NS records point elsewhere and DNS was not configured.
+
+**Alternatives considered**:
+- Hard-fail (raise `NSMismatchError`): Prevents any work from being done. The user still has a working site at the .github.io URL if we proceed with deployment.
+- Silently skip: Confusing; user expects DNS to be configured and doesn't know why it wasn't.
+
+**Consequences**: `NSMismatchError` exists in the exception hierarchy for callers that want to hard-fail (e.g. a hypothetical `--strict` flag). The result dict gains `ns_mismatch` and `dns_pending` fields when skipped. `mimeo doctor domain.com` provides a way to check NS status proactively before running `create`.
+
+---
+
 ## Superseded/Deprecated
 
 [No superseded decisions yet]

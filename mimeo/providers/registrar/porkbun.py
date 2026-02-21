@@ -1,4 +1,4 @@
-"""Porkbun registrar provider implementation."""
+"""Porkbun registrar and DNS provider implementations."""
 
 import time
 from typing import Any, Dict, List
@@ -6,8 +6,8 @@ from typing import Any, Dict, List
 import dns.resolver
 
 from mimeo.exceptions import RegistrarError, DNSError
-from mimeo.models import DNSRecord
-from mimeo.providers.base import Registrar
+from mimeo.models import DNSRecord, NameserverCheckResult
+from mimeo.providers.base import DNSProvider, Registrar
 from mimeo.utils.http import HTTPClient
 from mimeo.utils.retry import retry_with_jitter
 
@@ -20,15 +20,77 @@ GITHUB_PAGES_IPS = [
     "185.199.111.153",
 ]
 
+# Porkbun authoritative nameservers
+PORKBUN_NAMESERVERS = [
+    "curitiba.ns.porkbun.com",
+    "fortaleza.ns.porkbun.com",
+    "maceio.ns.porkbun.com",
+    "salvador.ns.porkbun.com",
+]
 
-class PorkbunRegistrar(Registrar):
-    """Porkbun registrar provider for DNS management.
 
-    Uses the Porkbun API v3 to configure DNS records for domains.
-    API documentation: https://porkbun.com/api/json/v3/documentation
+def _lookup_nameservers(domain: str) -> list[str]:
+    """Look up the NS records for a domain via public DNS.
+
+    Args:
+        domain: Domain name to query
+
+    Returns:
+        Sorted list of nameserver hostnames (lowercase, no trailing dot)
     """
+    resolver = dns.resolver.Resolver()
+    resolver.timeout = 5
+    resolver.lifetime = 5
+    try:
+        answers = resolver.resolve(domain, "NS")
+        return sorted(str(r).rstrip(".").lower() for r in answers)
+    except Exception:
+        return []
+
+
+class _PorkbunClient:
+    """Shared Porkbun API client plumbing."""
 
     BASE_URL = "https://api-ipv4.porkbun.com/api/json/v3"
+
+    def __init__(self, api_key: str, secret_key: str) -> None:
+        if not api_key or not secret_key:
+            raise RegistrarError("Porkbun API key and secret key are required")
+        self.api_key = api_key
+        self.secret_key = secret_key
+        self.client = HTTPClient(self.BASE_URL)
+
+    def _auth_payload(self) -> Dict[str, str]:
+        return {
+            "apikey": self.api_key,
+            "secretapikey": self.secret_key,
+        }
+
+    def _make_request(self, endpoint: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        full_payload = {**self._auth_payload(), **payload}
+        try:
+            response = retry_with_jitter(
+                lambda: self.client.post(endpoint, json=full_payload)
+            )
+            if response.get("status") != "SUCCESS":
+                error_msg = response.get("message", "Unknown error")
+                raise RegistrarError(f"Porkbun API error: {error_msg}")
+            return response
+        except Exception as e:
+            if isinstance(e, RegistrarError):
+                raise
+            raise RegistrarError(f"Failed to communicate with Porkbun API: {e}") from e
+
+    def close(self) -> None:
+        self.client.close()
+
+
+class PorkbunRegistrar(_PorkbunClient, Registrar):
+    """Porkbun registrar provider.
+
+    Manages domain registration concerns. Does not manage DNS records.
+    API documentation: https://porkbun.com/api/json/v3/documentation
+    """
 
     def __init__(self, api_key: str, secret_key: str) -> None:
         """Initialize Porkbun registrar.
@@ -40,110 +102,81 @@ class PorkbunRegistrar(Registrar):
         Raises:
             RegistrarError: If credentials are invalid
         """
-        if not api_key or not secret_key:
-            raise RegistrarError("Porkbun API key and secret key are required")
+        _PorkbunClient.__init__(self, api_key, secret_key)
 
-        self.api_key = api_key
-        self.secret_key = secret_key
-        self.client = HTTPClient(self.BASE_URL)
-
-    def _auth_payload(self) -> Dict[str, str]:
-        """Build authentication payload for API requests.
-
-        Returns:
-            Dictionary with API credentials
-        """
-        return {
-            "apikey": self.api_key,
-            "secretapikey": self.secret_key,
-        }
-
-    def _make_request(self, endpoint: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Make authenticated API request with retry on transient errors.
+    def check_nameservers(self, domain: str) -> NameserverCheckResult:
+        """Check whether the domain's NS records point to Porkbun.
 
         Args:
-            endpoint: API endpoint path
-            payload: Request payload (auth will be added)
+            domain: Domain name to check
 
         Returns:
-            API response data
+            NameserverCheckResult with ok flag and actual/expected nameservers
+        """
+        actual = _lookup_nameservers(domain)
+        expected = sorted(PORKBUN_NAMESERVERS)
+        ok = actual == expected
+        return NameserverCheckResult(ok=ok, actual=actual, expected=expected)
+
+    def __enter__(self) -> "PorkbunRegistrar":
+        return self
+
+    def __exit__(self, *args: Any) -> None:
+        self.close()
+
+
+class PorkbunDNSProvider(_PorkbunClient, DNSProvider):
+    """Porkbun DNS provider for DNS record management.
+
+    Uses the Porkbun API v3 to configure DNS records for domains.
+    API documentation: https://porkbun.com/api/json/v3/documentation
+    """
+
+    def __init__(self, api_key: str, secret_key: str) -> None:
+        """Initialize Porkbun DNS provider.
+
+        Args:
+            api_key: Porkbun API key (starts with 'pk1_')
+            secret_key: Porkbun secret key (starts with 'sk1_')
 
         Raises:
-            RegistrarError: If API request fails
+            RegistrarError: If credentials are invalid
         """
-        full_payload = {**self._auth_payload(), **payload}
+        _PorkbunClient.__init__(self, api_key, secret_key)
 
-        try:
-            response = retry_with_jitter(
-                lambda: self.client.post(endpoint, json=full_payload)
-            )
+    def check_nameservers(self, domain: str) -> NameserverCheckResult:
+        """Check whether the domain's NS records point to Porkbun.
 
-            # Check API status
-            if response.get("status") != "SUCCESS":
-                error_msg = response.get("message", "Unknown error")
-                raise RegistrarError(f"Porkbun API error: {error_msg}")
+        Args:
+            domain: Domain name to check
 
-            return response
-        except Exception as e:
-            if isinstance(e, RegistrarError):
-                raise
-            raise RegistrarError(f"Failed to communicate with Porkbun API: {e}") from e
+        Returns:
+            NameserverCheckResult with ok flag and actual/expected nameservers
+        """
+        actual = _lookup_nameservers(domain)
+        expected = sorted(PORKBUN_NAMESERVERS)
+        ok = actual == expected
+        return NameserverCheckResult(ok=ok, actual=actual, expected=expected)
 
     def _get_domain_records(self, domain: str) -> List[Dict[str, Any]]:
-        """Retrieve all DNS records for a domain.
-
-        Args:
-            domain: Domain name
-
-        Returns:
-            List of DNS records from API
-
-        Raises:
-            RegistrarError: If retrieval fails
-        """
-        response = self._make_request(
-            f"/dns/retrieve/{domain}",
-            {},
-        )
+        """Retrieve all DNS records for a domain."""
+        response = self._make_request(f"/dns/retrieve/{domain}", {})
         records: List[Dict[str, Any]] = response.get("records", [])
         return records
 
     def _delete_record(self, domain: str, record_id: str) -> None:
-        """Delete a DNS record.
-
-        Args:
-            domain: Domain name
-            record_id: Record ID to delete
-
-        Raises:
-            RegistrarError: If deletion fails
-        """
-        self._make_request(
-            f"/dns/delete/{domain}/{record_id}",
-            {},
-        )
+        """Delete a DNS record."""
+        self._make_request(f"/dns/delete/{domain}/{record_id}", {})
 
     def _create_record(self, domain: str, record: DNSRecord) -> None:
-        """Create a DNS record.
-
-        Args:
-            domain: Domain name
-            record: DNS record to create
-
-        Raises:
-            RegistrarError: If creation fails
-        """
+        """Create a DNS record."""
         payload = {
             "type": record.type,
             "name": record.name,
             "content": record.content,
             "ttl": str(record.ttl),
         }
-
-        self._make_request(
-            f"/dns/create/{domain}",
-            payload,
-        )
+        self._make_request(f"/dns/create/{domain}", payload)
 
     def _normalize_record_name(self, name: str, domain: str) -> str:
         """Normalize record name for comparison.
@@ -162,15 +195,10 @@ class PorkbunRegistrar(Registrar):
         Returns:
             Normalized name (empty string for apex, subdomain only otherwise)
         """
-        # Apex records can be represented as "", "@", or the full domain
         if name in ("", "@", domain):
             return ""
-
-        # If the name ends with the domain, strip it off
-        # e.g., "www.example.com" -> "www"
         if name.endswith(f".{domain}"):
             return name[: -len(domain) - 1]
-
         return name
 
     def configure_dns(self, domain: str, records: List[DNSRecord]) -> None:
@@ -189,30 +217,22 @@ class PorkbunRegistrar(Registrar):
             RegistrarError: If DNS configuration fails
         """
         try:
-            # Get existing records
             existing_records = self._get_domain_records(domain)
 
-            # Build set of (type, name) tuples we want to manage
-            # Normalize names for consistent comparison
             managed_records = {
                 (r.type, self._normalize_record_name(r.name, domain))
                 for r in records
             }
 
-            # Delete conflicting existing records
             for existing in existing_records:
                 record_type = existing.get("type", "")
                 record_name = existing.get("name", "")
                 record_id = existing.get("id", "")
 
-                # Normalize the existing record name for comparison
                 normalized_name = self._normalize_record_name(record_name, domain)
 
-                # Delete if this record type/name combination is in our managed set
                 if (record_type, normalized_name) in managed_records:
                     self._delete_record(domain, record_id)
-                # Also delete ALIAS records at apex when creating A records
-                # (Porkbun doesn't allow both at the same location)
                 elif (
                     record_type == "ALIAS"
                     and normalized_name == ""
@@ -220,7 +240,6 @@ class PorkbunRegistrar(Registrar):
                 ):
                     self._delete_record(domain, record_id)
 
-            # Create new records
             for record in records:
                 self._create_record(domain, record)
 
@@ -259,20 +278,16 @@ class PorkbunRegistrar(Registrar):
                 all_verified = True
 
                 for record in records:
-                    # Build query name (apex domain uses @ or empty string)
                     if record.name in ("", "@"):
                         query_name = domain
                     else:
                         query_name = f"{record.name}.{domain}"
 
                     try:
-                        # Query DNS
                         answers = resolver.resolve(query_name, record.type)
 
-                        # Check if expected content is in answers
                         found = False
                         for rdata in answers:
-                            # Compare content (normalize trailing dots for CNAME)
                             actual_content = str(rdata).rstrip(".")
                             expected_content = record.content.rstrip(".")
 
@@ -285,26 +300,21 @@ class PorkbunRegistrar(Registrar):
                             break
 
                     except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
-                        # Record doesn't exist yet
                         all_verified = False
                         break
                     except dns.exception.Timeout:
-                        # DNS timeout, try again
                         all_verified = False
                         break
 
-                # If all records verified, we're done
                 if all_verified:
                     return True
 
-                # Wait before next attempt (except on last attempt)
                 if attempt < max_attempts - 1:
                     time.sleep(delay)
 
             except Exception as e:
                 raise DNSError(f"DNS verification failed unexpectedly: {e}") from e
 
-        # All attempts exhausted
         return False
 
     def check_dns_drift(self, domain: str, expected: List[DNSRecord]) -> Dict[str, Any]:
@@ -312,7 +322,7 @@ class PorkbunRegistrar(Registrar):
 
         Args:
             domain: Domain name to check
-            expected: Expected DNS records (from github_pages_records)
+            expected: Expected DNS records
 
         Returns:
             Dict with keys:
@@ -322,7 +332,6 @@ class PorkbunRegistrar(Registrar):
         """
         live_records = self._get_domain_records(domain)
 
-        # Build set of (type, normalized_name, content) for live records
         live_set = {
             (
                 r.get("type", ""),
@@ -332,7 +341,6 @@ class PorkbunRegistrar(Registrar):
             for r in live_records
         }
 
-        # Build set for expected records
         expected_set = {
             (rec.type, self._normalize_record_name(rec.name, domain), rec.content.rstrip("."))
             for rec in expected
@@ -345,7 +353,7 @@ class PorkbunRegistrar(Registrar):
         extra = [
             {"type": t, "name": n or "@", "content": c}
             for t, n, c in live_set - expected_set
-            if t in {rec.type for rec in expected}  # only flag managed record types
+            if t in {rec.type for rec in expected}
         ]
 
         if missing:
@@ -357,50 +365,8 @@ class PorkbunRegistrar(Registrar):
 
         return {"status": status, "missing": missing, "extra": extra}
 
-    @staticmethod
-    def github_pages_records(domain: str, github_user: str) -> List[DNSRecord]:
-        """Generate DNS records for GitHub Pages.
-
-        Args:
-            domain: Domain name
-            github_user: GitHub username or organization
-
-        Returns:
-            List of DNS records (4 A records + 1 CNAME for www)
-        """
-        records = []
-
-        # A records for apex domain
-        for ip in GITHUB_PAGES_IPS:
-            records.append(
-                DNSRecord(
-                    type="A",
-                    name="",  # Apex domain
-                    content=ip,
-                    ttl=600,
-                )
-            )
-
-        # CNAME for www subdomain
-        records.append(
-            DNSRecord(
-                type="CNAME",
-                name="www",
-                content=f"{github_user}.github.io",
-                ttl=600,
-            )
-        )
-
-        return records
-
-    def close(self) -> None:
-        """Close the HTTP client."""
-        self.client.close()
-
-    def __enter__(self) -> "PorkbunRegistrar":
-        """Context manager entry."""
+    def __enter__(self) -> "PorkbunDNSProvider":
         return self
 
     def __exit__(self, *args: Any) -> None:
-        """Context manager exit."""
         self.close()

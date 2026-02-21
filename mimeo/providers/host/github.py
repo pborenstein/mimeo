@@ -6,7 +6,9 @@ from pathlib import Path
 from typing import Any, Dict
 
 from mimeo.exceptions import HostError
+from mimeo.models import DNSRecord
 from mimeo.providers.base import DeployResult, Host
+from mimeo.providers.registrar.porkbun import GITHUB_PAGES_IPS
 from mimeo.utils.retry import retry_with_jitter
 
 
@@ -561,6 +563,27 @@ class GitHubHost(Host):
             return repos
         except Exception as e:
             raise HostError(f"Failed to list mimeo repositories: {e}") from e
+
+    def required_dns_records(self, domain: str) -> list[DNSRecord]:
+        """Return DNS records required for GitHub Pages to serve the domain.
+
+        Args:
+            domain: Domain name for the site
+
+        Returns:
+            List of DNS records: 4 A records for the apex + 1 CNAME for www
+        """
+        owner = self.default_org or self._get_authenticated_user()
+        records: list[DNSRecord] = []
+
+        for ip in GITHUB_PAGES_IPS:
+            records.append(DNSRecord(type="A", name="", content=ip, ttl=600))
+
+        records.append(
+            DNSRecord(type="CNAME", name="www", content=f"{owner}.github.io", ttl=600)
+        )
+
+        return records
 
     def __enter__(self) -> "GitHubHost":
         """Context manager entry."""

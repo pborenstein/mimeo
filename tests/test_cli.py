@@ -12,15 +12,17 @@ from mimeo.cli import (
     _check_gh_auth,
     _check_gh_installed,
     _check_gh_workflow_scope,
+    _check_nameservers,
     _check_python_version,
     create,
     doctor,
     list,
     main,
 )
+
 from mimeo.config import Config
 from mimeo.exceptions import ConfigurationError, HostError, RegistrarError
-from mimeo.models import DNSRecord
+from mimeo.models import DNSRecord, NameserverCheckResult
 from mimeo.providers.base import DeployResult
 
 
@@ -87,8 +89,10 @@ class TestCreateCommand:
     @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
+    @patch("mimeo.cli.PorkbunDNSProvider")
     def test_create_success(
         self,
+        mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
         mock_generate: Any,
@@ -103,14 +107,19 @@ class TestCreateCommand:
 
         mock_host = MagicMock()
         mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
+        mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
         mock_registrar = MagicMock()
-        mock_registrar.verify_dns.return_value = True
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(ok=True, actual=[], expected=[])
         mock_registrar.__enter__.return_value = mock_registrar
         mock_registrar_class.return_value = mock_registrar
-        mock_registrar_class.github_pages_records.return_value = mock_dns_records
+
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.verify_dns.return_value = True
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
 
         # Run command
         result = runner.invoke(create, ["example.com"])
@@ -129,18 +138,19 @@ class TestCreateCommand:
         mock_generate.assert_called_once()
         mock_host_class.assert_called_once_with(default_org="testuser")
         mock_host.deploy_site.assert_called_once()
-        mock_registrar_class.github_pages_records.assert_called_once_with(
-            "example.com", "testuser"
-        )
-        mock_registrar.configure_dns.assert_called_once_with("example.com", mock_dns_records)
-        mock_registrar.verify_dns.assert_called_once()
+        mock_host.required_dns_records.assert_called_once_with("example.com")
+        mock_registrar.check_nameservers.assert_called_once_with("example.com")
+        mock_dns_provider.configure_dns.assert_called_once_with("example.com", mock_dns_records)
+        mock_dns_provider.verify_dns.assert_called_once()
 
     @patch("mimeo.cli.Config.load")
     @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
+    @patch("mimeo.cli.PorkbunDNSProvider")
     def test_create_dns_not_verified(
         self,
+        mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
         mock_generate: Any,
@@ -155,14 +165,19 @@ class TestCreateCommand:
 
         mock_host = MagicMock()
         mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
+        mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
         mock_registrar = MagicMock()
-        mock_registrar.verify_dns.return_value = False  # DNS not verified
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(ok=True, actual=[], expected=[])
         mock_registrar.__enter__.return_value = mock_registrar
         mock_registrar_class.return_value = mock_registrar
-        mock_registrar_class.github_pages_records.return_value = mock_dns_records
+
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.verify_dns.return_value = False  # DNS not verified
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
 
         # Run command
         result = runner.invoke(create, ["example.com"])
@@ -210,8 +225,10 @@ class TestCreateCommand:
     @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
+    @patch("mimeo.cli.PorkbunDNSProvider")
     def test_create_dns_error(
         self,
+        mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
         mock_generate: Any,
@@ -225,14 +242,19 @@ class TestCreateCommand:
 
         mock_host = MagicMock()
         mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
+        mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
         mock_registrar = MagicMock()
-        mock_registrar.configure_dns.side_effect = RegistrarError("Porkbun API failed")
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(ok=True, actual=[], expected=[])
         mock_registrar.__enter__.return_value = mock_registrar
         mock_registrar_class.return_value = mock_registrar
-        mock_registrar_class.github_pages_records.return_value = mock_dns_records
+
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.configure_dns.side_effect = RegistrarError("Porkbun API failed")
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
 
         result = runner.invoke(create, ["example.com"])
 
@@ -241,6 +263,52 @@ class TestCreateCommand:
         assert "DNS configuration failed" in result.output
         assert "Porkbun API failed" in result.output
         assert "Site deployed but DNS not configured" in result.output
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.generate_minimal_site")
+    @patch("mimeo.cli.GitHubHost")
+    @patch("mimeo.cli.PorkbunRegistrar")
+    @patch("mimeo.cli.PorkbunDNSProvider")
+    def test_create_ns_mismatch_skips_dns(
+        self,
+        mock_dns_provider_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_generate: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+        mock_dns_records: List[DNSRecord],
+    ) -> None:
+        """When NS points elsewhere, DNS config is skipped with a warning."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
+        mock_host.required_dns_records.return_value = mock_dns_records
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        mock_registrar = MagicMock()
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=False,
+            actual=["ns1.cloudflare.com", "ns2.cloudflare.com"],
+            expected=["curitiba.ns.porkbun.com"],
+        )
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar_class.return_value = mock_registrar
+
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
+
+        result = runner.invoke(create, ["example.com"])
+
+        assert result.exit_code == 0
+        assert "NS records point to" in result.output
+        assert "skipping DNS config" in result.output
+        # DNS provider should NOT have been called to configure records
+        mock_dns_provider.configure_dns.assert_not_called()
 
     @patch("mimeo.cli.Config.load")
     @patch("mimeo.cli.generate_minimal_site")
@@ -264,8 +332,10 @@ class TestCreateCommand:
     @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
+    @patch("mimeo.cli.PorkbunDNSProvider")
     def test_create_with_custom_config(
         self,
+        mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
         mock_generate: Any,
@@ -284,14 +354,19 @@ class TestCreateCommand:
 
         mock_host = MagicMock()
         mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
+        mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
         mock_registrar = MagicMock()
-        mock_registrar.verify_dns.return_value = True
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(ok=True, actual=[], expected=[])
         mock_registrar.__enter__.return_value = mock_registrar
         mock_registrar_class.return_value = mock_registrar
-        mock_registrar_class.github_pages_records.return_value = mock_dns_records
+
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.verify_dns.return_value = True
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
 
         result = runner.invoke(create, ["example.com", "--config", str(config_file)])
 
@@ -302,8 +377,10 @@ class TestCreateCommand:
     @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
+    @patch("mimeo.cli.PorkbunDNSProvider")
     def test_create_generates_content_in_temp_dir(
         self,
+        mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
         mock_generate: Any,
@@ -317,14 +394,19 @@ class TestCreateCommand:
 
         mock_host = MagicMock()
         mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
+        mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
         mock_registrar = MagicMock()
-        mock_registrar.verify_dns.return_value = True
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(ok=True, actual=[], expected=[])
         mock_registrar.__enter__.return_value = mock_registrar
         mock_registrar_class.return_value = mock_registrar
-        mock_registrar_class.github_pages_records.return_value = mock_dns_records
+
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.verify_dns.return_value = True
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
 
         result = runner.invoke(create, ["example.com"])
 
@@ -338,8 +420,10 @@ class TestCreateCommand:
     @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
+    @patch("mimeo.cli.PorkbunDNSProvider")
     def test_create_displays_repository_url(
         self,
+        mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
         mock_generate: Any,
@@ -353,14 +437,19 @@ class TestCreateCommand:
 
         mock_host = MagicMock()
         mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
+        mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
         mock_registrar = MagicMock()
-        mock_registrar.verify_dns.return_value = True
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(ok=True, actual=[], expected=[])
         mock_registrar.__enter__.return_value = mock_registrar
         mock_registrar_class.return_value = mock_registrar
-        mock_registrar_class.github_pages_records.return_value = mock_dns_records
+
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.verify_dns.return_value = True
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
 
         result = runner.invoke(create, ["example.com"])
 
@@ -371,8 +460,10 @@ class TestCreateCommand:
     @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
+    @patch("mimeo.cli.PorkbunDNSProvider")
     def test_create_passes_github_username_to_host(
         self,
+        mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
         mock_generate: Any,
@@ -386,14 +477,19 @@ class TestCreateCommand:
 
         mock_host = MagicMock()
         mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
+        mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
         mock_registrar = MagicMock()
-        mock_registrar.verify_dns.return_value = True
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(ok=True, actual=[], expected=[])
         mock_registrar.__enter__.return_value = mock_registrar
         mock_registrar_class.return_value = mock_registrar
-        mock_registrar_class.github_pages_records.return_value = mock_dns_records
+
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.verify_dns.return_value = True
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
 
         result = runner.invoke(create, ["example.com"])
 
@@ -404,8 +500,10 @@ class TestCreateCommand:
     @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
+    @patch("mimeo.cli.PorkbunDNSProvider")
     def test_create_passes_credentials_to_registrar(
         self,
+        mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
         mock_generate: Any,
@@ -414,31 +512,39 @@ class TestCreateCommand:
         mock_config: Config,
         mock_dns_records: List[DNSRecord],
     ) -> None:
-        """Test that create command passes credentials to registrar."""
+        """Test that create command passes credentials to registrar and DNS provider."""
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
         mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
+        mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
         mock_registrar = MagicMock()
-        mock_registrar.verify_dns.return_value = True
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(ok=True, actual=[], expected=[])
         mock_registrar.__enter__.return_value = mock_registrar
         mock_registrar_class.return_value = mock_registrar
-        mock_registrar_class.github_pages_records.return_value = mock_dns_records
+
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.verify_dns.return_value = True
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
 
         result = runner.invoke(create, ["example.com"])
 
         assert result.exit_code == 0
         mock_registrar_class.assert_called_with("pk1_test", "sk1_test")
+        mock_dns_provider_class.assert_called_with("pk1_test", "sk1_test")
 
     @patch("mimeo.cli.Config.load")
     @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
+    @patch("mimeo.cli.PorkbunDNSProvider")
     def test_create_multiple_domains_concurrent(
         self,
+        mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
         mock_generate: Any,
@@ -452,14 +558,19 @@ class TestCreateCommand:
 
         mock_host = MagicMock()
         mock_host.deploy_site.side_effect = lambda domain, _: DeployResult(url=f"https://{domain}", repo_created=True, https_enabled=True)
+        mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
         mock_registrar = MagicMock()
-        mock_registrar.verify_dns.return_value = True
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(ok=True, actual=[], expected=[])
         mock_registrar.__enter__.return_value = mock_registrar
         mock_registrar_class.return_value = mock_registrar
-        mock_registrar_class.github_pages_records.return_value = mock_dns_records
+
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.verify_dns.return_value = True
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
 
         result = runner.invoke(create, ["site1.com", "site2.com", "site3.com"])
 
@@ -476,14 +587,16 @@ class TestCreateCommand:
 
         # Verify all three domains were processed
         assert mock_host.deploy_site.call_count == 3
-        assert mock_registrar.configure_dns.call_count == 3
+        assert mock_dns_provider.configure_dns.call_count == 3
 
     @patch("mimeo.cli.Config.load")
     @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
+    @patch("mimeo.cli.PorkbunDNSProvider")
     def test_create_multiple_domains_sequential(
         self,
+        mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
         mock_generate: Any,
@@ -497,14 +610,19 @@ class TestCreateCommand:
 
         mock_host = MagicMock()
         mock_host.deploy_site.side_effect = lambda domain, _: DeployResult(url=f"https://{domain}", repo_created=True, https_enabled=True)
+        mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
         mock_registrar = MagicMock()
-        mock_registrar.verify_dns.return_value = True
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(ok=True, actual=[], expected=[])
         mock_registrar.__enter__.return_value = mock_registrar
         mock_registrar_class.return_value = mock_registrar
-        mock_registrar_class.github_pages_records.return_value = mock_dns_records
+
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.verify_dns.return_value = True
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
 
         result = runner.invoke(create, ["site1.com", "site2.com", "--sequential"])
 
@@ -1033,6 +1151,33 @@ class TestDoctorHelpers:
         ok, detail, fix = _check_config(cfg_file)
         assert ok is False
 
+    @patch("mimeo.providers.registrar.porkbun._lookup_nameservers")
+    def test_check_nameservers_ok(self, mock_lookup: Any) -> None:
+        """_check_nameservers passes when NS matches Porkbun."""
+        from mimeo.providers.registrar.porkbun import PORKBUN_NAMESERVERS
+        mock_lookup.return_value = sorted(PORKBUN_NAMESERVERS)
+        ok, detail, fix = _check_nameservers("example.com")
+        assert ok is True
+        assert detail == "porkbun"
+        assert fix == ""
+
+    @patch("mimeo.providers.registrar.porkbun._lookup_nameservers")
+    def test_check_nameservers_mismatch(self, mock_lookup: Any) -> None:
+        """_check_nameservers fails when NS points elsewhere."""
+        mock_lookup.return_value = ["ns1.cloudflare.com", "ns2.cloudflare.com"]
+        ok, detail, fix = _check_nameservers("example.com")
+        assert ok is False
+        assert "cloudflare" in detail
+        assert "Porkbun" in fix
+
+    @patch("mimeo.providers.registrar.porkbun._lookup_nameservers")
+    def test_check_nameservers_empty(self, mock_lookup: Any) -> None:
+        """_check_nameservers fails when no NS records are found."""
+        mock_lookup.return_value = []
+        ok, detail, fix = _check_nameservers("example.com")
+        assert ok is False
+        assert "no NS records" in detail
+
 
 class TestDoctorCommand:
     """Tests for the doctor CLI command."""
@@ -1102,6 +1247,94 @@ class TestDoctorCommand:
 
         assert result.exit_code != 0
         assert "not found" in result.output
+
+    @patch("mimeo.cli._check_nameservers")
+    def test_doctor_ns_check_ok(
+        self, mock_ns: Any, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """Doctor with domain args runs NS check and passes when NS is Porkbun."""
+        cfg_file = tmp_path / "config.toml"
+        cfg_file.write_text(
+            "[porkbun]\napi_key = \"pk1_test\"\nsecret_key = \"sk1_test\"\n"
+            "[github]\ndefault_org = \"testuser\"\n"
+        )
+        mock_ns.return_value = (True, "porkbun", "")
+
+        def fake_run(cmd: list, **kwargs: Any) -> MagicMock:
+            m = MagicMock()
+            m.returncode = 0
+            m.stdout = "gh version 2.40.0\n" if "--version" in cmd else "  - Token scopes: 'repo', 'workflow'\n"
+            m.stderr = ""
+            return m
+
+        with patch("mimeo.cli.subprocess.run", side_effect=fake_run):
+            result = runner.invoke(doctor, ["--config", str(cfg_file), "example.com"])
+
+        assert result.exit_code == 0
+        assert "NS: example.com" in result.output
+        assert "porkbun" in result.output
+        assert "All checks passed" in result.output
+        mock_ns.assert_called_once_with("example.com")
+
+    @patch("mimeo.cli._check_nameservers")
+    def test_doctor_ns_check_mismatch(
+        self, mock_ns: Any, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """Doctor exits non-zero and shows remediation when NS doesn't point to Porkbun."""
+        cfg_file = tmp_path / "config.toml"
+        cfg_file.write_text(
+            "[porkbun]\napi_key = \"pk1_test\"\nsecret_key = \"sk1_test\"\n"
+            "[github]\ndefault_org = \"testuser\"\n"
+        )
+        mock_ns.return_value = (
+            False,
+            "ns1.cloudflare.com, ns2.cloudflare.com",
+            "Nameservers don't point to Porkbun — DNS config will be skipped on create.",
+        )
+
+        def fake_run(cmd: list, **kwargs: Any) -> MagicMock:
+            m = MagicMock()
+            m.returncode = 0
+            m.stdout = "gh version 2.40.0\n" if "--version" in cmd else "  - Token scopes: 'repo', 'workflow'\n"
+            m.stderr = ""
+            return m
+
+        with patch("mimeo.cli.subprocess.run", side_effect=fake_run):
+            result = runner.invoke(doctor, ["--config", str(cfg_file), "example.com"])
+
+        assert result.exit_code != 0
+        assert "NS: example.com" in result.output
+        assert "cloudflare" in result.output
+        assert "Porkbun" in result.output
+
+    @patch("mimeo.cli._check_nameservers")
+    def test_doctor_ns_check_multiple_domains(
+        self, mock_ns: Any, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """Doctor checks NS for each domain provided."""
+        cfg_file = tmp_path / "config.toml"
+        cfg_file.write_text(
+            "[porkbun]\napi_key = \"pk1_test\"\nsecret_key = \"sk1_test\"\n"
+            "[github]\ndefault_org = \"testuser\"\n"
+        )
+        mock_ns.return_value = (True, "porkbun", "")
+
+        def fake_run(cmd: list, **kwargs: Any) -> MagicMock:
+            m = MagicMock()
+            m.returncode = 0
+            m.stdout = "gh version 2.40.0\n" if "--version" in cmd else "  - Token scopes: 'repo', 'workflow'\n"
+            m.stderr = ""
+            return m
+
+        with patch("mimeo.cli.subprocess.run", side_effect=fake_run):
+            result = runner.invoke(
+                doctor, ["--config", str(cfg_file), "site1.com", "site2.com"]
+            )
+
+        assert result.exit_code == 0
+        assert "NS: site1.com" in result.output
+        assert "NS: site2.com" in result.output
+        assert mock_ns.call_count == 2
 
 
 class TestWorkersOption:
@@ -1180,8 +1413,10 @@ class TestLogFormatOption:
     @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
+    @patch("mimeo.cli.PorkbunDNSProvider")
     def test_json_log_format_no_text_summary(
         self,
+        mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
         mock_generate: Any,
@@ -1197,14 +1432,19 @@ class TestLogFormatOption:
         mock_host.deploy_site.return_value = DeployResult(
             url="https://example.com", repo_created=True, https_enabled=True
         )
+        mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
         mock_registrar = MagicMock()
-        mock_registrar.verify_dns.return_value = True
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(ok=True, actual=[], expected=[])
         mock_registrar.__enter__.return_value = mock_registrar
         mock_registrar_class.return_value = mock_registrar
-        mock_registrar_class.github_pages_records.return_value = mock_dns_records
+
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.verify_dns.return_value = True
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
 
         result = runner.invoke(main, ["--log-format", "json", "create", "example.com"])
 
@@ -1271,10 +1511,10 @@ class TestDnsCheckOption:
 
     @patch("mimeo.cli.Config.load")
     @patch("mimeo.cli.GitHubHost")
-    @patch("mimeo.cli.PorkbunRegistrar")
+    @patch("mimeo.cli.PorkbunDNSProvider")
     def test_dns_check_ok(
         self,
-        mock_registrar_class: Any,
+        mock_dns_provider_class: Any,
         mock_host_class: Any,
         mock_config_load: Any,
         runner: CliRunner,
@@ -1292,27 +1532,28 @@ class TestDnsCheckOption:
                 "updatedAt": "2026-02-15T12:00:00Z",
             },
         ]
+        mock_host.required_dns_records.return_value = []
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
-        mock_registrar = MagicMock()
-        mock_registrar.check_dns_drift.return_value = {"status": "ok", "missing": [], "extra": []}
-        mock_registrar.__enter__.return_value = mock_registrar
-        mock_registrar_class.return_value = mock_registrar
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.check_dns_drift.return_value = {"status": "ok", "missing": [], "extra": []}
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
 
         result = runner.invoke(list, ["--dns-check"])
 
         assert result.exit_code == 0
         assert "DNS" in result.output
         assert "ok" in result.output
-        mock_registrar.check_dns_drift.assert_called_once()
+        mock_dns_provider.check_dns_drift.assert_called_once()
 
     @patch("mimeo.cli.Config.load")
     @patch("mimeo.cli.GitHubHost")
-    @patch("mimeo.cli.PorkbunRegistrar")
+    @patch("mimeo.cli.PorkbunDNSProvider")
     def test_dns_check_missing_shows_details(
         self,
-        mock_registrar_class: Any,
+        mock_dns_provider_class: Any,
         mock_host_class: Any,
         mock_config_load: Any,
         runner: CliRunner,
@@ -1330,17 +1571,18 @@ class TestDnsCheckOption:
                 "updatedAt": "2026-02-15T12:00:00Z",
             },
         ]
+        mock_host.required_dns_records.return_value = []
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
-        mock_registrar = MagicMock()
-        mock_registrar.check_dns_drift.return_value = {
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.check_dns_drift.return_value = {
             "status": "missing",
             "missing": [{"type": "A", "name": "@", "content": "185.199.108.153"}],
             "extra": [],
         }
-        mock_registrar.__enter__.return_value = mock_registrar
-        mock_registrar_class.return_value = mock_registrar
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
 
         result = runner.invoke(list, ["--dns-check"])
 
@@ -1350,10 +1592,10 @@ class TestDnsCheckOption:
 
     @patch("mimeo.cli.Config.load")
     @patch("mimeo.cli.GitHubHost")
-    @patch("mimeo.cli.PorkbunRegistrar")
+    @patch("mimeo.cli.PorkbunDNSProvider")
     def test_dns_check_json_format(
         self,
-        mock_registrar_class: Any,
+        mock_dns_provider_class: Any,
         mock_host_class: Any,
         mock_config_load: Any,
         runner: CliRunner,
@@ -1373,13 +1615,14 @@ class TestDnsCheckOption:
                 "updatedAt": "2026-02-15T12:00:00Z",
             },
         ]
+        mock_host.required_dns_records.return_value = []
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
-        mock_registrar = MagicMock()
-        mock_registrar.check_dns_drift.return_value = {"status": "ok", "missing": [], "extra": []}
-        mock_registrar.__enter__.return_value = mock_registrar
-        mock_registrar_class.return_value = mock_registrar
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.check_dns_drift.return_value = {"status": "ok", "missing": [], "extra": []}
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
 
         result = runner.invoke(list, ["--dns-check", "--format", "json"])
 

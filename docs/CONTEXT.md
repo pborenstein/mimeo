@@ -1,14 +1,15 @@
 ---
 phase: 6
 phase_name: Hardening
-updated: 2026-02-18
-last_commit: 8af228c
+updated: 2026-02-20
+last_commit: 2ff254e
 ---
 
 ## Current Focus
 
-Phase 6 Hardening — four more tasks landed this session: --workers, config schema
-versioning, --log-format json, and DNS drift detection via --dns-check.
+Registrar/DNS/Host separation landed: three-layer model with `Registrar`, `DNSProvider`,
+`Host` ABCs. NS check gates DNS config on `create`. `mimeo doctor` now accepts domain
+args for NS verification.
 
 ## Active Tasks
 
@@ -19,6 +20,8 @@ versioning, --log-format json, and DNS drift detection via --dns-check.
 - [x] Config schema versioning and deprecation warnings
 - [x] Structured logging (`--log-format json`)
 - [x] Reconciliation / DNS drift detection (`--dns-check` on `list`)
+- [x] Registrar/DNS/Host three-layer separation
+- [x] `mimeo doctor [domain...]` NS check
 - [ ] E2E integration test lane
 
 ## Blockers
@@ -27,12 +30,12 @@ None.
 
 ## Context
 
-- 216 tests passing; mypy and ruff clean
-- `--workers N` on create; defaults 5, capped to domain count
-- `schema_version = 1` in config; missing version → DeprecationWarning
-- `--log-format json` on main group; JSON lines to stderr, suppresses text output
-- `mimeo list --dns-check`: calls Porkbun API, compares live vs expected records
-- check_dns_drift() added to PorkbunRegistrar; returns ok/drift/missing
+- 239 tests passing; mypy and ruff clean
+- `PorkbunRegistrar` — NS check only; `PorkbunDNSProvider` — all DNS ops
+- `GitHubHost.required_dns_records(domain)` replaces static `github_pages_records()`
+- NS mismatch on `create` → warning + skip DNS, site still deploys to .github.io
+- `mimeo doctor site1.com site2.com` checks NS for each domain; mismatch → exit non-zero
+- `NSMismatchError` and `NameserverCheckResult` added to exceptions/models
 
 ## Next Session
 

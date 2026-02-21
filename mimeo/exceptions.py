@@ -33,6 +33,12 @@ class RegistrarError(ProviderError):
     pass
 
 
+class NSMismatchError(RegistrarError):
+    """Raised when nameservers don't match the expected provider."""
+
+    pass
+
+
 class HostError(ProviderError):
     """Raised when hosting provider operations fail."""
 

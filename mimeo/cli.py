@@ -29,7 +29,7 @@ from .exceptions import (
     RegistrarError,
 )
 from .providers.host.github import GitHubHost, _health_status
-from .providers.registrar.porkbun import PorkbunRegistrar
+from .providers.registrar.porkbun import PorkbunDNSProvider, PorkbunRegistrar
 
 # Lock for thread-safe console output
 _console_lock = Lock()
@@ -140,9 +140,15 @@ def _process_single_domain(domain: str, cfg: Config, dry_run: bool, verbose: boo
             log(f"Would generate site for {domain}")
             log(f"Would create repository: {cfg.github_username}/{domain}")
             log("Would deploy to GitHub Pages")
-            log("Would configure DNS records:")
-            dns_records = PorkbunRegistrar.github_pages_records(domain, cfg.github_username)
-            for record in dns_records:
+            log("Would check nameservers before configuring DNS")
+            log("Would configure DNS records (if NS points to Porkbun):")
+            from mimeo.providers.registrar.porkbun import GITHUB_PAGES_IPS
+            from mimeo.models import DNSRecord as _DNSRecord
+            dry_records = [
+                _DNSRecord(type="A", name="", content=ip, ttl=600)
+                for ip in GITHUB_PAGES_IPS
+            ] + [_DNSRecord(type="CNAME", name="www", content=f"{cfg.github_username}.github.io", ttl=600)]
+            for record in dry_records:
                 log(f"  - {record.type} {record.name or '@'} -> {record.content}")
             result["success"] = True
             result["url"] = f"https://{domain}"
@@ -164,9 +170,11 @@ def _process_single_domain(domain: str, cfg: Config, dry_run: bool, verbose: boo
 
             # Deploy to GitHub Pages
             log("Configuring GitHub repository")
+            dns_records = None
             try:
                 with GitHubHost(default_org=cfg.github_username) as host:
                     deploy = host.deploy_site(domain, content_path)
+                    dns_records = host.required_dns_records(domain)
                     result["url"] = deploy.url
                     result["repo_url"] = f"https://github.com/{cfg.github_username}/{domain}"
 
@@ -192,27 +200,32 @@ def _process_single_domain(domain: str, cfg: Config, dry_run: bool, verbose: boo
             # Configure DNS
             log("Configuring DNS records")
             try:
-                dns_records = PorkbunRegistrar.github_pages_records(
-                    domain, cfg.github_username
-                )
-
                 with PorkbunRegistrar(cfg.porkbun_api_key, cfg.porkbun_secret) as registrar:
-                    # Log what we're creating
-                    for record in dns_records:
-                        record_name = record.name or "@"
-                        log(f"Creating {record.type} record: {record_name} -> {record.content}")
-
-                    registrar.configure_dns(domain, dns_records)
-                    log("DNS records created", "success")
-
-                    # Verify DNS propagation
-                    log("Verifying DNS propagation")
-                    verified = registrar.verify_dns(domain, dns_records, max_attempts=10, delay=5)
-                    if verified:
-                        log("DNS records verified", "success")
-                    else:
-                        log("DNS records created but not yet propagated (may take up to 24 hours)", "warning")
+                    ns_result = registrar.check_nameservers(domain)
+                    if not ns_result.ok:
+                        actual_ns = ", ".join(ns_result.actual) if ns_result.actual else "unknown"
+                        log(
+                            f"NS records point to {actual_ns}, not Porkbun — skipping DNS config",
+                            "warning",
+                        )
                         result["dns_pending"] = True
+                        result["ns_mismatch"] = ns_result.actual
+                    else:
+                        with PorkbunDNSProvider(cfg.porkbun_api_key, cfg.porkbun_secret) as dns:
+                            for record in (dns_records or []):
+                                record_name = record.name or "@"
+                                log(f"Creating {record.type} record: {record_name} -> {record.content}")
+
+                            dns.configure_dns(domain, dns_records or [])
+                            log("DNS records created", "success")
+
+                            log("Verifying DNS propagation")
+                            verified = dns.verify_dns(domain, dns_records or [], max_attempts=10, delay=5)
+                            if verified:
+                                log("DNS records verified", "success")
+                            else:
+                                log("DNS records created but not yet propagated (may take up to 24 hours)", "warning")
+                                result["dns_pending"] = True
 
             except RegistrarError as e:
                 log(f"DNS configuration failed: {e}", "error")
@@ -569,12 +582,12 @@ def list(config: Path | None, format: str, health: bool, fix: bool, dns_check: b
 
             # Fetch DNS drift data concurrently if requested
             if dns_check:
-                with PorkbunRegistrar(cfg.porkbun_api_key, cfg.porkbun_secret) as registrar:
+                with PorkbunDNSProvider(cfg.porkbun_api_key, cfg.porkbun_secret) as dns_provider:
                     dns_map: Dict[str, Dict[str, Any]] = {}
                     with ThreadPoolExecutor(max_workers=10) as executor:
                         def _fetch_drift(name: str) -> Dict[str, Any]:
-                            expected = PorkbunRegistrar.github_pages_records(name, owner)
-                            return registrar.check_dns_drift(name, expected)
+                            expected = host.required_dns_records(name)
+                            return dns_provider.check_dns_drift(name, expected)
 
                         future_to_name_dns = {
                             executor.submit(_fetch_drift, r["name"]): r["name"]
@@ -786,6 +799,18 @@ def _check_gh_workflow_scope() -> tuple[bool, str, str]:
         return False, "gh not installed", "Install gh from https://cli.github.com"
 
 
+def _check_nameservers(domain: str) -> tuple[bool, str, str]:
+    """Check that a domain's nameservers point to Porkbun."""
+    from .providers.registrar.porkbun import PORKBUN_NAMESERVERS, _lookup_nameservers
+    ns = _lookup_nameservers(domain)
+    expected = sorted(PORKBUN_NAMESERVERS)
+    if not ns:
+        return False, "no NS records found", "Check that the domain is registered and DNS is reachable."
+    if sorted(ns) == expected:
+        return True, "porkbun", ""
+    return False, ", ".join(ns), "Nameservers don't point to Porkbun — DNS config will be skipped on create."
+
+
 def _check_config(config_path: Path | None) -> tuple[bool, str, str]:
     """Check that the config file exists and is valid."""
     if config_path is None:
@@ -810,26 +835,40 @@ def _check_config(config_path: Path | None) -> tuple[bool, str, str]:
     type=click.Path(path_type=Path),
     help="Path to config file (default: ~/.config/mimeo/config.toml)",
 )
-def doctor(config: Path | None) -> None:
+@click.argument("domains", nargs=-1)
+def doctor(config: Path | None, domains: tuple[str, ...]) -> None:
     """Check that all prerequisites for mimeo are met.
 
+    Optionally checks nameserver configuration for one or more domains.
+
+    \b
     Verifies:
       - Python version >= 3.11
       - gh CLI is installed
       - gh CLI is authenticated
       - GitHub token has the 'workflow' scope
       - Config file exists and is valid
+      - NS records for each DOMAIN point to Porkbun (if domains provided)
+
+    \b
+    Examples:
+        mimeo doctor
+        mimeo doctor example.com
+        mimeo doctor site1.com site2.com site3.com
 
     Prints a pass/fail result for each check with remediation
     instructions for any failures.
     """
-    checks = [
+    checks: List[tuple[str, Any]] = [
         ("Python >= 3.11", _check_python_version),
         ("gh installed", _check_gh_installed),
         ("gh authenticated", _check_gh_auth),
         ("workflow scope", _check_gh_workflow_scope),
         ("config file", lambda: _check_config(config)),
     ]
+
+    for domain in domains:
+        checks.append((f"NS: {domain}", lambda d=domain: _check_nameservers(d)))
 
     all_ok = True
     if _log_format == "text":

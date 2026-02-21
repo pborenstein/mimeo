@@ -490,6 +490,38 @@ class TestGitHubHost:
             assert result["cert_state"] is None
             assert result["pages_status"] is None
 
+    def test_required_dns_records(self, host: GitHubHost) -> None:
+        """required_dns_records returns 4 A records + 1 CNAME."""
+        from mimeo.providers.registrar.porkbun import GITHUB_PAGES_IPS
+
+        with patch.object(host, "_get_authenticated_user", return_value="testorg"):
+            records = host.required_dns_records("example.com")
+
+        assert len(records) == 5
+
+        a_records = [r for r in records if r.type == "A"]
+        assert len(a_records) == 4
+        assert {r.content for r in a_records} == set(GITHUB_PAGES_IPS)
+        for r in a_records:
+            assert r.name == ""
+            assert r.ttl == 600
+
+        cname_records = [r for r in records if r.type == "CNAME"]
+        assert len(cname_records) == 1
+        assert cname_records[0].name == "www"
+        assert cname_records[0].content == "testorg.github.io"
+        assert cname_records[0].ttl == 600
+
+    def test_required_dns_records_uses_default_org(self, host: GitHubHost) -> None:
+        """required_dns_records uses default_org without calling _get_authenticated_user."""
+        with patch.object(host, "_get_authenticated_user") as mock_user:
+            records = host.required_dns_records("example.com")
+
+        # default_org is "testorg" on the host fixture — no need to look up user
+        mock_user.assert_not_called()
+        cname = next(r for r in records if r.type == "CNAME")
+        assert cname.content == "testorg.github.io"
+
     def test_list_mimeo_repositories(self, host: GitHubHost) -> None:
         """Test listing mimeo-managed repositories."""
         with patch.object(host, "_run_gh_command") as mock_gh:

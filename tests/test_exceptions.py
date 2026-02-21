@@ -7,6 +7,7 @@ from mimeo.exceptions import (
     DNSError,
     HostError,
     MimeoError,
+    NSMismatchError,
     ProviderError,
     RegistrarError,
 )
@@ -49,4 +50,12 @@ def test_host_error_inherits_from_provider_error() -> None:
 def test_dns_error_inherits_from_mimeo_error() -> None:
     """DNSError should inherit from MimeoError."""
     error = DNSError("dns error")
+    assert isinstance(error, MimeoError)
+
+
+def test_ns_mismatch_error_inherits_from_registrar_error() -> None:
+    """NSMismatchError should inherit from RegistrarError."""
+    error = NSMismatchError("ns mismatch")
+    assert isinstance(error, RegistrarError)
+    assert isinstance(error, ProviderError)
     assert isinstance(error, MimeoError)

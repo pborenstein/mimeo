@@ -35,6 +35,8 @@ Living document tracking progress on the domain landing page provisioning tool.
 - [x] Config schema versioning and deprecation warnings (`schema_version = 1`)
 - [x] Structured logging option (`--log-format json`) on main group
 - [x] DNS drift detection (`mimeo list --dns-check` via Porkbun API)
+- [x] Registrar/DNS/Host three-layer separation (`DNSProvider` ABC, `PorkbunDNSProvider`, NS check gate)
+- [x] `mimeo doctor [domain...]` NS verification for domains
 - [ ] E2E integration test lane (separate from unit tests, gated, hits real APIs)
 - [x] Refresh README to current state
 - [x] Document workflow scope requirement

@@ -1,6 +1,6 @@
 # List Command Reference
 
-Quick reference for using `mimeo list` with different output formats.
+Quick reference for `mimeo list` (GitHub-managed sites) and `mimeo registrar list` (all Porkbun account domains).
 
 ## Basic Usage
 
@@ -221,4 +221,91 @@ mimeo list --format json | jq 'sort_by(.name)'
 
 ```bash
 mimeo list --format json | jq '.[] | select(.name == "example.com")'
+```
+
+---
+
+## `mimeo registrar list`
+
+Lists all domains in the Porkbun account — not filtered by mimeo management. Useful for auditing the full account inventory and checking nameserver configuration.
+
+### Basic Usage
+
+```bash
+# Default text table
+mimeo registrar list
+
+# JSON output
+mimeo registrar list --format json
+
+# CSV output
+mimeo registrar list --format csv
+
+# Include DNS records per domain (doubles API calls)
+mimeo registrar list --with-dns
+
+# Adjust concurrent workers (default 5)
+mimeo registrar list --workers 10
+```
+
+### Output Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `domain` | string | Domain name |
+| `tld` | string | TLD only (e.g. `com`) |
+| `expires` | string | Expiry date (YYYY-MM-DD) |
+| `auto_renew` | bool | Whether auto-renew is enabled |
+| `ns_ok` | bool | Whether NS records point to Porkbun |
+| `nameservers` | list/string | Current NS records (pipe-delimited in CSV) |
+| `dns_records` | list/string | DNS records (only with `--with-dns`; pipe-delimited in CSV) |
+
+### JSON Format
+
+```json
+[
+  {
+    "domain": "example.com",
+    "tld": "com",
+    "expires": "2027-01-15",
+    "auto_renew": true,
+    "ns_ok": true,
+    "nameservers": ["curitiba.ns.porkbun.com", "fortaleza.ns.porkbun.com"],
+    "dns_records": []
+  }
+]
+```
+
+### CSV Format
+
+```csv
+domain,tld,expires,auto_renew,ns_ok,nameservers
+example.com,com,2027-01-15,True,True,curitiba.ns.porkbun.com|fortaleza.ns.porkbun.com
+```
+
+With `--with-dns`:
+
+```csv
+domain,tld,expires,auto_renew,ns_ok,nameservers,dns_records
+example.com,com,2027-01-15,True,True,curitiba.ns.porkbun.com|fortaleza.ns.porkbun.com,A:@=185.199.108.153|CNAME:www=user.github.io
+```
+
+### Common Use Cases
+
+```bash
+# Find domains not pointing to Porkbun
+mimeo registrar list --format json | jq '.[] | select(.ns_ok == false) | .domain'
+
+# List expiring within 90 days (requires date math)
+mimeo registrar list --format json | jq --arg cutoff "$(date -v+90d +%Y-%m-%d)" \
+  '.[] | select(.expires <= $cutoff) | {domain, expires}'
+
+# Extract all domain names
+mimeo registrar list --format csv | tail -n +2 | cut -d, -f1
+
+# Export full inventory
+mimeo registrar list --format csv --with-dns > inventory.csv
+
+# Count domains by TLD
+mimeo registrar list --format json | jq 'group_by(.tld) | map({tld: .[0].tld, count: length})'
 ```

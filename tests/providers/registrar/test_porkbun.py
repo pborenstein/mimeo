@@ -187,6 +187,53 @@ class TestPorkbunRegistrar:
         with pytest.raises(RegistrarError, match="Domain not found"):
             registrar.update_nameservers("example.com")
 
+    @responses.activate
+    def test_list_domains_success(self, registrar: PorkbunRegistrar) -> None:
+        """list_domains returns domain list from /domain/listAll."""
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/domain/listAll",
+            json={
+                "status": "SUCCESS",
+                "domains": [
+                    {"domain": "example.com", "tld": "com", "expireDate": "2027-01-01", "autoRenew": "1"},
+                    {"domain": "example.net", "tld": "net", "expireDate": "2027-06-01", "autoRenew": "0"},
+                ],
+            },
+            status=200,
+        )
+
+        result = registrar.list_domains()
+        assert len(result) == 2
+        assert result[0]["domain"] == "example.com"
+        assert result[1]["domain"] == "example.net"
+
+    @responses.activate
+    def test_list_domains_empty(self, registrar: PorkbunRegistrar) -> None:
+        """list_domains returns empty list when account has no domains."""
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/domain/listAll",
+            json={"status": "SUCCESS", "domains": []},
+            status=200,
+        )
+
+        result = registrar.list_domains()
+        assert result == []
+
+    @responses.activate
+    def test_list_domains_api_error(self, registrar: PorkbunRegistrar) -> None:
+        """list_domains raises RegistrarError on API failure."""
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/domain/listAll",
+            json={"status": "ERROR", "message": "Invalid authentication"},
+            status=200,
+        )
+
+        with pytest.raises(RegistrarError, match="Invalid authentication"):
+            registrar.list_domains()
+
 
 # ---------------------------------------------------------------------------
 # PorkbunDNSProvider tests

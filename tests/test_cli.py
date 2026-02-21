@@ -16,8 +16,10 @@ from mimeo.cli import (
     _check_python_version,
     create,
     doctor,
-    list,
+    list_sites,
     main,
+    registrar,
+    registrar_list,
 )
 
 from mimeo.config import Config
@@ -753,7 +755,7 @@ class TestListCommand:
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
-        result = runner.invoke(list, [])
+        result = runner.invoke(list_sites, [])
 
         assert result.exit_code == 0
         assert "NAME" in result.output
@@ -778,7 +780,7 @@ class TestListCommand:
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
-        result = runner.invoke(list, [])
+        result = runner.invoke(list_sites, [])
 
         assert result.exit_code == 0
         assert "No mimeo-managed sites found" in result.output
@@ -793,7 +795,7 @@ class TestListCommand:
         """Test list command with configuration error."""
         mock_config_load.side_effect = ConfigurationError("Config not found")
 
-        result = runner.invoke(list, [])
+        result = runner.invoke(list_sites, [])
 
         assert result.exit_code == 2
         assert "Config not found" in result.output
@@ -828,7 +830,7 @@ class TestListCommand:
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
-        result = runner.invoke(list, ["--format", "json"])
+        result = runner.invoke(list_sites, ["--format", "json"])
 
         assert result.exit_code == 0
 
@@ -859,7 +861,7 @@ class TestListCommand:
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
-        result = runner.invoke(list, ["--format", "json"])
+        result = runner.invoke(list_sites, ["--format", "json"])
 
         assert result.exit_code == 0
         assert result.output.strip() == "[]"
@@ -894,7 +896,7 @@ class TestListCommand:
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
-        result = runner.invoke(list, ["--format", "csv"])
+        result = runner.invoke(list_sites, ["--format", "csv"])
 
         assert result.exit_code == 0
         lines = result.output.strip().split("\n")
@@ -920,7 +922,7 @@ class TestListCommand:
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
-        result = runner.invoke(list, ["--format", "csv"])
+        result = runner.invoke(list_sites, ["--format", "csv"])
 
         assert result.exit_code == 0
         # Should still output header even with no data
@@ -956,7 +958,7 @@ class TestListCommand:
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
-        result = runner.invoke(list, ["--health"])
+        result = runner.invoke(list_sites, ["--health"])
 
         assert result.exit_code == 0
         assert "example.com" in result.output
@@ -995,7 +997,7 @@ class TestListCommand:
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
-        result = runner.invoke(list, ["--health", "--format", "json"])
+        result = runner.invoke(list_sites, ["--health", "--format", "json"])
 
         assert result.exit_code == 0
         data = json_mod.loads(result.output)
@@ -1034,7 +1036,7 @@ class TestListCommand:
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
-        result = runner.invoke(list, ["--health", "--format", "csv"])
+        result = runner.invoke(list_sites, ["--health", "--format", "csv"])
 
         assert result.exit_code == 0
         lines = result.output.strip().split("\n")
@@ -1072,7 +1074,7 @@ class TestListCommand:
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
-        result = runner.invoke(list, ["--fix"])
+        result = runner.invoke(list_sites, ["--fix"])
 
         assert result.exit_code == 0
         mock_host._enable_https_enforcement.assert_called_once_with("testuser/fixable.com")
@@ -1116,7 +1118,7 @@ class TestListCommand:
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
-        result = runner.invoke(list, ["--fix"])
+        result = runner.invoke(list_sites, ["--fix"])
 
         assert result.exit_code == 0
         mock_host._enable_https_enforcement.assert_not_called()
@@ -1593,7 +1595,7 @@ class TestDnsCheckOption:
 
     def test_dns_check_in_list_help(self, runner: CliRunner) -> None:
         """--dns-check appears in list help."""
-        result = runner.invoke(list, ["--help"])
+        result = runner.invoke(list_sites, ["--help"])
         assert result.exit_code == 0
         assert "--dns-check" in result.output
 
@@ -1629,7 +1631,7 @@ class TestDnsCheckOption:
         mock_dns_provider.__enter__.return_value = mock_dns_provider
         mock_dns_provider_class.return_value = mock_dns_provider
 
-        result = runner.invoke(list, ["--dns-check"])
+        result = runner.invoke(list_sites, ["--dns-check"])
 
         assert result.exit_code == 0
         assert "DNS" in result.output
@@ -1672,7 +1674,7 @@ class TestDnsCheckOption:
         mock_dns_provider.__enter__.return_value = mock_dns_provider
         mock_dns_provider_class.return_value = mock_dns_provider
 
-        result = runner.invoke(list, ["--dns-check"])
+        result = runner.invoke(list_sites, ["--dns-check"])
 
         assert result.exit_code == 0
         assert "missing" in result.output
@@ -1712,10 +1714,259 @@ class TestDnsCheckOption:
         mock_dns_provider.__enter__.return_value = mock_dns_provider
         mock_dns_provider_class.return_value = mock_dns_provider
 
-        result = runner.invoke(list, ["--dns-check", "--format", "json"])
+        result = runner.invoke(list_sites, ["--dns-check", "--format", "json"])
 
         assert result.exit_code == 0
         data = json_mod.loads(result.output)
         assert len(data) == 1
         assert "dns" in data[0]
         assert data[0]["dns"]["status"] == "ok"
+
+
+class TestRegistrarListCommand:
+    """Tests for the registrar list subcommand."""
+
+    SAMPLE_DOMAINS = [
+        {
+            "domain": "example.com",
+            "tld": "com",
+            "expireDate": "2027-01-15",
+            "autoRenew": "1",
+        },
+        {
+            "domain": "example.net",
+            "tld": "net",
+            "expireDate": "2027-06-30",
+            "autoRenew": "0",
+        },
+    ]
+
+    def test_registrar_list_help(self, runner: CliRunner) -> None:
+        """registrar list shows help."""
+        result = runner.invoke(registrar_list, ["--help"])
+        assert result.exit_code == 0
+        assert "--format" in result.output
+        assert "--with-dns" in result.output
+        assert "--workers" in result.output
+
+    def test_registrar_group_help(self, runner: CliRunner) -> None:
+        """registrar group shows help with list subcommand."""
+        result = runner.invoke(main, ["registrar", "--help"])
+        assert result.exit_code == 0
+        assert "list" in result.output
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.PorkbunRegistrar")
+    def test_registrar_list_text_format(
+        self,
+        mock_registrar_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """registrar list outputs a text table by default."""
+        mock_config_load.return_value = mock_config
+
+        mock_registrar = MagicMock()
+        mock_registrar.list_domains.return_value = self.SAMPLE_DOMAINS
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=True,
+            actual=["curitiba.ns.porkbun.com"],
+            expected=["curitiba.ns.porkbun.com"],
+        )
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar.__exit__ = MagicMock(return_value=False)
+        mock_registrar_class.return_value = mock_registrar
+
+        result = runner.invoke(registrar_list, [])
+
+        assert result.exit_code == 0
+        assert "DOMAIN" in result.output
+        assert "example.com" in result.output
+        assert "example.net" in result.output
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.PorkbunRegistrar")
+    def test_registrar_list_json_format(
+        self,
+        mock_registrar_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """registrar list --format json emits valid JSON."""
+        import json as json_mod
+
+        mock_config_load.return_value = mock_config
+
+        mock_registrar = MagicMock()
+        mock_registrar.list_domains.return_value = self.SAMPLE_DOMAINS
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=True, actual=[], expected=[]
+        )
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar.__exit__ = MagicMock(return_value=False)
+        mock_registrar_class.return_value = mock_registrar
+
+        result = runner.invoke(registrar_list, ["--format", "json"])
+
+        assert result.exit_code == 0
+        data = json_mod.loads(result.output)
+        assert len(data) == 2
+        assert data[0]["domain"] == "example.com"
+        assert data[0]["tld"] == "com"
+        assert data[0]["expires"] == "2027-01-15"
+        assert data[0]["auto_renew"] is True
+        assert data[1]["auto_renew"] is False
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.PorkbunRegistrar")
+    def test_registrar_list_csv_format(
+        self,
+        mock_registrar_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """registrar list --format csv emits CSV with correct header."""
+        mock_config_load.return_value = mock_config
+
+        mock_registrar = MagicMock()
+        mock_registrar.list_domains.return_value = self.SAMPLE_DOMAINS
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=False, actual=["ns1.other.com"], expected=[]
+        )
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar.__exit__ = MagicMock(return_value=False)
+        mock_registrar_class.return_value = mock_registrar
+
+        result = runner.invoke(registrar_list, ["--format", "csv"])
+
+        assert result.exit_code == 0
+        lines = result.output.strip().split("\n")
+        assert lines[0] == "domain,tld,expires,auto_renew,ns_ok,nameservers"
+        assert len(lines) == 3  # header + 2 domains
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.PorkbunRegistrar")
+    def test_registrar_list_csv_with_dns_header(
+        self,
+        mock_registrar_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """registrar list --format csv --with-dns includes dns_records column."""
+        mock_config_load.return_value = mock_config
+
+        mock_registrar = MagicMock()
+        mock_registrar.list_domains.return_value = [self.SAMPLE_DOMAINS[0]]
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=True, actual=[], expected=[]
+        )
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar.__exit__ = MagicMock(return_value=False)
+        mock_registrar_class.return_value = mock_registrar
+
+        with patch("mimeo.cli.PorkbunDNSProvider") as mock_dns_class:
+            mock_dns = MagicMock()
+            mock_dns._get_domain_records.return_value = []
+            mock_dns.__enter__.return_value = mock_dns
+            mock_dns.__exit__ = MagicMock(return_value=False)
+            mock_dns_class.return_value = mock_dns
+
+            result = runner.invoke(registrar_list, ["--format", "csv", "--with-dns"])
+
+        assert result.exit_code == 0
+        lines = result.output.strip().split("\n")
+        assert "dns_records" in lines[0]
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.PorkbunRegistrar")
+    def test_registrar_list_empty(
+        self,
+        mock_registrar_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """registrar list shows message when account has no domains."""
+        mock_config_load.return_value = mock_config
+
+        mock_registrar = MagicMock()
+        mock_registrar.list_domains.return_value = []
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar.__exit__ = MagicMock(return_value=False)
+        mock_registrar_class.return_value = mock_registrar
+
+        result = runner.invoke(registrar_list, [])
+
+        assert result.exit_code == 0
+        assert "No domains found" in result.output
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.PorkbunRegistrar")
+    def test_registrar_list_empty_json(
+        self,
+        mock_registrar_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """registrar list --format json with empty account outputs []."""
+        mock_config_load.return_value = mock_config
+
+        mock_registrar = MagicMock()
+        mock_registrar.list_domains.return_value = []
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar.__exit__ = MagicMock(return_value=False)
+        mock_registrar_class.return_value = mock_registrar
+
+        result = runner.invoke(registrar_list, ["--format", "json"])
+
+        assert result.exit_code == 0
+        assert result.output.strip() == "[]"
+
+    @patch("mimeo.cli.Config.load")
+    def test_registrar_list_config_error(
+        self,
+        mock_config_load: Any,
+        runner: CliRunner,
+    ) -> None:
+        """registrar list exits with config error when config fails to load."""
+        mock_config_load.side_effect = ConfigurationError("Config not found")
+
+        result = runner.invoke(registrar_list, [])
+
+        assert result.exit_code == 2
+        assert "Config not found" in result.output
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.PorkbunRegistrar")
+    def test_registrar_list_ns_ok_flag(
+        self,
+        mock_registrar_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """registrar list --format json includes ns_ok field."""
+        import json as json_mod
+
+        mock_config_load.return_value = mock_config
+
+        mock_registrar = MagicMock()
+        mock_registrar.list_domains.return_value = [self.SAMPLE_DOMAINS[0]]
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=False, actual=["ns1.cloudflare.com"], expected=["curitiba.ns.porkbun.com"]
+        )
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar.__exit__ = MagicMock(return_value=False)
+        mock_registrar_class.return_value = mock_registrar
+
+        result = runner.invoke(registrar_list, ["--format", "json"])
+
+        assert result.exit_code == 0
+        data = json_mod.loads(result.output)
+        assert data[0]["ns_ok"] is False
+        assert "ns1.cloudflare.com" in data[0]["nameservers"]

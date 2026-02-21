@@ -1,6 +1,7 @@
 """Tests for provider base classes."""
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -18,6 +19,10 @@ class ConcreteRegistrar(Registrar):
     def update_nameservers(self, domain: str) -> None:
         """Test implementation."""
         pass
+
+    def list_domains(self) -> list[dict[str, Any]]:
+        """Test implementation."""
+        return []
 
 
 class ConcreteDNSProvider(DNSProvider):
@@ -66,6 +71,13 @@ def test_registrar_has_update_nameservers_method() -> None:
     """Registrar should have update_nameservers method."""
     registrar = ConcreteRegistrar()
     registrar.update_nameservers("example.com")  # should not raise
+
+
+def test_registrar_has_list_domains_method() -> None:
+    """Registrar should have list_domains method."""
+    registrar = ConcreteRegistrar()
+    result = registrar.list_domains()
+    assert isinstance(result, list)
 
 
 def test_dns_provider_can_be_instantiated() -> None:

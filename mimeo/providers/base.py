@@ -3,6 +3,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from mimeo.models import DNSRecord, NameserverCheckResult
 
@@ -31,6 +32,18 @@ class Registrar(ABC):
 
         Raises:
             RegistrarError: If the update fails
+        """
+        pass
+
+    @abstractmethod
+    def list_domains(self) -> list[dict[str, Any]]:
+        """Return all domains in the account.
+
+        Returns:
+            List of domain info dicts as returned by the registrar API.
+
+        Raises:
+            RegistrarError: If the API call fails
         """
         pass
 

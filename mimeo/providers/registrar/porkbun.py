@@ -132,6 +132,19 @@ class PorkbunRegistrar(_PorkbunClient, Registrar):
             {"ns": PORKBUN_NAMESERVERS},
         )
 
+    def list_domains(self) -> List[Dict[str, Any]]:
+        """Return all domains in the Porkbun account.
+
+        Returns:
+            List of domain info dicts from the Porkbun API.
+
+        Raises:
+            RegistrarError: If the API call fails
+        """
+        response = self._make_request("/domain/listAll", {})
+        domains: List[Dict[str, Any]] = response.get("domains", [])
+        return domains
+
     def __enter__(self) -> "PorkbunRegistrar":
         return self
 

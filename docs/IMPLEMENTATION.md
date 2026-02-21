@@ -2,7 +2,7 @@
 
 Living document tracking progress on the domain landing page provisioning tool.
 
-**Last updated**: 2026-02-18
+**Last updated**: 2026-02-20
 
 ---
 
@@ -38,6 +38,7 @@ Living document tracking progress on the domain landing page provisioning tool.
 - [x] Registrar/DNS/Host three-layer separation (`DNSProvider` ABC, `PorkbunDNSProvider`, NS check gate)
 - [x] `mimeo doctor [domain...]` NS verification for domains
 - [x] `--force-dns-update` flag on `create` (reset NS to Porkbun when mismatch, then configure DNS)
+- [x] `mimeo registrar list` subcommand (list all Porkbun account domains with NS/DNS enrichment)
 - [ ] E2E integration test lane (separate from unit tests, gated, hits real APIs)
 - [x] Refresh README to current state
 - [x] Document workflow scope requirement

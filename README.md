@@ -157,6 +157,37 @@ Output is sorted by severity (problems first).
 
 See [docs/LIST_COMMAND.md](./docs/LIST_COMMAND.md) for detailed format reference and scripting examples.
 
+### `mimeo registrar list`
+
+List all domains in the Porkbun account — regardless of whether mimeo manages them:
+
+```bash
+# Human-readable table (domain, expiry, NS status)
+mimeo registrar list
+
+# JSON output — pipeable
+mimeo registrar list --format json
+
+# CSV output
+mimeo registrar list --format csv
+
+# Include DNS records per domain (doubles API calls)
+mimeo registrar list --with-dns
+
+# Adjust concurrency (default 5)
+mimeo registrar list --workers 10
+```
+
+Output fields: `domain`, `tld`, `expires`, `auto_renew`, `ns_ok` (whether NS points to Porkbun), `nameservers`.
+
+```bash
+# Check which domains are not pointing to Porkbun
+mimeo registrar list --format json | jq '.[] | select(.ns_ok == false) | .domain'
+
+# Export full domain inventory to CSV
+mimeo registrar list --format csv --with-dns > inventory.csv
+```
+
 ## Architecture overview
 
 ```
@@ -184,7 +215,7 @@ The tool uses provider abstractions (`Registrar`, `Host` ABCs) that allow adding
 uv sync --frozen && uv run pytest && uv run ruff check mimeo && uv run mypy mimeo
 ```
 
-177 tests. Linting and type checking are expected to be clean (one pre-existing mypy warning in cli.py for a heterogeneous dict).
+258 tests. Linting and type checking are expected to be clean.
 
 ## Project structure
 
@@ -227,9 +258,7 @@ mimeo/
 ## Known limitations
 
 - Only supports Porkbun (registrar) and GitHub Pages (host). Provider abstraction is in place for future additions.
-- No reconciliation command for DNS drift — `mimeo list --fix` handles HTTPS enforcement; DNS drift detection is planned for Phase 6.
 - DNS propagation is verified after configuration (up to 10 attempts, 50 seconds), but the site is marked successful regardless of propagation status.
-- No `--workers` option yet for configuring concurrency beyond the default 5-worker limit.
 
 ## Development
 

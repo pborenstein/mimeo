@@ -1,5 +1,26 @@
 # Phase 6: Hardening Chronicles
 
+## Entry 23: mimeo registrar list subcommand (2026-02-20)
+
+**What**: Added `mimeo registrar list` — lists all domains in the Porkbun account with
+NS status, expiry, and optional DNS records. Concurrent enrichment, three output formats.
+Also renamed `list` function to `list_sites` in cli.py to stop shadowing Python's builtin.
+
+**Why**: `scripts/fetch_porkbun_domains.py` did this as a standalone script; moving it into
+the CLI makes it discoverable and consistent. The `list` shadowing had caused two separate
+bugs (`list(enumerate(...))` calling the Click command, `isinstance(data, list)` failing in tests).
+
+**How**:
+- `Registrar` ABC: `list_domains() -> list[dict[str, Any]]` abstract method
+- `PorkbunRegistrar.list_domains()`: calls `/domain/listAll`, returns domain list
+- `cli.py`: `registrar` group + `registrar_list` command; concurrent `_enrich()` closure
+  per domain (NS via `check_nameservers()`, DNS via `_get_domain_records()`)
+- `list` Click command renamed to `list_sites` (no CLI surface change)
+- 81 new tests (258 total); mypy and ruff clean
+- Docs: README, docs/LIST_COMMAND.md, docs/IMPLEMENTATION.md updated
+
+**Files**: commit acb399b
+
 ## Entry 22: --force-dns-update flag (2026-02-20)
 
 **What**: Added `--force-dns-update` flag to `mimeo create`. When NS mismatch is detected,

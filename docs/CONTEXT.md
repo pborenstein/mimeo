@@ -2,13 +2,14 @@
 phase: 6
 phase_name: Hardening
 updated: 2026-02-20
-last_commit: c6abee3
+last_commit: acb399b
 ---
 
 ## Current Focus
 
-Added `--force-dns-update` flag to `mimeo create`: when NS mismatch is detected, resets
-nameservers to Porkbun via `/domain/updateNs` API then proceeds with DNS config as normal.
+Added `mimeo registrar list` subcommand: lists all domains in the Porkbun
+account with NS enrichment, optional DNS records, and text/JSON/CSV output.
+Also fixed `list` → `list_sites` function rename to stop shadowing the builtin.
 
 ## Active Tasks
 
@@ -22,6 +23,7 @@ nameservers to Porkbun via `/domain/updateNs` API then proceeds with DNS config 
 - [x] Registrar/DNS/Host three-layer separation
 - [x] `mimeo doctor [domain...]` NS check
 - [x] `--force-dns-update` flag on `create`
+- [x] `mimeo registrar list` subcommand
 - [ ] E2E integration test lane
 
 ## Blockers
@@ -30,11 +32,11 @@ None.
 
 ## Context
 
-- 244 tests passing; mypy and ruff clean
-- `--force-dns-update`: NS mismatch → calls `PorkbunRegistrar.update_nameservers()` → DNS config proceeds
-- When NS already correct, `--force-dns-update` is a no-op
-- `Registrar` ABC now has `update_nameservers(domain)` as abstract method
-- Verified end-to-end: documentation.rodeo reset from Cloudflare NS to Porkbun successfully
+- 258 tests passing; mypy and ruff clean
+- `list` Click command renamed to `list_sites` in cli.py — avoids shadowing builtin `list`
+- `registrar list` enriches domains concurrently: NS via `check_nameservers()`, DNS via `_get_domain_records()`
+- `list_domains()` added to `Registrar` ABC and implemented in `PorkbunRegistrar`
+- `scripts/fetch_porkbun_domains.py` was the prototype; the CLI version shares no code with it
 
 ## Next Session
 

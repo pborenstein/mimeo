@@ -37,6 +37,7 @@ Living document tracking progress on the domain landing page provisioning tool.
 - [x] DNS drift detection (`mimeo list --dns-check` via Porkbun API)
 - [x] Registrar/DNS/Host three-layer separation (`DNSProvider` ABC, `PorkbunDNSProvider`, NS check gate)
 - [x] `mimeo doctor [domain...]` NS verification for domains
+- [x] `--force-dns-update` flag on `create` (reset NS to Porkbun when mismatch, then configure DNS)
 - [ ] E2E integration test lane (separate from unit tests, gated, hits real APIs)
 - [x] Refresh README to current state
 - [x] Document workflow scope requirement

@@ -2,14 +2,13 @@
 phase: 6
 phase_name: Hardening
 updated: 2026-02-20
-last_commit: f109d63
+last_commit: pending
 ---
 
 ## Current Focus
 
-Registrar/DNS/Host separation landed: three-layer model with `Registrar`, `DNSProvider`,
-`Host` ABCs. NS check gates DNS config on `create`. `mimeo doctor` now accepts domain
-args for NS verification.
+Added `--force-dns-update` flag to `mimeo create`: when NS mismatch is detected, resets
+nameservers to Porkbun via `/domain/updateNs` API then proceeds with DNS config as normal.
 
 ## Active Tasks
 
@@ -22,6 +21,7 @@ args for NS verification.
 - [x] Reconciliation / DNS drift detection (`--dns-check` on `list`)
 - [x] Registrar/DNS/Host three-layer separation
 - [x] `mimeo doctor [domain...]` NS check
+- [x] `--force-dns-update` flag on `create`
 - [ ] E2E integration test lane
 
 ## Blockers
@@ -30,12 +30,11 @@ None.
 
 ## Context
 
-- 239 tests passing; mypy and ruff clean
-- `PorkbunRegistrar` — NS check only; `PorkbunDNSProvider` — all DNS ops
-- `GitHubHost.required_dns_records(domain)` replaces static `github_pages_records()`
-- NS mismatch on `create` → warning + skip DNS, site still deploys to .github.io
-- `mimeo doctor site1.com site2.com` checks NS for each domain; mismatch → exit non-zero
-- `NSMismatchError` and `NameserverCheckResult` added to exceptions/models
+- 244 tests passing; mypy and ruff clean
+- `--force-dns-update`: NS mismatch → calls `PorkbunRegistrar.update_nameservers()` → DNS config proceeds
+- When NS already correct, `--force-dns-update` is a no-op
+- `Registrar` ABC now has `update_nameservers(domain)` as abstract method
+- Verified end-to-end: documentation.rodeo reset from Cloudflare NS to Porkbun successfully
 
 ## Next Session
 

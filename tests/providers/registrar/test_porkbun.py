@@ -157,6 +157,36 @@ class TestPorkbunRegistrar:
         assert result.ok is False
         assert result.actual == []
 
+    @responses.activate
+    def test_update_nameservers_success(self, registrar: PorkbunRegistrar) -> None:
+        """update_nameservers calls /domain/updateNs with Porkbun NS list."""
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/domain/updateNs/example.com",
+            json={"status": "SUCCESS"},
+            status=200,
+        )
+
+        registrar.update_nameservers("example.com")
+
+        assert len(responses.calls) == 1
+        import json
+        payload = json.loads(responses.calls[0].request.body)
+        assert payload["ns"] == PORKBUN_NAMESERVERS
+
+    @responses.activate
+    def test_update_nameservers_api_error(self, registrar: PorkbunRegistrar) -> None:
+        """update_nameservers raises RegistrarError on API failure."""
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/domain/updateNs/example.com",
+            json={"status": "ERROR", "message": "Domain not found"},
+            status=200,
+        )
+
+        with pytest.raises(RegistrarError, match="Domain not found"):
+            registrar.update_nameservers("example.com")
+
 
 # ---------------------------------------------------------------------------
 # PorkbunDNSProvider tests

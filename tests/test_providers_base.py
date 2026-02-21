@@ -15,6 +15,10 @@ class ConcreteRegistrar(Registrar):
         """Test implementation."""
         return NameserverCheckResult(ok=True, actual=[], expected=[])
 
+    def update_nameservers(self, domain: str) -> None:
+        """Test implementation."""
+        pass
+
 
 class ConcreteDNSProvider(DNSProvider):
     """Concrete implementation of DNSProvider for testing."""
@@ -56,6 +60,12 @@ def test_registrar_has_check_nameservers_method() -> None:
     result = registrar.check_nameservers("example.com")
     assert isinstance(result, NameserverCheckResult)
     assert result.ok is True
+
+
+def test_registrar_has_update_nameservers_method() -> None:
+    """Registrar should have update_nameservers method."""
+    registrar = ConcreteRegistrar()
+    registrar.update_nameservers("example.com")  # should not raise
 
 
 def test_dns_provider_can_be_instantiated() -> None:

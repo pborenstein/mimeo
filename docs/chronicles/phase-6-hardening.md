@@ -1,5 +1,23 @@
 # Phase 6: Hardening Chronicles
 
+## Entry 22: --force-dns-update flag (2026-02-20)
+
+**What**: Added `--force-dns-update` flag to `mimeo create`. When NS mismatch is detected,
+resets the domain's nameservers to Porkbun via API then proceeds with full DNS config.
+
+**Why**: Real-world use case — domain registered at Porkbun with NS delegated to Cloudflare.
+Without the flag, mimeo warns and skips DNS. With it, ownership is asserted back to Porkbun.
+
+**How**:
+- `Registrar` ABC: added `update_nameservers(domain)` abstract method
+- `PorkbunRegistrar.update_nameservers()`: calls `/domain/updateNs/{domain}` with `PORKBUN_NAMESERVERS`
+- `_process_single_domain`: `force_dns_update` param; on mismatch calls `update_nameservers` then falls through to DNS config
+- `create` command: `--force-dns-update` flag, threaded through sequential and concurrent paths
+- 5 new tests (244 total); mypy and ruff clean
+
+**Files**: mimeo/providers/base.py, mimeo/providers/registrar/porkbun.py, mimeo/cli.py,
+tests/test_providers_base.py, tests/test_cli.py, tests/providers/registrar/test_porkbun.py
+
 ## Entry 15: Documentation Refresh (2026-02-17)
 
 **What**: Rewrote README and refreshed all planning docs to match current state. Moved PLAN.md to archive.

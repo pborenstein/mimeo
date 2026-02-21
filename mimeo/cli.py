@@ -96,13 +96,14 @@ def _categorize_error(exc: BaseException) -> tuple[int, str]:
     return EXIT_TRANSIENT, "provider"
 
 
-def _process_single_domain(domain: str, cfg: Config, dry_run: bool, verbose: bool = True) -> dict:
+def _process_single_domain(domain: str, cfg: Config, dry_run: bool, verbose: bool = True, force_dns_update: bool = False) -> dict:
     """Process a single domain creation.
 
     Args:
         domain: Domain name to process
         cfg: Configuration object
         dry_run: If True, don't actually create anything
+        force_dns_update: If True, reset nameservers to Porkbun when mismatch detected
 
     Returns:
         Dictionary with result information
@@ -204,13 +205,22 @@ def _process_single_domain(domain: str, cfg: Config, dry_run: bool, verbose: boo
                     ns_result = registrar.check_nameservers(domain)
                     if not ns_result.ok:
                         actual_ns = ", ".join(ns_result.actual) if ns_result.actual else "unknown"
-                        log(
-                            f"NS records point to {actual_ns}, not Porkbun — skipping DNS config",
-                            "warning",
-                        )
-                        result["dns_pending"] = True
-                        result["ns_mismatch"] = ns_result.actual
-                    else:
+                        if force_dns_update:
+                            log(
+                                f"NS records point to {actual_ns} — resetting to Porkbun",
+                                "warning",
+                            )
+                            registrar.update_nameservers(domain)
+                            log("Nameservers updated to Porkbun", "success")
+                        else:
+                            log(
+                                f"NS records point to {actual_ns}, not Porkbun — skipping DNS config",
+                                "warning",
+                            )
+                            result["dns_pending"] = True
+                            result["ns_mismatch"] = ns_result.actual
+
+                    if ns_result.ok or force_dns_update:
                         with PorkbunDNSProvider(cfg.porkbun_api_key, cfg.porkbun_secret) as dns:
                             for record in (dns_records or []):
                                 record_name = record.name or "@"
@@ -288,7 +298,12 @@ def main(log_format: str) -> None:
     show_default=True,
     help="Maximum number of concurrent workers",
 )
-def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on_error: bool, sequential: bool, workers: int) -> None:
+@click.option(
+    "--force-dns-update",
+    is_flag=True,
+    help="Reset nameservers to Porkbun and configure DNS even if NS records point elsewhere",
+)
+def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on_error: bool, sequential: bool, workers: int, force_dns_update: bool) -> None:
     """Create and deploy minimal landing pages for one or more domains.
 
     This command will:
@@ -305,6 +320,7 @@ def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on
         mimeo create example.com --dry-run
         mimeo create site1.com site2.com --sequential
         mimeo create site1.com site2.com site3.com --workers 3
+        mimeo create example.com --force-dns-update
     """
     # Load configuration once
     try:
@@ -331,7 +347,7 @@ def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on
                 click.secho(f"[{idx}/{len(domains)}] Processing {domain}", fg="cyan", bold=True)
                 click.secho("=" * 60, fg="cyan")
 
-            result = _process_single_domain(domain, cfg, dry_run, verbose=True)
+            result = _process_single_domain(domain, cfg, dry_run, verbose=True, force_dns_update=force_dns_update)
             results.append(result)
 
             # Stop on error if requested
@@ -352,7 +368,7 @@ def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on
             # Submit all tasks and show as they start
             future_to_domain = {}
             for domain in domains:
-                future = executor.submit(_process_single_domain, domain, cfg, dry_run, verbose=False)
+                future = executor.submit(_process_single_domain, domain, cfg, dry_run, verbose=False, force_dns_update=force_dns_update)
                 future_to_domain[future] = domain
                 if _log_format == "text":
                     click.secho(f"→ {domain} started", fg="cyan")

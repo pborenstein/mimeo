@@ -118,6 +118,20 @@ class PorkbunRegistrar(_PorkbunClient, Registrar):
         ok = actual == expected
         return NameserverCheckResult(ok=ok, actual=actual, expected=expected)
 
+    def update_nameservers(self, domain: str) -> None:
+        """Reset the domain's nameservers to Porkbun defaults.
+
+        Args:
+            domain: Domain name to update
+
+        Raises:
+            RegistrarError: If the API call fails
+        """
+        self._make_request(
+            f"/domain/updateNs/{domain}",
+            {"ns": PORKBUN_NAMESERVERS},
+        )
+
     def __enter__(self) -> "PorkbunRegistrar":
         return self
 

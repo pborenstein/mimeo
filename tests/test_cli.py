@@ -631,6 +631,94 @@ class TestCreateCommand:
         assert "Processing site2.com" in result.output
         assert "Successfully created: 2/2 domain(s)" in result.output
 
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.generate_minimal_site")
+    @patch("mimeo.cli.GitHubHost")
+    @patch("mimeo.cli.PorkbunRegistrar")
+    @patch("mimeo.cli.PorkbunDNSProvider")
+    def test_create_force_dns_update_resets_nameservers(
+        self,
+        mock_dns_provider_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_generate: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+        mock_dns_records: List[DNSRecord],
+    ) -> None:
+        """With --force-dns-update, NS mismatch resets nameservers then configures DNS."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
+        mock_host.required_dns_records.return_value = mock_dns_records
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        mock_registrar = MagicMock()
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=False,
+            actual=["ns1.cloudflare.com", "ns2.cloudflare.com"],
+            expected=["curitiba.ns.porkbun.com"],
+        )
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar_class.return_value = mock_registrar
+
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.verify_dns.return_value = True
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
+
+        result = runner.invoke(create, ["example.com", "--force-dns-update"])
+
+        assert result.exit_code == 0
+        assert "resetting to Porkbun" in result.output
+        assert "Nameservers updated to Porkbun" in result.output
+        mock_registrar.update_nameservers.assert_called_once_with("example.com")
+        mock_dns_provider.configure_dns.assert_called_once()
+
+    @patch("mimeo.cli.Config.load")
+    @patch("mimeo.cli.generate_minimal_site")
+    @patch("mimeo.cli.GitHubHost")
+    @patch("mimeo.cli.PorkbunRegistrar")
+    @patch("mimeo.cli.PorkbunDNSProvider")
+    def test_create_force_dns_update_no_op_when_ns_ok(
+        self,
+        mock_dns_provider_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_generate: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+        mock_dns_records: List[DNSRecord],
+    ) -> None:
+        """With --force-dns-update and correct NS, no nameserver reset occurs."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
+        mock_host.required_dns_records.return_value = mock_dns_records
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        mock_registrar = MagicMock()
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(ok=True, actual=[], expected=[])
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar_class.return_value = mock_registrar
+
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.verify_dns.return_value = True
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
+
+        result = runner.invoke(create, ["example.com", "--force-dns-update"])
+
+        assert result.exit_code == 0
+        mock_registrar.update_nameservers.assert_not_called()
+        mock_dns_provider.configure_dns.assert_called_once()
+
 
 class TestListCommand:
     """Tests for list CLI command."""

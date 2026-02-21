@@ -22,6 +22,18 @@ class Registrar(ABC):
         """
         pass
 
+    @abstractmethod
+    def update_nameservers(self, domain: str) -> None:
+        """Reset the domain's nameservers to this registrar's defaults.
+
+        Args:
+            domain: Domain name to update
+
+        Raises:
+            RegistrarError: If the update fails
+        """
+        pass
+
 
 class DNSProvider(ABC):
     """Abstract base class for DNS providers."""

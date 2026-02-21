@@ -472,7 +472,7 @@ def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on
         sys.exit(min(codes))  # lower code = more specific / severe
 
 
-@main.command()
+@main.command(name="list")
 @click.option(
     "--config",
     type=click.Path(exists=True, path_type=Path),

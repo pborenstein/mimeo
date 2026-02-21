@@ -858,7 +858,7 @@ def registrar_list(config: Path | None, output_format: str, with_dns: bool, work
                 i = futures[future]
                 enriched[i] = future.result()
 
-        ordered = [enriched[i] for i in range(1, total + 1)]
+        ordered = sorted(enriched.values(), key=lambda r: r["domain"])
 
         if output_format == "json":
             click.echo(json.dumps(ordered, indent=2))

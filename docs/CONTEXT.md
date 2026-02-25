@@ -1,14 +1,14 @@
 ---
 phase: 6
 phase_name: Hardening
-updated: 2026-02-20
-last_commit: a3f1805
+updated: 2026-02-25
+last_commit: 73d0566
 ---
 
 ## Current Focus
 
-Polishing `mimeo registrar list`: fixed CLI command name regression (`list-sites` →
-`list`) and added alpha sort by domain. Both were post-merge fixups.
+Documentation sync: updated ARCHITECTURE.md and README.md to match the
+current implementation (Phase 6 additions that were not yet documented).
 
 ## Active Tasks
 
@@ -23,6 +23,7 @@ Polishing `mimeo registrar list`: fixed CLI command name regression (`list-sites
 - [x] `mimeo doctor [domain...]` NS check
 - [x] `--force-dns-update` flag on `create`
 - [x] `mimeo registrar list` subcommand
+- [x] ARCHITECTURE.md and README.md synced to current implementation
 - [ ] E2E integration test lane
 
 ## Blockers
@@ -32,10 +33,14 @@ None.
 ## Context
 
 - 258 tests passing; mypy and ruff clean
-- `list_sites` function name + `name="list"` on decorator — avoids builtin shadow, preserves CLI name
-- `registrar list` output sorted alpha by domain; concurrent enrichment preserves dict order via `enriched.values()`
-- Click command name comes from function name by default; use `name=` param to override
-- `list_domains()` on `Registrar` ABC + `PorkbunRegistrar`; enrichment in cli.py `_enrich()` closure
+- ARCHITECTURE.md now documents: `utils/retry.py`, `DNSProvider` ABC, `PorkbunDNSProvider`,
+  `NSMismatchError`, `NameserverCheckResult`, exit codes table, `--log-format` global,
+  `registrar list` workflow, structured logging section, `--force-dns-update` in create workflow,
+  `--dns-check` in list workflow, `doctor [domain...]` NS check
+- README.md now documents: `--log-format` global option, `--force-dns-update`, `--dns-check`,
+  `doctor [domain...]` NS check, `utils/retry.py` in project structure
+- Registrar ABC: `check_nameservers`, `update_nameservers`, `list_domains`
+- DNSProvider ABC (separate from Registrar): `configure_dns`, `verify_dns`, `check_nameservers`
 
 ## Next Session
 

@@ -96,6 +96,15 @@ export MIMEO_PORKBUN_SECRET="sk1_..."
 export MIMEO_GITHUB_USERNAME="your-username"
 ```
 
+## Global options
+
+```bash
+# Emit structured JSON log lines to stderr instead of human-readable text
+mimeo --log-format json create example.com
+```
+
+`--log-format` accepts `text` (default) or `json`. In JSON mode each diagnostic line is a newline-delimited JSON object with `ts`, `level`, `message`, and optionally `domain`. Result output (tables, JSON arrays) still goes to stdout.
+
 ## Commands
 
 ### `mimeo doctor`
@@ -107,6 +116,12 @@ mimeo doctor
 ```
 
 Verifies Python version, `gh` installation, `gh` authentication, `workflow` token scope, and config file validity. Prints a pass/fail result for each check with remediation instructions.
+
+Optionally pass one or more domain names to also check that their nameservers point to Porkbun:
+
+```bash
+mimeo doctor example.com another.lol
+```
 
 ### `mimeo create <domain> [<domain> ...]`
 
@@ -127,6 +142,9 @@ mimeo create example.com --stop-on-error
 
 # Run sequentially instead of concurrently
 mimeo create example.com another.lol --sequential
+
+# Reset nameservers to Porkbun and configure DNS even if NS points elsewhere
+mimeo create example.com --force-dns-update
 ```
 
 Multiple domains are processed concurrently (up to 5 workers). Use `--sequential` for verbose per-step output or when debugging.
@@ -150,6 +168,9 @@ mimeo list --health
 
 # Fix HTTPS enforcement for sites with approved certs
 mimeo list --fix
+
+# Check DNS records for drift against expected configuration
+mimeo list --dns-check
 ```
 
 Health status values: `healthy`, `fixable`, `cert_pending`, `no_cert`, `pages_error`.
@@ -225,12 +246,15 @@ mimeo/
 │   ├── cli.py                          # CLI entry point (Click)
 │   ├── config.py                       # Config loading (~/.config/mimeo/config.toml)
 │   ├── content.py                      # Landing page HTML generation
-│   ├── exceptions.py                   # Exception hierarchy
-│   ├── models.py                       # Domain, DNSRecord, DeployResult
-│   └── providers/
-│       ├── base.py                     # Registrar / Host ABCs
-│       ├── registrar/porkbun.py        # Porkbun DNS API
-│       └── host/github.py             # GitHub Pages automation (via gh CLI)
+│   ├── exceptions.py                   # Exception hierarchy + exit codes
+│   ├── models.py                       # Domain, DNSRecord, NameserverCheckResult
+│   ├── providers/
+│   │   ├── base.py                     # Registrar / DNSProvider / Host ABCs
+│   │   ├── registrar/porkbun.py        # Porkbun registrar + DNS provider
+│   │   └── host/github.py             # GitHub Pages automation (via gh CLI)
+│   └── utils/
+│       ├── http.py                     # requests.Session with retry strategy
+│       └── retry.py                    # retry_with_jitter() for transient errors
 ├── tests/
 ├── scripts/                            # Smoke tests and utilities
 ├── docs/

@@ -12,38 +12,46 @@ The tool is structured around a provider abstraction that separates the registra
 mimeo/
 ├── cli.py              Command-line interface (Click)
 │                         create, list, doctor subcommands
+│                         registrar list subcommand
 │                         ThreadPoolExecutor for concurrent provisioning
+│                         --log-format {text|json} global option
 │
 ├── config.py           Configuration loader
 │                         TOML file: ~/.config/mimeo/config.toml
 │                         Environment variable overrides: MIMEO_*
 │
 ├── models.py           Data models
-│                         Domain, DNSRecord, DeployResult
+│                         Domain, DNSRecord, NameserverCheckResult
 │
 ├── content.py          Content generator
 │                         index.html (dark theme, domain name centered)
 │                         .github/workflows/static.yml (GitHub Actions)
 │                         README.md
 │
-├── exceptions.py       Exception hierarchy
+├── exceptions.py       Exception hierarchy + exit codes
+│                         EXIT_OK=0, EXIT_CONFIG=2, EXIT_AUTH=3
+│                         EXIT_RATE_LIMIT=4, EXIT_TRANSIENT=5, EXIT_PARTIAL=6
 │                         MimeoError
 │                           ConfigurationError
 │                           ProviderError
 │                             RegistrarError
+│                               NSMismatchError
 │                             HostError
 │                           DNSError
 │                           NetworkError
-│                           APIError
+│                           APIError (status_code attribute)
 │
 ├── providers/
 │   ├── base.py         Abstract base classes
-│   │                     Registrar ABC: configure_dns, verify_dns
-│   │                     Host ABC: deploy_site -> DeployResult
-│   │                     DeployResult dataclass
+│   │                     Registrar ABC: check_nameservers, update_nameservers, list_domains
+│   │                     DNSProvider ABC: configure_dns, verify_dns, check_nameservers
+│   │                     Host ABC: deploy_site -> DeployResult, required_dns_records
+│   │                     DeployResult dataclass: url, repo_created, https_enabled
 │   │
 │   ├── registrar/
-│   │   └── porkbun.py  Porkbun DNS provider
+│   │   └── porkbun.py  Porkbun registrar + DNS provider
+│   │                     PorkbunRegistrar: list_domains, check_nameservers, update_nameservers
+│   │                     PorkbunDNSProvider: configure_dns, verify_dns, check_nameservers
 │   │                     HTTP calls to api-ipv4.porkbun.com/api/json/v3
 │   │                     configure_dns: delete conflicts, create records
 │   │                     verify_dns: poll with dnspython
@@ -55,37 +63,51 @@ mimeo/
 │                         HTTPS enforcement (requires approved cert)
 │
 └── utils/
-    └── http.py         HTTP client
-                          requests.Session with retry strategy
-                          Retries on 429, 5xx with exponential backoff
+    ├── http.py         HTTP client
+    │                     requests.Session with retry strategy
+    │                     Retries on 429, 5xx with exponential backoff
+    └── retry.py        Retry with exponential backoff and jitter
+                          retry_with_jitter(): retries on transient errors
+                          Retryable: APIError (429/5xx), NetworkError, transient HostError
 ```
 
 ## Provider Abstractions
 
-The `Registrar` and `Host` ABCs in `providers/base.py` define the minimum interface for each concern:
+`providers/base.py` defines three ABCs separating registrar, DNS, and host concerns:
 
 ```
-Registrar (ABC)                    Host (ABC)
+Registrar (ABC)                    DNSProvider (ABC)
 ─────────────────────────          ──────────────────────────────
-configure_dns(domain, records)     deploy_site(domain, path)
-verify_dns(domain, records)          -> DeployResult
-                                       url
-                                       repo_created
-                                       https_enabled
+check_nameservers(domain)          configure_dns(domain, records)
+  -> NameserverCheckResult         verify_dns(domain, records)
+update_nameservers(domain)         check_nameservers(domain)
+list_domains()                       -> NameserverCheckResult
         │                                      │
         ▼                                      ▼
-PorkbunRegistrar              GitHubHost
-(porkbun.py)                  (github.py)
+PorkbunRegistrar              PorkbunDNSProvider
+(porkbun.py)                  (porkbun.py)
+
+Host (ABC)
+──────────────────────────────────────
+deploy_site(domain, path) -> DeployResult
+  DeployResult: url, repo_created, https_enabled
+required_dns_records(domain) -> list[DNSRecord]
+        │
+        ▼
+GitHubHost
+(github.py)
 ```
 
 New providers implement these interfaces. The CLI orchestration in `cli.py` calls only the abstract methods, so new implementations slot in without touching the core flow.
 
+`NameserverCheckResult` (in `models.py`) carries `ok: bool`, `actual: list[str]`, `expected: list[str]`.
+
 ## Create Workflow
 
-The `mimeo create <domain>` command orchestrates four stages in sequence per domain:
+The `mimeo create <domain>` command orchestrates stages in sequence per domain:
 
 ```
-mimeo create example.com
+mimeo create example.com [--force-dns-update]
         │
         ▼
 Load Config
@@ -116,7 +138,12 @@ Deploy to GitHub Pages (GitHubHost)
          url, repo_created, https_enabled
                    │
                    ▼
-Configure DNS (PorkbunRegistrar)
+Check Nameservers (PorkbunRegistrar)
+  ns_ok? ── no + --force-dns-update ──► update_nameservers()
+  ns_ok? ── no (no flag) ──► warn, skip DNS config
+                   │
+                   ▼
+Configure DNS (PorkbunDNSProvider)
   retrieve existing records
   delete conflicting records (by type + name)
   create 4 A records (185.199.108-111.153)
@@ -155,7 +182,7 @@ Single domains and `--dry-run` always run sequentially with verbose per-step out
 `mimeo list` enumerates repositories tagged with the `mimeo` topic:
 
 ```
-mimeo list [--health] [--fix]
+mimeo list [--health] [--fix] [--dns-check]
         │
         ▼
 gh search repos user:<owner> topic:mimeo
@@ -164,6 +191,10 @@ gh search repos user:<owner> topic:mimeo
 normalize: name, repository URL, site URL, updated date
         │
         ├── (no --health) ──► sort by name ──► display
+        │
+        ├── (--dns-check) ──► check DNS records against expected
+        │                      PorkbunDNSProvider.check_nameservers()
+        │                      compare live records vs required_dns_records()
         │
         └── (--health) ──► fetch Pages health concurrently (10 workers)
                                   │
@@ -197,7 +228,7 @@ normalize: name, repository URL, site URL, updated date
 `mimeo doctor` runs preflight checks before any API calls:
 
 ```
-mimeo doctor
+mimeo doctor [domain ...]
         │
         ▼
 Python >= 3.11?     ok / fail + remediation
@@ -213,6 +244,11 @@ workflow scope?     ok / fail + remediation
         │
         ▼
 config valid?       ok / fail + remediation
+        │
+        ▼
+(for each domain) NS check via PorkbunRegistrar.check_nameservers()
+  ns_ok? ──► ok
+  !ns_ok? ──► warn: nameservers point elsewhere
         │
         ▼
 all ok? ──► exit 0
@@ -275,13 +311,60 @@ MimeoError
 ├── ConfigurationError     missing/invalid config file or required fields
 ├── ProviderError
 │   ├── RegistrarError     Porkbun API failures
+│   │   └── NSMismatchError  nameservers don't match expected provider
 │   └── HostError          GitHub API / gh CLI failures
 ├── DNSError               DNS verification failures
 ├── NetworkError           network-level request failures
-└── APIError               HTTP error responses (with status_code attribute)
+└── APIError               HTTP error responses (has status_code attribute)
 ```
 
 The CLI catches `ConfigurationError` and `HostError` at the top level and prints a user-readable message before exiting. `RegistrarError` in the `create` command is caught and treated as a non-fatal DNS failure — the site is still accessible via `github.io` URL.
+
+## Exit Codes
+
+| Code | Constant | Meaning |
+|:-----|:---------|:--------|
+| 0 | EXIT_OK | All operations succeeded |
+| 2 | EXIT_CONFIG | Configuration missing or invalid |
+| 3 | EXIT_AUTH | Authentication failure (API key, gh token) |
+| 4 | EXIT_RATE_LIMIT | Rate limit hit |
+| 5 | EXIT_TRANSIENT | Transient network/server error |
+| 6 | EXIT_PARTIAL | Some domains succeeded, some failed |
+
+## Registrar List Workflow
+
+`mimeo registrar list` enumerates all domains in the Porkbun account and enriches them concurrently:
+
+```
+mimeo registrar list [--with-dns] [--workers N]
+        │
+        ▼
+PorkbunRegistrar.list_domains()
+  GET /domain/listAll
+        │
+        ▼
+concurrent enrichment (ThreadPoolExecutor, default 5 workers)
+  per domain:
+    check_nameservers() -> NameserverCheckResult (ns_ok)
+    (--with-dns) fetch_dns_records() -> list[DNSRecord]
+        │
+        ▼
+sort alphabetically by domain name
+        │
+        ▼
+output: domain, tld, expires, auto_renew, ns_ok, nameservers
+  (--format text|json|csv)
+```
+
+## Structured Logging
+
+The `--log-format json` global option switches all diagnostic output to newline-delimited JSON on stderr:
+
+```
+mimeo --log-format json create example.com
+```
+
+Each log record has fields: `ts` (ISO 8601 UTC), `level`, `message`, and optionally `domain`. Normal result output (tables, JSON arrays) still goes to stdout.
 
 ## GitHub Pages SSL Certificate Lifecycle
 

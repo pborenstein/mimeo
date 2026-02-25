@@ -1,5 +1,23 @@
 # Phase 6: Hardening Chronicles
 
+## Entry 24: Documentation sync (2026-02-25)
+
+**What**: Updated ARCHITECTURE.md and README.md to reflect all Phase 6 additions
+that had been implemented but not yet documented.
+
+**Why**: Docs lagged behind implementation. ARCHITECTURE.md still described the
+old two-ABC design (`Registrar` + `Host`); README.md was missing several flags
+and the global `--log-format` option entirely.
+
+**How**:
+- ARCHITECTURE.md: component map, provider abstractions, create/list/doctor/registrar-list
+  workflows, exit codes table, structured logging section — all updated to match code
+- README.md: global options section (`--log-format`), `--force-dns-update`, `--dns-check`,
+  `doctor [domain...]` NS check, `utils/retry.py` in project structure
+- CONTEXT.md: updated to 2026-02-25
+
+**Files**: docs/ARCHITECTURE.md, README.md, docs/CONTEXT.md
+
 ## Entry 23: mimeo registrar list subcommand (2026-02-20)
 
 **What**: Added `mimeo registrar list` — lists all domains in the Porkbun account with

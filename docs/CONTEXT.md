@@ -1,14 +1,15 @@
 ---
 phase: 6
 phase_name: Hardening
-updated: 2026-02-25
-last_commit: 73d0566
+updated: 2026-03-06
+last_commit: a65448f
 ---
 
 ## Current Focus
 
-Documentation sync: updated ARCHITECTURE.md and README.md to match the
-current implementation (Phase 6 additions that were not yet documented).
+Docs cleanup: removed dead-weight files (ABSTRACT.md, CODEX-SPEAKS.md,
+CONTRIBUTING.md, archive/PLAN.md, porkbun-OpenAPI/). Updated docs/README.md.
+Beginning to explore template/type system for `mimeo create`.
 
 ## Active Tasks
 
@@ -24,7 +25,9 @@ current implementation (Phase 6 additions that were not yet documented).
 - [x] `--force-dns-update` flag on `create`
 - [x] `mimeo registrar list` subcommand
 - [x] ARCHITECTURE.md and README.md synced to current implementation
+- [x] docs/ cleanup (dead files removed)
 - [ ] E2E integration test lane
+- [ ] Template/type system (`--template` flag on `create`)
 
 ## Blockers
 
@@ -33,16 +36,13 @@ None.
 ## Context
 
 - 258 tests passing; mypy and ruff clean
-- ARCHITECTURE.md now documents: `utils/retry.py`, `DNSProvider` ABC, `PorkbunDNSProvider`,
-  `NSMismatchError`, `NameserverCheckResult`, exit codes table, `--log-format` global,
-  `registrar list` workflow, structured logging section, `--force-dns-update` in create workflow,
-  `--dns-check` in list workflow, `doctor [domain...]` NS check
-- README.md now documents: `--log-format` global option, `--force-dns-update`, `--dns-check`,
-  `doctor [domain...]` NS check, `utils/retry.py` in project structure
-- Registrar ABC: `check_nameservers`, `update_nameservers`, `list_domains`
-- DNSProvider ABC (separate from Registrar): `configure_dns`, `verify_dns`, `check_nameservers`
+- tantamount.rodeo is the working sandbox for template exploration
+- Template family exists in mimeo-sites/TEMPLATES/: eleventy-pamphlet, eleventy-chapbook, eleventy-folio
+- orobia.{lol,dev,net} repos in tepiton org are plain placeholders; the Eleventy template repos point custom domains there
+- Pandoc-based single-page markdown template is the first new template target
 
 ## Next Session
 
-Template/type system: --type flag on create (static, eleventy, astro), multiple
-content generators, workflow variants (static.yml vs build workflows for SSGs).
+Build a pandoc-based `simple-markdown` template: index.md + stylesheet +
+GitHub Actions workflow (pandoc build → Pages deploy). Wire up `--template`
+flag on `mimeo create`. Start in tantamount.rodeo as sandbox.

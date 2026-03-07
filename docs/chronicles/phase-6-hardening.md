@@ -181,3 +181,20 @@ config; warn-and-skip if NS doesn't point at Porkbun. See DEC-015, DEC-016.
 **Decisions**: DEC-015, DEC-016
 
 **Files**: mimeo/providers/base.py, mimeo/providers/registrar/porkbun.py, mimeo/providers/host/github.py, mimeo/cli.py, mimeo/models.py, mimeo/exceptions.py, tests/
+
+## Entry 25: Docs cleanup (2026-03-06)
+
+**What**: Removed dead-weight documentation files; updated docs/README.md.
+
+**Why**: Files were historical artifacts with no ongoing reference value — a one-time AI code review (CODEX-SPEAKS.md), the original pre-implementation spec (archive/PLAN.md), raw API spec files (porkbun-OpenAPI/), the project abstract (ABSTRACT.md), and CONTRIBUTING.md (single-developer project).
+
+**How**: Deleted 7 files, updated docs/README.md to remove dead links.
+
+**Removed**:
+- `docs/ABSTRACT.md`
+- `docs/CODEX-SPEAKS.md`
+- `docs/archive/PLAN.md`
+- `docs/porkbun-OpenAPI/` (3 files)
+- `CONTRIBUTING.md`
+
+**Files**: docs/README.md

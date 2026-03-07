@@ -13,7 +13,6 @@ Navigation index for all Mimeo documentation files.
 | [IMPLEMENTATION.md](IMPLEMENTATION.md) | Contributors | Phase tracker, current tasks, completed work |
 | [DECISIONS.md](DECISIONS.md) | Contributors | Architectural decision registry (DEC-001 through DEC-014) |
 | [CONTEXT.md](CONTEXT.md) | Contributors | Current session state, active tasks, blockers |
-| [ABSTRACT.md](ABSTRACT.md) | Background | Original project motivation and requirements |
 
 ## Contributor Entry Points
 
@@ -26,7 +25,6 @@ Navigation index for all Mimeo documentation files.
 **Understanding the codebase:**
 
 1. Read [ARCHITECTURE.md](ARCHITECTURE.md) for component map and workflow diagrams
-2. Read [../CONTRIBUTING.md](../CONTRIBUTING.md) for coding standards and PR process
 
 **Debugging a deployment:**
 
@@ -38,7 +36,6 @@ Navigation index for all Mimeo documentation files.
 | Location | Contents |
 |:---------|:---------|
 | [chronicles/](chronicles/) | Session-by-session history, one file per phase |
-| [archive/](archive/) | Historical documents (superseded plans) |
 | [../scripts/](../scripts/) | Smoke test and utility scripts; see [../scripts/README.md](../scripts/README.md) |
 | [../config.toml.example](../config.toml.example) | Annotated configuration template |
 

@@ -18,7 +18,6 @@ from mimeo.cli import (
     doctor,
     list_sites,
     main,
-    registrar,
     registrar_list,
 )
 
@@ -88,7 +87,6 @@ class TestCreateCommand:
         assert "Missing argument" in result.output
 
     @patch("mimeo.cli.Config.load")
-    @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
     @patch("mimeo.cli.PorkbunDNSProvider")
@@ -97,7 +95,6 @@ class TestCreateCommand:
         mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
-        mock_generate: Any,
         mock_config_load: Any,
         runner: CliRunner,
         mock_config: Config,
@@ -129,7 +126,6 @@ class TestCreateCommand:
         # Verify success
         assert result.exit_code == 0
         assert "Loading configuration" in result.output
-        assert "Generating site content" in result.output
         assert "Configuring GitHub repository" in result.output
         assert "Configuring DNS records" in result.output
         assert "Successfully created: 1/1 domain(s)" in result.output
@@ -137,7 +133,6 @@ class TestCreateCommand:
 
         # Verify mocks called correctly
         mock_config_load.assert_called_once()
-        mock_generate.assert_called_once()
         mock_host_class.assert_called_once_with(default_org="testuser")
         mock_host.deploy_site.assert_called_once()
         mock_host.required_dns_records.assert_called_once_with("example.com")
@@ -146,7 +141,6 @@ class TestCreateCommand:
         mock_dns_provider.verify_dns.assert_called_once()
 
     @patch("mimeo.cli.Config.load")
-    @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
     @patch("mimeo.cli.PorkbunDNSProvider")
@@ -155,7 +149,6 @@ class TestCreateCommand:
         mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
-        mock_generate: Any,
         mock_config_load: Any,
         runner: CliRunner,
         mock_config: Config,
@@ -200,12 +193,10 @@ class TestCreateCommand:
         assert "Config file not found" in result.output
 
     @patch("mimeo.cli.Config.load")
-    @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     def test_create_deployment_error(
         self,
         mock_host_class: Any,
-        mock_generate: Any,
         mock_config_load: Any,
         runner: CliRunner,
         mock_config: Config,
@@ -224,7 +215,6 @@ class TestCreateCommand:
         assert "GitHub API failed" in result.output
 
     @patch("mimeo.cli.Config.load")
-    @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
     @patch("mimeo.cli.PorkbunDNSProvider")
@@ -233,7 +223,6 @@ class TestCreateCommand:
         mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
-        mock_generate: Any,
         mock_config_load: Any,
         runner: CliRunner,
         mock_config: Config,
@@ -267,7 +256,6 @@ class TestCreateCommand:
         assert "Site deployed but DNS not configured" in result.output
 
     @patch("mimeo.cli.Config.load")
-    @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
     @patch("mimeo.cli.PorkbunDNSProvider")
@@ -276,7 +264,6 @@ class TestCreateCommand:
         mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
-        mock_generate: Any,
         mock_config_load: Any,
         runner: CliRunner,
         mock_config: Config,
@@ -313,25 +300,6 @@ class TestCreateCommand:
         mock_dns_provider.configure_dns.assert_not_called()
 
     @patch("mimeo.cli.Config.load")
-    @patch("mimeo.cli.generate_minimal_site")
-    def test_create_content_generation_error(
-        self,
-        mock_generate: Any,
-        mock_config_load: Any,
-        runner: CliRunner,
-        mock_config: Config,
-    ) -> None:
-        """Test create command handles content generation errors."""
-        mock_config_load.return_value = mock_config
-        mock_generate.side_effect = OSError("Failed to write file")
-
-        result = runner.invoke(create, ["example.com"])
-
-        assert result.exit_code == 5
-        assert "Failed to write file" in result.output
-
-    @patch("mimeo.cli.Config.load")
-    @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
     @patch("mimeo.cli.PorkbunDNSProvider")
@@ -340,7 +308,6 @@ class TestCreateCommand:
         mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
-        mock_generate: Any,
         mock_config_load: Any,
         runner: CliRunner,
         mock_config: Config,
@@ -376,22 +343,20 @@ class TestCreateCommand:
         mock_config_load.assert_called_once_with(config_file)
 
     @patch("mimeo.cli.Config.load")
-    @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
     @patch("mimeo.cli.PorkbunDNSProvider")
-    def test_create_generates_content_in_temp_dir(
+    def test_create_calls_deploy_site(
         self,
         mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
-        mock_generate: Any,
         mock_config_load: Any,
         runner: CliRunner,
         mock_config: Config,
         mock_dns_records: List[DNSRecord],
     ) -> None:
-        """Test that create command generates content in temporary directory."""
+        """Test that create command calls deploy_site on the host."""
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
@@ -413,13 +378,8 @@ class TestCreateCommand:
         result = runner.invoke(create, ["example.com"])
 
         assert result.exit_code == 0
-        # Verify generate_minimal_site was called with Path object
-        args = mock_generate.call_args[0]
-        assert args[0] == "example.com"
-        assert isinstance(args[1], Path)
 
     @patch("mimeo.cli.Config.load")
-    @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
     @patch("mimeo.cli.PorkbunDNSProvider")
@@ -428,7 +388,6 @@ class TestCreateCommand:
         mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
-        mock_generate: Any,
         mock_config_load: Any,
         runner: CliRunner,
         mock_config: Config,
@@ -459,7 +418,6 @@ class TestCreateCommand:
         assert "https://github.com/testuser/example.com" in result.output
 
     @patch("mimeo.cli.Config.load")
-    @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
     @patch("mimeo.cli.PorkbunDNSProvider")
@@ -468,7 +426,6 @@ class TestCreateCommand:
         mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
-        mock_generate: Any,
         mock_config_load: Any,
         runner: CliRunner,
         mock_config: Config,
@@ -499,7 +456,6 @@ class TestCreateCommand:
         mock_host_class.assert_called_once_with(default_org="testuser")
 
     @patch("mimeo.cli.Config.load")
-    @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
     @patch("mimeo.cli.PorkbunDNSProvider")
@@ -508,7 +464,6 @@ class TestCreateCommand:
         mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
-        mock_generate: Any,
         mock_config_load: Any,
         runner: CliRunner,
         mock_config: Config,
@@ -540,7 +495,6 @@ class TestCreateCommand:
         mock_dns_provider_class.assert_called_with("pk1_test", "sk1_test")
 
     @patch("mimeo.cli.Config.load")
-    @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
     @patch("mimeo.cli.PorkbunDNSProvider")
@@ -549,7 +503,6 @@ class TestCreateCommand:
         mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
-        mock_generate: Any,
         mock_config_load: Any,
         runner: CliRunner,
         mock_config: Config,
@@ -559,7 +512,7 @@ class TestCreateCommand:
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
-        mock_host.deploy_site.side_effect = lambda domain, _: DeployResult(url=f"https://{domain}", repo_created=True, https_enabled=True)
+        mock_host.deploy_site.side_effect = lambda domain, **kw: DeployResult(url=f"https://{domain}", repo_created=True, https_enabled=True)
         mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
@@ -592,7 +545,6 @@ class TestCreateCommand:
         assert mock_dns_provider.configure_dns.call_count == 3
 
     @patch("mimeo.cli.Config.load")
-    @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
     @patch("mimeo.cli.PorkbunDNSProvider")
@@ -601,7 +553,6 @@ class TestCreateCommand:
         mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
-        mock_generate: Any,
         mock_config_load: Any,
         runner: CliRunner,
         mock_config: Config,
@@ -611,7 +562,7 @@ class TestCreateCommand:
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
-        mock_host.deploy_site.side_effect = lambda domain, _: DeployResult(url=f"https://{domain}", repo_created=True, https_enabled=True)
+        mock_host.deploy_site.side_effect = lambda domain, **kw: DeployResult(url=f"https://{domain}", repo_created=True, https_enabled=True)
         mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
@@ -634,7 +585,6 @@ class TestCreateCommand:
         assert "Successfully created: 2/2 domain(s)" in result.output
 
     @patch("mimeo.cli.Config.load")
-    @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
     @patch("mimeo.cli.PorkbunDNSProvider")
@@ -643,7 +593,6 @@ class TestCreateCommand:
         mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
-        mock_generate: Any,
         mock_config_load: Any,
         runner: CliRunner,
         mock_config: Config,
@@ -681,7 +630,6 @@ class TestCreateCommand:
         mock_dns_provider.configure_dns.assert_called_once()
 
     @patch("mimeo.cli.Config.load")
-    @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
     @patch("mimeo.cli.PorkbunDNSProvider")
@@ -690,7 +638,6 @@ class TestCreateCommand:
         mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
-        mock_generate: Any,
         mock_config_load: Any,
         runner: CliRunner,
         mock_config: Config,
@@ -1447,7 +1394,6 @@ class TestWorkersOption:
         assert result.exit_code != 0
 
     @patch("mimeo.cli.Config.load")
-    @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
     @patch("mimeo.cli.ThreadPoolExecutor")
@@ -1456,7 +1402,6 @@ class TestWorkersOption:
         mock_executor_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
-        mock_generate: Any,
         mock_config_load: Any,
         runner: CliRunner,
         mock_config: Config,
@@ -1500,7 +1445,6 @@ class TestLogFormatOption:
         assert "--log-format" in result.output
 
     @patch("mimeo.cli.Config.load")
-    @patch("mimeo.cli.generate_minimal_site")
     @patch("mimeo.cli.GitHubHost")
     @patch("mimeo.cli.PorkbunRegistrar")
     @patch("mimeo.cli.PorkbunDNSProvider")
@@ -1509,7 +1453,6 @@ class TestLogFormatOption:
         mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
-        mock_generate: Any,
         mock_config_load: Any,
         runner: CliRunner,
         mock_config: Config,

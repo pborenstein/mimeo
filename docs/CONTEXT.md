@@ -1,15 +1,16 @@
 ---
 phase: 6
 phase_name: Hardening
-updated: 2026-03-06
-last_commit: a65448f
+updated: 2026-03-19
+last_commit: 5e23155
 ---
 
 ## Current Focus
 
-Docs cleanup: removed dead-weight files (ABSTRACT.md, CODEX-SPEAKS.md,
-CONTRIBUTING.md, archive/PLAN.md, porkbun-OpenAPI/). Updated docs/README.md.
-Beginning to explore template/type system for `mimeo create`.
+Replaced hardcoded content generation with GitHub template repo instantiation.
+`mimeo create example.com` now creates repos from `tepiton/mimeo.lol` via the
+GitHub "Use this template" API. Next: parameterization (substituting domain
+into template content like metadata.js / index.md frontmatter).
 
 ## Active Tasks
 
@@ -26,8 +27,9 @@ Beginning to explore template/type system for `mimeo create`.
 - [x] `mimeo registrar list` subcommand
 - [x] ARCHITECTURE.md and README.md synced to current implementation
 - [x] docs/ cleanup (dead files removed)
+- [x] Replace content generation with GitHub template repo API
 - [ ] E2E integration test lane
-- [ ] Template/type system (`--template` flag on `create`)
+- [ ] Template parameterization (substitute domain into template files)
 
 ## Blockers
 
@@ -35,14 +37,14 @@ None.
 
 ## Context
 
-- 258 tests passing; mypy and ruff clean
-- tantamount.rodeo is the working sandbox for template exploration
-- Template family exists in mimeo-sites/TEMPLATES/: eleventy-pamphlet, eleventy-chapbook, eleventy-folio
-- orobia.{lol,dev,net} repos in tepiton org are plain placeholders; the Eleventy template repos point custom domains there
-- Pandoc-based single-page markdown template is the first new template target
+- 242 tests passing; mypy and ruff clean
+- `tepiton/mimeo.lol` is_template=true (set this session)
+- All 5 templates in tepiton org: mimeo.lol, pandoc-simple, eleventy-pamphlet, eleventy-chapbook, eleventy-folio
+- `--template` flag wired up on `create`, defaults to `mimeo.lol`
+- content.py deleted; `_init_and_push_repository` deleted; `_create_from_template` added
 
 ## Next Session
 
-Build a pandoc-based `simple-markdown` template: index.md + stylesheet +
-GitHub Actions workflow (pandoc build → Pages deploy). Wire up `--template`
-flag on `mimeo create`. Start in tantamount.rodeo as sandbox.
+Discuss and implement template parameterization: substituting the domain name
+into template files (e.g. `metadata.js` url field for Eleventy templates,
+`index.md` frontmatter title for pandoc-simple).

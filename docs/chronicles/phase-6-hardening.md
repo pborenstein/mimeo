@@ -1,5 +1,24 @@
 # Phase 6: Hardening Chronicles
 
+## Entry 26: Replace content generation with GitHub template repo API (2026-03-19)
+
+**What**: Deleted `content.py` and the git-init/push flow. `mimeo create` now
+instantiates repos via `POST /repos/tepiton/{template}/generate`. Added
+`--template` flag (default: `mimeo.lol`). Set `is_template=true` on
+`tepiton/mimeo.lol` via API.
+
+**Why**: Simpler, fewer moving parts. No local content generation, no temp
+dirs, no git operations. Template repos in `tepiton` org are the source of
+truth for site content and GitHub Actions workflows.
+
+**How**: Added `_create_from_template()` to `GitHubHost`, removed
+`_create_repository()` and `_init_and_push_repository()`. Updated `deploy_site`
+signature (no `content_path`). Deleted `test_content.py`. 242 tests passing.
+
+**Decisions**: See DEC-017.
+
+**Files**: `mimeo/providers/host/github.py`, `mimeo/cli.py`, `mimeo/providers/base.py`
+
 ## Entry 24: Documentation sync (2026-02-25)
 
 **What**: Updated ARCHITECTURE.md and README.md to reflect all Phase 6 additions

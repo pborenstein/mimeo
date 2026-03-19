@@ -4,7 +4,6 @@ import csv
 import json
 import subprocess
 import sys
-import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,7 +14,6 @@ import click
 
 from . import __version__
 from .config import Config
-from .content import generate_minimal_site
 from .exceptions import (
     EXIT_AUTH,
     EXIT_CONFIG,
@@ -28,7 +26,7 @@ from .exceptions import (
     NetworkError,
     RegistrarError,
 )
-from .providers.host.github import GitHubHost, _health_status
+from .providers.host.github import DEFAULT_TEMPLATE, GitHubHost, _health_status
 from .providers.registrar.porkbun import PorkbunDNSProvider, PorkbunRegistrar
 
 # Lock for thread-safe console output
@@ -96,7 +94,7 @@ def _categorize_error(exc: BaseException) -> tuple[int, str]:
     return EXIT_TRANSIENT, "provider"
 
 
-def _process_single_domain(domain: str, cfg: Config, dry_run: bool, verbose: bool = True, force_dns_update: bool = False) -> dict:
+def _process_single_domain(domain: str, cfg: Config, dry_run: bool, verbose: bool = True, force_dns_update: bool = False, template: str = DEFAULT_TEMPLATE) -> dict:
     """Process a single domain creation.
 
     Args:
@@ -156,93 +154,78 @@ def _process_single_domain(domain: str, cfg: Config, dry_run: bool, verbose: boo
             result["repo_url"] = f"https://github.com/{cfg.github_username}/{domain}"
             return result
 
-        # Create temporary directory for site content
-        with tempfile.TemporaryDirectory() as temp_dir:
-            content_path = Path(temp_dir)
+        # Deploy to GitHub Pages
+        log("Configuring GitHub repository")
+        dns_records = None
+        try:
+            with GitHubHost(default_org=cfg.github_username) as host:
+                deploy = host.deploy_site(domain, template=template)
+                dns_records = host.required_dns_records(domain)
+                result["url"] = deploy.url
+                result["repo_url"] = f"https://github.com/{cfg.github_username}/{domain}"
 
-            # Generate site content
-            log("Generating site content")
-            try:
-                generate_minimal_site(domain, content_path)
-                log("Site content generated", "success")
-            except Exception as e:
-                log(f"Failed to generate site content: {e}", "error")
-                raise
+                if deploy.repo_created:
+                    log(f"Repository created from template '{template}': {cfg.github_username}/{domain}", "success")
+                else:
+                    log(f"Repository exists: {cfg.github_username}/{domain}", "info")
 
-            # Deploy to GitHub Pages
-            log("Configuring GitHub repository")
-            dns_records = None
-            try:
-                with GitHubHost(default_org=cfg.github_username) as host:
-                    deploy = host.deploy_site(domain, content_path)
-                    dns_records = host.required_dns_records(domain)
-                    result["url"] = deploy.url
-                    result["repo_url"] = f"https://github.com/{cfg.github_username}/{domain}"
+                log("GitHub Pages enabled", "success")
+                log(f"Custom domain configured: {domain}", "success")
 
-                    if deploy.repo_created:
-                        log(f"Repository created: {cfg.github_username}/{domain}", "success")
-                        log("Content pushed to GitHub", "success")
+                if not deploy.https_enabled:
+                    log("HTTPS enforcement pending SSL certificate", "warning")
+                    result["https_pending"] = True
+                else:
+                    log("HTTPS enforcement enabled", "success")
+        except HostError as e:
+            log(f"GitHub deployment failed: {e}", "error")
+            raise
+
+        # Configure DNS
+        log("Configuring DNS records")
+        try:
+            with PorkbunRegistrar(cfg.porkbun_api_key, cfg.porkbun_secret) as registrar:
+                ns_result = registrar.check_nameservers(domain)
+                if not ns_result.ok:
+                    actual_ns = ", ".join(ns_result.actual) if ns_result.actual else "unknown"
+                    if force_dns_update:
+                        log(
+                            f"NS records point to {actual_ns} — resetting to Porkbun",
+                            "warning",
+                        )
+                        registrar.update_nameservers(domain)
+                        log("Nameservers updated to Porkbun", "success")
                     else:
-                        log(f"Repository exists: {cfg.github_username}/{domain}", "info")
-                        log("Skipped content push (using existing content)", "info")
+                        log(
+                            f"NS records point to {actual_ns}, not Porkbun — skipping DNS config",
+                            "warning",
+                        )
+                        result["dns_pending"] = True
+                        result["ns_mismatch"] = ns_result.actual
 
-                    log("GitHub Pages enabled", "success")
-                    log(f"Custom domain configured: {domain}", "success")
+                if ns_result.ok or force_dns_update:
+                    with PorkbunDNSProvider(cfg.porkbun_api_key, cfg.porkbun_secret) as dns:
+                        for record in (dns_records or []):
+                            record_name = record.name or "@"
+                            log(f"Creating {record.type} record: {record_name} -> {record.content}")
 
-                    if not deploy.https_enabled:
-                        log("HTTPS enforcement pending SSL certificate", "warning")
-                        result["https_pending"] = True
-                    else:
-                        log("HTTPS enforcement enabled", "success")
-            except HostError as e:
-                log(f"GitHub deployment failed: {e}", "error")
-                raise
+                        dns.configure_dns(domain, dns_records or [])
+                        log("DNS records created", "success")
 
-            # Configure DNS
-            log("Configuring DNS records")
-            try:
-                with PorkbunRegistrar(cfg.porkbun_api_key, cfg.porkbun_secret) as registrar:
-                    ns_result = registrar.check_nameservers(domain)
-                    if not ns_result.ok:
-                        actual_ns = ", ".join(ns_result.actual) if ns_result.actual else "unknown"
-                        if force_dns_update:
-                            log(
-                                f"NS records point to {actual_ns} — resetting to Porkbun",
-                                "warning",
-                            )
-                            registrar.update_nameservers(domain)
-                            log("Nameservers updated to Porkbun", "success")
+                        log("Verifying DNS propagation")
+                        verified = dns.verify_dns(domain, dns_records or [], max_attempts=10, delay=5)
+                        if verified:
+                            log("DNS records verified", "success")
                         else:
-                            log(
-                                f"NS records point to {actual_ns}, not Porkbun — skipping DNS config",
-                                "warning",
-                            )
+                            log("DNS records created but not yet propagated (may take up to 24 hours)", "warning")
                             result["dns_pending"] = True
-                            result["ns_mismatch"] = ns_result.actual
 
-                    if ns_result.ok or force_dns_update:
-                        with PorkbunDNSProvider(cfg.porkbun_api_key, cfg.porkbun_secret) as dns:
-                            for record in (dns_records or []):
-                                record_name = record.name or "@"
-                                log(f"Creating {record.type} record: {record_name} -> {record.content}")
-
-                            dns.configure_dns(domain, dns_records or [])
-                            log("DNS records created", "success")
-
-                            log("Verifying DNS propagation")
-                            verified = dns.verify_dns(domain, dns_records or [], max_attempts=10, delay=5)
-                            if verified:
-                                log("DNS records verified", "success")
-                            else:
-                                log("DNS records created but not yet propagated (may take up to 24 hours)", "warning")
-                                result["dns_pending"] = True
-
-            except RegistrarError as e:
-                log(f"DNS configuration failed: {e}", "error")
-                log("Site deployed but DNS not configured", "warning")
-                # Don't raise - site is still accessible via github.io URL
-                result["dns_pending"] = True
-                result["error_category"] = "partial"
+        except RegistrarError as e:
+            log(f"DNS configuration failed: {e}", "error")
+            log("Site deployed but DNS not configured", "warning")
+            # Don't raise - site is still accessible via github.io URL
+            result["dns_pending"] = True
+            result["error_category"] = "partial"
 
         result["success"] = True
 
@@ -303,7 +286,13 @@ def main(log_format: str) -> None:
     is_flag=True,
     help="Reset nameservers to Porkbun and configure DNS even if NS records point elsewhere",
 )
-def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on_error: bool, sequential: bool, workers: int, force_dns_update: bool) -> None:
+@click.option(
+    "--template",
+    default=DEFAULT_TEMPLATE,
+    show_default=True,
+    help="Template repository name to use (from the tepiton org)",
+)
+def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on_error: bool, sequential: bool, workers: int, force_dns_update: bool, template: str) -> None:
     """Create and deploy minimal landing pages for one or more domains.
 
     This command will:
@@ -347,7 +336,7 @@ def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on
                 click.secho(f"[{idx}/{len(domains)}] Processing {domain}", fg="cyan", bold=True)
                 click.secho("=" * 60, fg="cyan")
 
-            result = _process_single_domain(domain, cfg, dry_run, verbose=True, force_dns_update=force_dns_update)
+            result = _process_single_domain(domain, cfg, dry_run, verbose=True, force_dns_update=force_dns_update, template=template)
             results.append(result)
 
             # Stop on error if requested
@@ -368,7 +357,7 @@ def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on
             # Submit all tasks and show as they start
             future_to_domain = {}
             for domain in domains:
-                future = executor.submit(_process_single_domain, domain, cfg, dry_run, verbose=False, force_dns_update=force_dns_update)
+                future = executor.submit(_process_single_domain, domain, cfg, dry_run, verbose=False, force_dns_update=force_dns_update, template=template)
                 future_to_domain[future] = domain
                 if _log_format == "text":
                     click.secho(f"→ {domain} started", fg="cyan")

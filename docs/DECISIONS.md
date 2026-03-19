@@ -289,6 +289,33 @@ Porkbun is both a Registrar and a DNSProvider in the common case. When DNS is de
 
 ---
 
+### DEC-017: GitHub Template Repo API Replaces Local Content Generation (2026-03-19)
+
+**Status**: Active
+
+**Context**: `content.py` generated HTML inline via string substitution, then
+git-initialized a temp directory and pushed it to GitHub. This was fragile
+(local git, credential setup, temp dir lifecycle) and meant the source of truth
+for site content lived in Python strings rather than actual repos.
+
+**Decision**: Use GitHub's "Use this template" API (`POST /repos/{owner}/{repo}/generate`)
+to instantiate new site repos from template repos in the `tepiton` org. Template
+repos (`tepiton/mimeo.lol`, `tepiton/pandoc-simple`, etc.) are the authoritative
+source of content and GitHub Actions workflows. `mimeo create` passes a `--template`
+flag (default: `mimeo.lol`) to select the template.
+
+**Alternatives considered**:
+- Keep local generation, add template file copying: Still requires git operations
+  and a local content pipeline; doesn't scale to complex templates (Eleventy etc.)
+- Clone template repo and push: More steps than the API, same outcome
+
+**Consequences**: `content.py` deleted. No local git operations during `create`.
+Template repos must have `is_template=true` set on GitHub (done for `mimeo.lol`).
+Parameterization (substituting domain into template files) requires a follow-up
+step since the template API copies files verbatim.
+
+---
+
 ## Superseded/Deprecated
 
 [No superseded decisions yet]

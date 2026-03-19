@@ -1,15 +1,12 @@
 """Tests for GitHub Pages host provider."""
 
 import json
-import subprocess
-import tempfile
-from pathlib import Path
-from unittest.mock import Mock, patch, call
+from unittest.mock import Mock, patch
 
 import pytest
 
 from mimeo.exceptions import HostError
-from mimeo.providers.host.github import GitHubHost, _health_status
+from mimeo.providers.host.github import DEFAULT_TEMPLATE, TEMPLATE_ORG, GitHubHost, _health_status
 
 
 class TestGitHubHost:
@@ -134,67 +131,65 @@ class TestGitHubHost:
             username = host._get_authenticated_user()
             assert username == "testuser"
 
-    def test_create_repository_new(self, host: GitHubHost) -> None:
-        """Test creating a new repository."""
+    def test_create_from_template_new_repo(self, host: GitHubHost) -> None:
+        """Test creating a new repository from a template."""
         with patch.object(host, "_gh_api") as mock_api:
-            # First call checks if repo exists (raises error = doesn't exist)
-            # Second call creates the repo
-            # Third call sets topics
-            mock_api.side_effect = [
-                HostError("Not Found"),
-                {"full_name": "testorg/example.com"},
-                {"names": ["mimeo", "landing-page", "github-pages"]},
-            ]
-
-            result = host._create_repository("example.com", org="testorg")
-
-            assert result == "testorg/example.com"
-            assert mock_api.call_count == 3
-
-    def test_create_repository_already_exists(self, host: GitHubHost) -> None:
-        """Test creating a repository that already exists."""
-        with patch.object(host, "_gh_api") as mock_api:
-            # Repo exists, first call succeeds
-            mock_api.return_value = {"full_name": "testorg/example.com"}
-
-            result = host._create_repository("example.com", org="testorg")
-
-            assert result == "testorg/example.com"
-            # Only one call to check if repo exists
-            assert mock_api.call_count == 1
-
-    def test_create_repository_in_user_account(self, host: GitHubHost) -> None:
-        """Test creating a repository in user account (not org)."""
-        with patch.object(host, "_gh_api") as mock_api:
-            with patch.object(host, "_get_authenticated_user") as mock_user:
-                mock_user.return_value = "testuser"
+            with patch.object(host, "_set_repository_topics") as mock_topics:
                 mock_api.side_effect = [
-                    HostError("Not Found"),
-                    {"full_name": "testuser/example.com"},
-                    {"names": ["mimeo", "landing-page", "github-pages"]},
+                    HostError("Not Found"),  # repo existence check
+                    {"full_name": "testorg/example.com"},  # template generate
                 ]
 
-                result = host._create_repository("example.com", org=None)
+                full_name, created = host._create_from_template("example.com", "testorg")
 
-                assert result == "testuser/example.com"
-                # Check that correct endpoint was used
-                calls = mock_api.call_args_list
-                assert calls[1][0][0] == "user/repos"
+                assert full_name == "testorg/example.com"
+                assert created is True
+                generate_call = mock_api.call_args_list[1]
+                assert generate_call[0][0] == f"repos/{TEMPLATE_ORG}/{DEFAULT_TEMPLATE}/generate"
+                assert generate_call[1]["method"] == "POST"
+                assert generate_call[1]["data"]["owner"] == "testorg"
+                assert generate_call[1]["data"]["name"] == "example.com"
+                mock_topics.assert_called_once_with(
+                    "testorg/example.com", ["mimeo", "landing-page", "github-pages"]
+                )
 
-    def test_create_repository_private(self, host: GitHubHost) -> None:
-        """Test creating a private repository."""
+    def test_create_from_template_existing_repo(self, host: GitHubHost) -> None:
+        """Test that existing repos are returned without calling template API."""
+        with patch.object(host, "_gh_api") as mock_api:
+            mock_api.return_value = {"full_name": "testorg/example.com"}
+
+            full_name, created = host._create_from_template("example.com", "testorg")
+
+            assert full_name == "testorg/example.com"
+            assert created is False
+            assert mock_api.call_count == 1  # only the existence check
+
+    def test_create_from_template_custom_template(self, host: GitHubHost) -> None:
+        """Test using a non-default template repo."""
+        with patch.object(host, "_gh_api") as mock_api:
+            with patch.object(host, "_set_repository_topics"):
+                mock_api.side_effect = [
+                    HostError("Not Found"),
+                    {"full_name": "testorg/example.com"},
+                ]
+
+                host._create_from_template("example.com", "testorg", template_repo="pandoc-simple")
+
+                generate_call = mock_api.call_args_list[1]
+                assert generate_call[0][0] == f"repos/{TEMPLATE_ORG}/pandoc-simple/generate"
+
+    def test_create_from_template_missing_full_name(self, host: GitHubHost) -> None:
+        """Test HostError raised when template API response has no full_name."""
         with patch.object(host, "_gh_api") as mock_api:
             mock_api.side_effect = [
                 HostError("Not Found"),
-                {"full_name": "testorg/example.com"},
-                {"names": ["mimeo", "landing-page", "github-pages"]},
+                {},  # no full_name
             ]
 
-            host._create_repository("example.com", org="testorg", private=True)
+            with pytest.raises(HostError) as exc_info:
+                host._create_from_template("example.com", "testorg")
 
-            # Check that private flag was passed
-            create_call = mock_api.call_args_list[1]
-            assert create_call[1]["data"]["private"] is True
+            assert "template" in str(exc_info.value).lower()
 
     def test_enable_github_pages_new(self, host: GitHubHost) -> None:
         """Test enabling GitHub Pages for a repository."""
@@ -237,156 +232,66 @@ class TestGitHubHost:
             assert call_args[1]["method"] == "PUT"
             assert call_args[1]["data"]["cname"] == "example.com"
 
-    def test_init_and_push_repository(self, host: GitHubHost) -> None:
-        """Test initializing and pushing a repository."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            content_path = Path(tmpdir)
-            (content_path / "index.html").write_text("<h1>Test</h1>")
+    def test_deploy_site_new_repo(self, host: GitHubHost) -> None:
+        """Test successful deployment creates repo from template."""
+        with patch.object(host, "_create_from_template") as mock_create:
+            with patch.object(host, "_enable_github_pages") as mock_pages:
+                with patch.object(host, "_set_custom_domain") as mock_domain:
+                    with patch.object(host, "_enable_https_enforcement") as mock_https:
+                        mock_create.return_value = ("testorg/example.com", True)
+                        mock_https.return_value = True
 
-            with patch("subprocess.run") as mock_run:
-                mock_run.return_value = Mock(
-                    returncode=0,
-                    stdout=b"main",
-                    stderr=b"",
-                )
+                        result = host.deploy_site("example.com")
 
-                host._init_and_push_repository("testorg/example.com", content_path)
+                        assert result.url == "https://example.com"
+                        assert result.repo_created is True
+                        assert result.https_enabled is True
+                        mock_create.assert_called_once_with(
+                            repo_name="example.com",
+                            owner="testorg",
+                            template_repo=DEFAULT_TEMPLATE,
+                        )
+                        mock_pages.assert_called_once_with("testorg/example.com")
+                        mock_domain.assert_called_once_with("testorg/example.com", "example.com")
 
-                # Verify git commands were called
-                calls = [call[0][0] for call in mock_run.call_args_list]
-                assert ["git", "init"] in calls
-                assert ["git", "add", "-A"] in calls
-                assert any("commit" in call for call in calls)
-                assert any("push" in call for call in calls)
+    def test_deploy_site_existing_repo(self, host: GitHubHost) -> None:
+        """Test deployment with existing repo returns repo_created=False."""
+        with patch.object(host, "_create_from_template") as mock_create:
+            with patch.object(host, "_enable_github_pages"):
+                with patch.object(host, "_set_custom_domain"):
+                    with patch.object(host, "_enable_https_enforcement") as mock_https:
+                        mock_create.return_value = ("testorg/example.com", False)
+                        mock_https.return_value = False
 
-    def test_init_and_push_repository_branch_rename(self, host: GitHubHost) -> None:
-        """Test repository initialization with branch rename."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            content_path = Path(tmpdir)
-            (content_path / "index.html").write_text("<h1>Test</h1>")
+                        result = host.deploy_site("example.com")
 
-            with patch("subprocess.run") as mock_run:
-                # Simulate git branch --show-current returning "master"
-                def run_side_effect(*args, **kwargs):
-                    cmd = args[0]
-                    if "branch" in cmd and "--show-current" in cmd:
-                        return Mock(returncode=0, stdout="master\n", stderr="")
-                    return Mock(returncode=0, stdout=b"", stderr=b"")
+                        assert result.repo_created is False
 
-                mock_run.side_effect = run_side_effect
+    def test_deploy_site_custom_template(self, host: GitHubHost) -> None:
+        """Test deployment passes custom template to _create_from_template."""
+        with patch.object(host, "_create_from_template") as mock_create:
+            with patch.object(host, "_enable_github_pages"):
+                with patch.object(host, "_set_custom_domain"):
+                    with patch.object(host, "_enable_https_enforcement", return_value=True):
+                        mock_create.return_value = ("testorg/example.com", True)
 
-                host._init_and_push_repository("testorg/example.com", content_path)
+                        host.deploy_site("example.com", template="pandoc-simple")
 
-                # Verify branch rename was called
-                calls = [call[0][0] for call in mock_run.call_args_list]
-                assert ["git", "branch", "-M", "main"] in calls
-
-    def test_init_and_push_repository_git_error(self, host: GitHubHost) -> None:
-        """Test git error handling during repository initialization."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            content_path = Path(tmpdir)
-
-            with patch("subprocess.run") as mock_run:
-                mock_run.side_effect = subprocess.CalledProcessError(
-                    1, ["git", "init"], stderr=b"git error"
-                )
-
-                with pytest.raises(HostError) as exc_info:
-                    host._init_and_push_repository("testorg/example.com", content_path)
-
-                assert "git" in str(exc_info.value).lower()
-
-    def test_deploy_site_success(self, host: GitHubHost) -> None:
-        """Test successful site deployment."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            content_path = Path(tmpdir)
-            (content_path / "index.html").write_text("<h1>Test</h1>")
-
-            with patch.object(host, "_gh_api") as mock_api:
-                with patch.object(host, "_create_repository") as mock_create:
-                    with patch.object(host, "_init_and_push_repository") as mock_push:
-                        with patch.object(host, "_enable_github_pages") as mock_pages:
-                            with patch.object(host, "_set_custom_domain") as mock_domain:
-                                with patch.object(host, "_enable_https_enforcement") as mock_https:
-                                    # Simulate repo doesn't exist yet (raises HostError on first check)
-                                    mock_api.side_effect = HostError("Not Found")
-                                    mock_create.return_value = "testorg/example.com"
-                                    mock_https.return_value = True
-
-                                    result = host.deploy_site("example.com", content_path)
-
-                                    assert result.url == "https://example.com"
-                                    assert result.repo_created is True
-                                    mock_create.assert_called_once_with("example.com", org="testorg")
-                                    mock_push.assert_called_once_with(
-                                        "testorg/example.com", content_path
-                                    )
-                                    mock_pages.assert_called_once_with("testorg/example.com")
-                                    mock_domain.assert_called_once_with(
-                                        "testorg/example.com", "example.com"
-                                    )
-
-    def test_deploy_site_existing_repository(self, host: GitHubHost) -> None:
-        """Test deploying to an existing repository skips content push."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            content_path = Path(tmpdir)
-            (content_path / "index.html").write_text("<h1>Test</h1>")
-
-            with patch.object(host, "_gh_api") as mock_api:
-                with patch.object(host, "_create_repository") as mock_create:
-                    with patch.object(host, "_init_and_push_repository") as mock_push:
-                        with patch.object(host, "_enable_github_pages") as mock_pages:
-                            with patch.object(host, "_set_custom_domain") as mock_domain:
-                                with patch.object(host, "_enable_https_enforcement") as mock_https:
-                                    # Simulate repo already exists (returns data on first check)
-                                    mock_api.return_value = {"full_name": "testorg/example.com"}
-                                    mock_create.return_value = "testorg/example.com"
-                                    mock_https.return_value = True
-
-                                    result = host.deploy_site("example.com", content_path)
-
-                                    assert result.url == "https://example.com"
-                                    assert result.repo_created is False
-                                    mock_create.assert_called_once_with("example.com", org="testorg")
-                                    # Should NOT push content for existing repo
-                                    mock_push.assert_not_called()
-                                    # But should still configure Pages and domain
-                                    mock_pages.assert_called_once_with("testorg/example.com")
-                                    mock_domain.assert_called_once_with(
-                                        "testorg/example.com", "example.com"
-                                    )
-
-    def test_deploy_site_nonexistent_path(self, host: GitHubHost) -> None:
-        """Test deployment fails with nonexistent content path."""
-        content_path = Path("/nonexistent/path")
-
-        with pytest.raises(HostError) as exc_info:
-            host.deploy_site("example.com", content_path)
-
-        assert "does not exist" in str(exc_info.value)
-
-    def test_deploy_site_not_a_directory(self, host: GitHubHost) -> None:
-        """Test deployment fails when content path is not a directory."""
-        with tempfile.NamedTemporaryFile() as tmpfile:
-            content_path = Path(tmpfile.name)
-
-            with pytest.raises(HostError) as exc_info:
-                host.deploy_site("example.com", content_path)
-
-            assert "not a directory" in str(exc_info.value)
+                        mock_create.assert_called_once_with(
+                            repo_name="example.com",
+                            owner="testorg",
+                            template_repo="pandoc-simple",
+                        )
 
     def test_deploy_site_error_handling(self, host: GitHubHost) -> None:
-        """Test error handling during deployment."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            content_path = Path(tmpdir)
+        """Test unexpected errors are wrapped in HostError."""
+        with patch.object(host, "_create_from_template") as mock_create:
+            mock_create.side_effect = Exception("Unexpected error")
 
-            with patch.object(host, "_create_repository") as mock_create:
-                mock_create.side_effect = Exception("Unexpected error")
+            with pytest.raises(HostError) as exc_info:
+                host.deploy_site("example.com")
 
-                with pytest.raises(HostError) as exc_info:
-                    host.deploy_site("example.com", content_path)
-
-                assert "failed to deploy" in str(exc_info.value).lower()
+            assert "failed to deploy" in str(exc_info.value).lower()
 
     def test_enable_https_enforcement_success(self, host: GitHubHost) -> None:
         """Test enabling HTTPS enforcement when certificate is ready."""
@@ -431,20 +336,19 @@ class TestGitHubHost:
                 data={"names": topics},
             )
 
-    def test_create_repository_sets_topics(self, host: GitHubHost) -> None:
-        """Test that creating a repository automatically sets mimeo topics."""
+    def test_create_from_template_sets_topics(self, host: GitHubHost) -> None:
+        """Test that _create_from_template sets mimeo topics on new repos."""
         with patch.object(host, "_gh_api") as mock_api:
             with patch.object(host, "_set_repository_topics") as mock_topics:
-                # First call checks if repo exists (raises HostError)
-                # Second call creates the repo
                 mock_api.side_effect = [
                     HostError("Not found"),
                     {"full_name": "testorg/test-repo"},
                 ]
 
-                result = host._create_repository("test-repo")
+                full_name, created = host._create_from_template("test-repo", "testorg")
 
-                assert result == "testorg/test-repo"
+                assert full_name == "testorg/test-repo"
+                assert created is True
                 mock_topics.assert_called_once_with(
                     "testorg/test-repo",
                     ["mimeo", "landing-page", "github-pages"],

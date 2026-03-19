@@ -2,7 +2,6 @@
 
 import json
 import subprocess
-from pathlib import Path
 from typing import Any, Dict
 
 from mimeo.exceptions import HostError
@@ -10,6 +9,9 @@ from mimeo.models import DNSRecord
 from mimeo.providers.base import DeployResult, Host
 from mimeo.providers.registrar.porkbun import GITHUB_PAGES_IPS
 from mimeo.utils.retry import retry_with_jitter
+
+TEMPLATE_ORG = "tepiton"
+DEFAULT_TEMPLATE = "mimeo.lol"
 
 
 def _health_status(health: Dict[str, Any]) -> str:
@@ -170,59 +172,55 @@ class GitHubHost(Host):
         except HostError as e:
             raise HostError(f"Failed to get authenticated user: {e}") from e
 
-    def _create_repository(
+    def _create_from_template(
         self,
         repo_name: str,
-        org: str | None = None,
+        owner: str,
+        template_repo: str = DEFAULT_TEMPLATE,
         private: bool = False,
-    ) -> str:
-        """Create a GitHub repository.
+    ) -> tuple[str, bool]:
+        """Create a repository from a GitHub template repo.
+
+        If the repository already exists, returns it unchanged.
 
         Args:
-            repo_name: Repository name
-            org: Organization name (uses authenticated user if None)
+            repo_name: Name for the new repository
+            owner: Owner (user or org) for the new repository
+            template_repo: Template repository name in TEMPLATE_ORG
             private: Whether to create a private repository
 
         Returns:
-            Full repository name (owner/repo)
+            Tuple of (full_name, repo_created) where repo_created is False
+            if the repo already existed.
 
         Raises:
             HostError: If repository creation fails
         """
-        owner = org or self.default_org or self._get_authenticated_user()
-
         # Check if repository already exists
         try:
             self._gh_api(f"repos/{owner}/{repo_name}")
-            # Repository exists, we can use it
-            return f"{owner}/{repo_name}"
+            return f"{owner}/{repo_name}", False
         except HostError:
-            # Repository doesn't exist, create it
             pass
 
-        # Create repository
         data: Dict[str, Any] = {
+            "owner": owner,
             "name": repo_name,
             "private": private,
-            "auto_init": False,  # We'll initialize it ourselves
         }
 
-        if org and org != self._get_authenticated_user():
-            # Create in organization
-            endpoint = f"orgs/{org}/repos"
-        else:
-            # Create in user account
-            endpoint = "user/repos"
-
-        response = self._gh_api(endpoint, method="POST", data=data)
+        response = self._gh_api(
+            f"repos/{TEMPLATE_ORG}/{template_repo}/generate",
+            method="POST",
+            data=data,
+        )
         full_name = response.get("full_name")
         if not full_name:
-            raise HostError("Repository created but full_name not in response")
+            raise HostError(f"Failed to create repository from template {TEMPLATE_ORG}/{template_repo}")
 
-        # Add topics to mark this as a mimeo-managed repository
         self._set_repository_topics(str(full_name), ["mimeo", "landing-page", "github-pages"])
 
-        return str(full_name)
+        return str(full_name), True
 
     def _set_repository_topics(self, repo_full_name: str, topics: list[str]) -> None:
         """Set topics (tags) for a repository.
@@ -335,128 +333,21 @@ class GitHubHost(Host):
             # Other errors should be raised
             raise
 
-    def _init_and_push_repository(
-        self,
-        repo_full_name: str,
-        content_path: Path,
-        branch: str = "main",
-    ) -> None:
-        """Initialize local repository and push to GitHub.
-
-        Args:
-            repo_full_name: Full repository name (owner/repo)
-            content_path: Path to content directory
-            branch: Branch name to push to
-
-        Raises:
-            HostError: If git operations fail
-        """
-        try:
-            # Initialize git repository
-            subprocess.run(
-                ["git", "init"],
-                cwd=content_path,
-                capture_output=True,
-                check=True,
-            )
-
-            # Configure git user if not set globally
-            subprocess.run(
-                ["git", "config", "user.name", "Mimeo"],
-                cwd=content_path,
-                capture_output=True,
-                check=False,
-            )
-            subprocess.run(
-                ["git", "config", "user.email", "mimeo@example.com"],
-                cwd=content_path,
-                capture_output=True,
-                check=False,
-            )
-
-            # Create initial commit
-            subprocess.run(
-                ["git", "add", "-A"],
-                cwd=content_path,
-                capture_output=True,
-                check=True,
-            )
-            subprocess.run(
-                ["git", "commit", "-m", "Initial commit from Mimeo"],
-                cwd=content_path,
-                capture_output=True,
-                check=True,
-            )
-
-            # Rename to main branch if needed
-            result = subprocess.run(
-                ["git", "branch", "--show-current"],
-                cwd=content_path,
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            current_branch = result.stdout.strip()
-            if current_branch != branch:
-                subprocess.run(
-                    ["git", "branch", "-M", branch],
-                    cwd=content_path,
-                    capture_output=True,
-                    check=True,
-                )
-
-            # Add origin remote
-            remote_url = f"https://github.com/{repo_full_name}.git"
-            subprocess.run(
-                ["git", "remote", "add", "origin", remote_url],
-                cwd=content_path,
-                capture_output=True,
-                check=True,
-            )
-
-            # Configure git to use gh as credential helper for GitHub authentication
-            subprocess.run(
-                ["git", "config", "--local", "credential.helper", ""],
-                cwd=content_path,
-                capture_output=True,
-                check=False,  # May not exist, that's ok
-            )
-            subprocess.run(
-                ["git", "config", "--local", "credential.https://github.com.helper", "!gh auth git-credential"],
-                cwd=content_path,
-                capture_output=True,
-                check=True,
-            )
-
-            # Push to GitHub
-            subprocess.run(
-                ["git", "push", "-u", "origin", branch],
-                cwd=content_path,
-                capture_output=True,
-                check=True,
-            )
-
-        except subprocess.CalledProcessError as e:
-            stderr = e.stderr.decode() if e.stderr else ""
-            raise HostError(f"Git operation failed: {stderr}") from e
-
-    def deploy_site(self, domain: str, content_path: Path) -> DeployResult:
-        """Deploy a site to GitHub Pages.
+    def deploy_site(self, domain: str, template: str = DEFAULT_TEMPLATE) -> DeployResult:
+        """Deploy a site to GitHub Pages using a template repository.
 
         This will:
-        1. Create a GitHub repository (domain name as repo name)
-        2. Initialize local git repository in content_path
-        3. Push content to GitHub
-        4. Enable GitHub Pages
-        5. Configure custom domain
-        6. Enable HTTPS enforcement (if certificate is ready)
+        1. Create a GitHub repository from the template (domain name as repo name)
+        2. Enable GitHub Pages
+        3. Configure custom domain
+        4. Enable HTTPS enforcement (if certificate is ready)
 
-        If the repository already exists with content, it will skip the push
-        step and only configure GitHub Pages settings and custom domain.
+        If the repository already exists, skips creation and only configures
+        GitHub Pages settings and custom domain.
 
         Args:
             domain: Domain name for the site
-            content_path: Path to site content directory
+            template: Template repository name in the tepiton org
 
         Returns:
             DeployResult with url, repo_created, and https_enabled flags
@@ -464,45 +355,22 @@ class GitHubHost(Host):
         Raises:
             HostError: If deployment fails
         """
-        if not content_path.exists():
-            raise HostError(f"Content path does not exist: {content_path}")
-
-        if not content_path.is_dir():
-            raise HostError(f"Content path is not a directory: {content_path}")
-
         try:
-            repo_name = domain
             owner = self.default_org or self._get_authenticated_user()
-            repo_full_name = f"{owner}/{repo_name}"
 
-            # Check if repository already exists
-            repo_exists = False
-            try:
-                self._gh_api(f"repos/{repo_full_name}")
-                repo_exists = True
-            except HostError:
-                pass
+            repo_full_name, repo_created = self._create_from_template(
+                repo_name=domain,
+                owner=owner,
+                template_repo=template,
+            )
 
-            # Create repository (or confirm existing)
-            repo_full_name = self._create_repository(repo_name, org=self.default_org)
-
-            # Only initialize and push if repository is new
-            if not repo_exists:
-                self._init_and_push_repository(repo_full_name, content_path)
-
-            # Enable GitHub Pages
             self._enable_github_pages(repo_full_name)
-
-            # Configure custom domain
             self._set_custom_domain(repo_full_name, domain)
-
-            # Try to enable HTTPS enforcement
-            # This will fail if certificate isn't ready yet (expected for new sites)
             https_enabled = self._enable_https_enforcement(repo_full_name)
 
             return DeployResult(
                 url=f"https://{domain}",
-                repo_created=not repo_exists,
+                repo_created=repo_created,
                 https_enabled=https_enabled,
             )
 

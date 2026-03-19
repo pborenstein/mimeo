@@ -39,7 +39,10 @@ Living document tracking progress on the domain landing page provisioning tool.
 - [x] `mimeo doctor [domain...]` NS verification for domains
 - [x] `--force-dns-update` flag on `create` (reset NS to Porkbun when mismatch, then configure DNS)
 - [x] `mimeo registrar list` subcommand (list all Porkbun account domains with NS/DNS enrichment)
+- [x] Replace content generation with GitHub template repo API (`_create_from_template`)
+- [x] `--template` flag on `create` (defaults to `mimeo.lol`)
 - [ ] E2E integration test lane (separate from unit tests, gated, hits real APIs)
+- [ ] Template parameterization (substitute domain into template files post-creation)
 - [x] Refresh README to current state
 - [x] Document workflow scope requirement
 - [x] Document `uv tool install` for global CLI access

@@ -2,8 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
+from typing import Any  # noqa: F401 — kept for subclass use
 
 from mimeo.models import DNSRecord, NameserverCheckResult
 
@@ -106,12 +105,11 @@ class Host(ABC):
     """Abstract base class for hosting providers."""
 
     @abstractmethod
-    def deploy_site(self, domain: str, content_path: Path) -> DeployResult:
+    def deploy_site(self, domain: str) -> DeployResult:
         """Deploy a site to the hosting provider.
 
         Args:
             domain: Domain name for the site
-            content_path: Path to site content directory
 
         Returns:
             DeployResult with url, repo_created, and https_enabled flags

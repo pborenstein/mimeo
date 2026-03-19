@@ -1,33 +1,21 @@
 ---
-phase: 6
-phase_name: Hardening
+phase: 7
+phase_name: CLI Redesign
 updated: 2026-03-19
-last_commit: 5e23155
+last_commit: 928c6aa
 ---
 
 ## Current Focus
 
-Replaced hardcoded content generation with GitHub template repo instantiation.
-`mimeo create example.com` now creates repos from `tepiton/mimeo.lol` via the
-GitHub "Use this template" API. Next: parameterization (substituting domain
-into template content like metadata.js / index.md frontmatter).
+Added `--force` flag to `mimeo create` for replacing existing repos with a new
+template. Set `is_template=true` on all 5 tepiton template repos. Identified
+that `create` is overloaded -- doing both provisioning and repair. CLI options
+are becoming a hodgepodge. Need to rethink the command structure from first
+principles before adding more flags.
 
 ## Active Tasks
 
-- [x] Add `mimeo doctor` preflight command
-- [x] Retry with jitter for transient failures
-- [x] Improve failure taxonomy and exit codes
-- [x] Add `--workers` option to `create`
-- [x] Config schema versioning and deprecation warnings
-- [x] Structured logging (`--log-format json`)
-- [x] Reconciliation / DNS drift detection (`--dns-check` on `list`)
-- [x] Registrar/DNS/Host three-layer separation
-- [x] `mimeo doctor [domain...]` NS check
-- [x] `--force-dns-update` flag on `create`
-- [x] `mimeo registrar list` subcommand
-- [x] ARCHITECTURE.md and README.md synced to current implementation
-- [x] docs/ cleanup (dead files removed)
-- [x] Replace content generation with GitHub template repo API
+- [ ] Rethink `create` command structure (provisioning vs repair)
 - [ ] E2E integration test lane
 - [ ] Template parameterization (substitute domain into template files)
 
@@ -38,13 +26,15 @@ None.
 ## Context
 
 - 242 tests passing; mypy and ruff clean
-- `tepiton/mimeo.lol` is_template=true (set this session)
-- All 5 templates in tepiton org: mimeo.lol, pandoc-simple, eleventy-pamphlet, eleventy-chapbook, eleventy-folio
-- `--template` flag wired up on `create`, defaults to `mimeo.lol`
-- content.py deleted; `_init_and_push_repository` deleted; `_create_from_template` added
+- All 5 templates in tepiton org have is_template=true
+- `--force` implemented but uncommitted -- deletes and recreates repo from template
+- Warning shown when repo exists and template not applied
+- DNS always runs even when repo already exists -- wasteful
+- `--force` vs `--force-dns-update` naming is confusing
+- User wants to rethink CLI design from first principles (switching to opus)
 
 ## Next Session
 
-Discuss and implement template parameterization: substituting the domain name
-into template files (e.g. `metadata.js` url field for Eleventy templates,
-`index.md` frontmatter title for pandoc-simple).
+Redesign `mimeo create` command structure. The current flag set (`--force`,
+`--force-dns-update`, `--template`) suggests `create` is doing too much.
+Consider separating provisioning from repair/maintenance commands.

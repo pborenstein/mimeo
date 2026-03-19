@@ -99,6 +99,7 @@ class DeployResult:
     url: str
     repo_created: bool
     https_enabled: bool
+    repo_existed: bool = False
 
 
 class Host(ABC):

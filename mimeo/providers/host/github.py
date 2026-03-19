@@ -172,36 +172,56 @@ class GitHubHost(Host):
         except HostError as e:
             raise HostError(f"Failed to get authenticated user: {e}") from e
 
+    def _delete_repository(self, repo_full_name: str) -> None:
+        """Delete a repository.
+
+        Args:
+            repo_full_name: Full repository name (owner/repo)
+
+        Raises:
+            HostError: If deletion fails
+        """
+        self._run_gh_command(["repo", "delete", repo_full_name, "--yes"])
+
     def _create_from_template(
         self,
         repo_name: str,
         owner: str,
         template_repo: str = DEFAULT_TEMPLATE,
         private: bool = False,
-    ) -> tuple[str, bool]:
+        force: bool = False,
+    ) -> tuple[str, bool, bool]:
         """Create a repository from a GitHub template repo.
 
-        If the repository already exists, returns it unchanged.
+        If the repository already exists and force is False, returns it unchanged.
+        If force is True and the repo exists, deletes it first then recreates.
 
         Args:
             repo_name: Name for the new repository
             owner: Owner (user or org) for the new repository
             template_repo: Template repository name in TEMPLATE_ORG
             private: Whether to create a private repository
+            force: If True, delete existing repo and recreate from template
 
         Returns:
-            Tuple of (full_name, repo_created) where repo_created is False
-            if the repo already existed.
+            Tuple of (full_name, repo_created, repo_existed) where repo_created is
+            False if the repo already existed and force was not set.
 
         Raises:
             HostError: If repository creation fails
         """
         # Check if repository already exists
+        repo_existed = False
         try:
             self._gh_api(f"repos/{owner}/{repo_name}")
-            return f"{owner}/{repo_name}", False
+            repo_existed = True
         except HostError:
             pass
+
+        if repo_existed:
+            if not force:
+                return f"{owner}/{repo_name}", False, True
+            self._delete_repository(f"{owner}/{repo_name}")
 
         data: Dict[str, Any] = {
             "owner": owner,
@@ -220,7 +240,7 @@ class GitHubHost(Host):
 
         self._set_repository_topics(str(full_name), ["mimeo", "landing-page", "github-pages"])
 
-        return str(full_name), True
+        return str(full_name), True, repo_existed
 
     def _set_repository_topics(self, repo_full_name: str, topics: list[str]) -> None:
         """Set topics (tags) for a repository.
@@ -333,7 +353,7 @@ class GitHubHost(Host):
             # Other errors should be raised
             raise
 
-    def deploy_site(self, domain: str, template: str = DEFAULT_TEMPLATE) -> DeployResult:
+    def deploy_site(self, domain: str, template: str = DEFAULT_TEMPLATE, force: bool = False) -> DeployResult:
         """Deploy a site to GitHub Pages using a template repository.
 
         This will:
@@ -358,10 +378,11 @@ class GitHubHost(Host):
         try:
             owner = self.default_org or self._get_authenticated_user()
 
-            repo_full_name, repo_created = self._create_from_template(
+            repo_full_name, repo_created, repo_existed = self._create_from_template(
                 repo_name=domain,
                 owner=owner,
                 template_repo=template,
+                force=force,
             )
 
             self._enable_github_pages(repo_full_name)
@@ -372,6 +393,7 @@ class GitHubHost(Host):
                 url=f"https://{domain}",
                 repo_created=repo_created,
                 https_enabled=https_enabled,
+                repo_existed=repo_existed,
             )
 
         except Exception as e:

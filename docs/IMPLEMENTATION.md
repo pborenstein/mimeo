@@ -16,42 +16,45 @@ Living document tracking progress on the domain landing page provisioning tool.
 | Phase 3: GitHub Pages Integration | Complete | Repository creation, Pages setup, custom domains |
 | Phase 4: Content Generation | Complete | Simple HTML generator (no template engine) |
 | Phase 5: CLI Integration | Complete | Full CLI with create, list, health, fix commands |
-| Phase 6: Hardening | Current | Operational robustness and documentation |
+| Phase 6: Hardening | Complete | Operational robustness and documentation |
+| Phase 7: CLI Redesign | Current | Rethink command structure from first principles |
 
 ---
 
 ## Current Phase
 
-### Phase 6: Hardening (2026-02-17 - Present)
+### Phase 7: CLI Redesign (2026-03-19 - Present)
 
-**Goal**: Make the tool dependable and maintainable. Any operator can run one command and know what happened, what failed, and how to fix it.
+**Goal**: Rethink `mimeo create` command structure. Current flag set (`--force`,
+`--force-dns-update`, `--template`) suggests `create` is doing too much —
+conflating provisioning with repair/maintenance.
 
 **Tasks**:
 
-- [x] Add `mimeo doctor` preflight command (Python version, gh auth/scope, config validity)
-- [x] Add retry with jitter for transient API failures
-- [x] Improve failure taxonomy and exit codes (config / auth / rate-limit / transient / partial)
-- [x] Add `--workers N` option to `create` for configurable concurrency
-- [x] Config schema versioning and deprecation warnings (`schema_version = 1`)
-- [x] Structured logging option (`--log-format json`) on main group
-- [x] DNS drift detection (`mimeo list --dns-check` via Porkbun API)
-- [x] Registrar/DNS/Host three-layer separation (`DNSProvider` ABC, `PorkbunDNSProvider`, NS check gate)
-- [x] `mimeo doctor [domain...]` NS verification for domains
-- [x] `--force-dns-update` flag on `create` (reset NS to Porkbun when mismatch, then configure DNS)
-- [x] `mimeo registrar list` subcommand (list all Porkbun account domains with NS/DNS enrichment)
-- [x] Replace content generation with GitHub template repo API (`_create_from_template`)
-- [x] `--template` flag on `create` (defaults to `mimeo.lol`)
+- [x] `--force` flag on `create` to delete/recreate from template
+- [x] Set `is_template=true` on all 5 tepiton template repos
+- [ ] Redesign command structure (provisioning vs repair)
 - [ ] E2E integration test lane (separate from unit tests, gated, hits real APIs)
 - [ ] Template parameterization (substitute domain into template files post-creation)
-- [x] Refresh README to current state
-- [x] Document workflow scope requirement
-- [x] Document `uv tool install` for global CLI access
 
-**Success Criteria**:
+---
 
-- `mimeo doctor` catches misconfiguration before any API calls
-- Partial failure leaves a clear repair path
-- All error messages include actionable remediation
+### Phase 6: Hardening (2026-02-17 - 2026-03-19)
+
+**Delivered**:
+
+- `mimeo doctor` preflight command (Python, gh auth/scope, config, NS checks)
+- Retry with jitter for transient API failures
+- Failure taxonomy and exit codes (config / auth / rate-limit / transient / partial)
+- `--workers N` configurable concurrency on `create`
+- Config schema versioning and deprecation warnings
+- Structured logging (`--log-format json`)
+- DNS drift detection (`mimeo list --dns-check`)
+- Registrar/DNS/Host three-layer separation
+- `--force-dns-update` flag on `create`
+- `mimeo registrar list` subcommand
+- Replaced content generation with GitHub template repo API
+- `--template` flag on `create`
 
 ---
 

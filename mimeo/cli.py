@@ -94,7 +94,7 @@ def _categorize_error(exc: BaseException) -> tuple[int, str]:
     return EXIT_TRANSIENT, "provider"
 
 
-def _process_single_domain(domain: str, cfg: Config, dry_run: bool, verbose: bool = True, force_dns_update: bool = False, template: str = DEFAULT_TEMPLATE) -> dict:
+def _process_single_domain(domain: str, cfg: Config, dry_run: bool, verbose: bool = True, force_dns_update: bool = False, template: str = DEFAULT_TEMPLATE, force: bool = False) -> dict:
     """Process a single domain creation.
 
     Args:
@@ -159,15 +159,17 @@ def _process_single_domain(domain: str, cfg: Config, dry_run: bool, verbose: boo
         dns_records = None
         try:
             with GitHubHost(default_org=cfg.github_username) as host:
-                deploy = host.deploy_site(domain, template=template)
+                deploy = host.deploy_site(domain, template=template, force=force)
                 dns_records = host.required_dns_records(domain)
                 result["url"] = deploy.url
                 result["repo_url"] = f"https://github.com/{cfg.github_username}/{domain}"
 
-                if deploy.repo_created:
+                if deploy.repo_created and deploy.repo_existed:
+                    log(f"Repository replaced with template '{template}': {cfg.github_username}/{domain}", "success")
+                elif deploy.repo_created:
                     log(f"Repository created from template '{template}': {cfg.github_username}/{domain}", "success")
                 else:
-                    log(f"Repository exists: {cfg.github_username}/{domain}", "info")
+                    log(f"Repository exists: {cfg.github_username}/{domain} (template '{template}' not applied — use --force to replace)", "warning")
 
                 log("GitHub Pages enabled", "success")
                 log(f"Custom domain configured: {domain}", "success")
@@ -292,7 +294,12 @@ def main(log_format: str) -> None:
     show_default=True,
     help="Template repository name to use (from the tepiton org)",
 )
-def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on_error: bool, sequential: bool, workers: int, force_dns_update: bool, template: str) -> None:
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Delete and recreate the repository from the template if it already exists",
+)
+def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on_error: bool, sequential: bool, workers: int, force_dns_update: bool, template: str, force: bool) -> None:
     """Create and deploy minimal landing pages for one or more domains.
 
     This command will:
@@ -336,7 +343,7 @@ def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on
                 click.secho(f"[{idx}/{len(domains)}] Processing {domain}", fg="cyan", bold=True)
                 click.secho("=" * 60, fg="cyan")
 
-            result = _process_single_domain(domain, cfg, dry_run, verbose=True, force_dns_update=force_dns_update, template=template)
+            result = _process_single_domain(domain, cfg, dry_run, verbose=True, force_dns_update=force_dns_update, template=template, force=force)
             results.append(result)
 
             # Stop on error if requested
@@ -357,7 +364,7 @@ def create(domains: tuple[str, ...], config: Path | None, dry_run: bool, stop_on
             # Submit all tasks and show as they start
             future_to_domain = {}
             for domain in domains:
-                future = executor.submit(_process_single_domain, domain, cfg, dry_run, verbose=False, force_dns_update=force_dns_update, template=template)
+                future = executor.submit(_process_single_domain, domain, cfg, dry_run, verbose=False, force_dns_update=force_dns_update, template=template, force=force)
                 future_to_domain[future] = domain
                 if _log_format == "text":
                     click.secho(f"→ {domain} started", fg="cyan")

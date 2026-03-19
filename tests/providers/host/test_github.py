@@ -140,10 +140,11 @@ class TestGitHubHost:
                     {"full_name": "testorg/example.com"},  # template generate
                 ]
 
-                full_name, created = host._create_from_template("example.com", "testorg")
+                full_name, created, existed = host._create_from_template("example.com", "testorg")
 
                 assert full_name == "testorg/example.com"
                 assert created is True
+                assert existed is False
                 generate_call = mock_api.call_args_list[1]
                 assert generate_call[0][0] == f"repos/{TEMPLATE_ORG}/{DEFAULT_TEMPLATE}/generate"
                 assert generate_call[1]["method"] == "POST"
@@ -158,10 +159,11 @@ class TestGitHubHost:
         with patch.object(host, "_gh_api") as mock_api:
             mock_api.return_value = {"full_name": "testorg/example.com"}
 
-            full_name, created = host._create_from_template("example.com", "testorg")
+            full_name, created, existed = host._create_from_template("example.com", "testorg")
 
             assert full_name == "testorg/example.com"
             assert created is False
+            assert existed is True
             assert mock_api.call_count == 1  # only the existence check
 
     def test_create_from_template_custom_template(self, host: GitHubHost) -> None:
@@ -238,18 +240,20 @@ class TestGitHubHost:
             with patch.object(host, "_enable_github_pages") as mock_pages:
                 with patch.object(host, "_set_custom_domain") as mock_domain:
                     with patch.object(host, "_enable_https_enforcement") as mock_https:
-                        mock_create.return_value = ("testorg/example.com", True)
+                        mock_create.return_value = ("testorg/example.com", True, False)
                         mock_https.return_value = True
 
                         result = host.deploy_site("example.com")
 
                         assert result.url == "https://example.com"
                         assert result.repo_created is True
+                        assert result.repo_existed is False
                         assert result.https_enabled is True
                         mock_create.assert_called_once_with(
                             repo_name="example.com",
                             owner="testorg",
                             template_repo=DEFAULT_TEMPLATE,
+                            force=False,
                         )
                         mock_pages.assert_called_once_with("testorg/example.com")
                         mock_domain.assert_called_once_with("testorg/example.com", "example.com")
@@ -260,12 +264,13 @@ class TestGitHubHost:
             with patch.object(host, "_enable_github_pages"):
                 with patch.object(host, "_set_custom_domain"):
                     with patch.object(host, "_enable_https_enforcement") as mock_https:
-                        mock_create.return_value = ("testorg/example.com", False)
+                        mock_create.return_value = ("testorg/example.com", False, True)
                         mock_https.return_value = False
 
                         result = host.deploy_site("example.com")
 
                         assert result.repo_created is False
+                        assert result.repo_existed is True
 
     def test_deploy_site_custom_template(self, host: GitHubHost) -> None:
         """Test deployment passes custom template to _create_from_template."""
@@ -273,7 +278,7 @@ class TestGitHubHost:
             with patch.object(host, "_enable_github_pages"):
                 with patch.object(host, "_set_custom_domain"):
                     with patch.object(host, "_enable_https_enforcement", return_value=True):
-                        mock_create.return_value = ("testorg/example.com", True)
+                        mock_create.return_value = ("testorg/example.com", True, False)
 
                         host.deploy_site("example.com", template="pandoc-simple")
 
@@ -281,6 +286,7 @@ class TestGitHubHost:
                             repo_name="example.com",
                             owner="testorg",
                             template_repo="pandoc-simple",
+                            force=False,
                         )
 
     def test_deploy_site_error_handling(self, host: GitHubHost) -> None:
@@ -345,10 +351,11 @@ class TestGitHubHost:
                     {"full_name": "testorg/test-repo"},
                 ]
 
-                full_name, created = host._create_from_template("test-repo", "testorg")
+                full_name, created, existed = host._create_from_template("test-repo", "testorg")
 
                 assert full_name == "testorg/test-repo"
                 assert created is True
+                assert existed is False
                 mock_topics.assert_called_once_with(
                     "testorg/test-repo",
                     ["mimeo", "landing-page", "github-pages"],

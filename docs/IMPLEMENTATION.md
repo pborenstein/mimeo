@@ -33,7 +33,15 @@ conflating provisioning with repair/maintenance.
 
 - [x] `--force` flag on `create` to delete/recreate from template
 - [x] Set `is_template=true` on all 5 tepiton template repos
-- [ ] Redesign command structure (provisioning vs repair)
+- [x] Redesign command structure (provisioning vs repair)
+  - [x] Convert `mimeo/cli.py` to `mimeo/cli/` package
+  - [x] Extract shared processing utilities into `_processing.py`
+  - [x] Add `mimeo dns check` and `mimeo dns repair`
+  - [x] Add `mimeo template apply`
+  - [x] Add `mimeo fix https`
+  - [x] Clean up `create` (remove `--force`, `--force-dns-update`; add `--skip-dns`)
+  - [x] Clean up `list` (remove `--fix`, `--dns-check`)
+  - [x] Update tests for new module structure + new commands
 - [ ] E2E integration test lane (separate from unit tests, gated, hits real APIs)
 - [ ] Template parameterization (substitute domain into template files post-creation)
 

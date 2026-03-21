@@ -316,6 +316,32 @@ step since the template API copies files verbatim.
 
 ---
 
+### DEC-018: CLI Redesign -- Task-Oriented Command Groups (2026-03-20)
+
+**Status**: Active
+
+**Context**: `mimeo create` was overloaded -- it handled provisioning, DNS repair (`--force-dns-update`), and template re-application (`--force`). `list` had side effects (`--fix`) and DNS checking (`--dns-check`). DNS repair required running the full create flow. The CLI needed to be organized around actual use cases.
+
+**Decision**: Split CLI into task-oriented commands:
+
+- `create DOMAINS...` -- provision new sites only (no `--force`, no `--force-dns-update`)
+- `dns check DOMAINS...` -- read-only DNS inspection (replaces `list --dns-check`)
+- `dns repair DOMAINS...` -- fix DNS records (replaces `create --force-dns-update`)
+- `template apply DOMAINS...` -- replace repo content (replaces `create --force`)
+- `fix https [DOMAINS...]` -- enable HTTPS enforcement (replaces `list --fix`)
+- `list` -- pure read-only (no `--fix`, no `--dns-check`)
+
+Also converted `mimeo/cli.py` (1084 lines) to a `mimeo/cli/` package with one file per command group plus shared `_processing.py` utilities.
+
+**Alternatives considered**:
+
+- Keep single create with more flags: Leads to flag proliferation and confusing semantics
+- Use positional subcommand style (`mimeo create dns-repair`): Doesn't compose well in Click
+
+**Consequences**: Breaking changes to CLI flags (acceptable pre-1.0). Each command has a clear, single responsibility. `create` now prints guidance messages pointing to `template apply` and `dns repair` when it encounters existing repos or NS mismatches. Tests updated to patch submodule paths instead of `mimeo.cli.*`.
+
+---
+
 ## Superseded/Deprecated
 
 [No superseded decisions yet]

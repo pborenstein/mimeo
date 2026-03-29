@@ -13,7 +13,7 @@
 # ENVIRONMENT VARIABLE OVERRIDES:
 #   All settings can be overridden with MIMEO_* environment variables:
 #     export MIMEO_PORKBUN_API_KEY="your-key"
-#     export MIMEO_PORKBUN_SECRET_KEY="your-secret"
+#   export MIMEO_PORKBUN_SECRET="your-secret"
 #     export MIMEO_GITHUB_TOKEN="your-token"
 #
 #   Environment variables take precedence over values in this file.

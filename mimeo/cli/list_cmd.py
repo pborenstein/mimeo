@@ -9,7 +9,7 @@ from typing import Any, Dict
 
 import click
 
-from ..providers.host.github import GitHubHost, _health_status
+from ..providers.host.github import GitHubHost, health_status
 from ..config import Config
 from ._processing import _categorize_error
 
@@ -22,12 +22,13 @@ from ._processing import _categorize_error
 )
 @click.option(
     "--format",
+    "output_format",
     type=click.Choice(["text", "json", "csv"], case_sensitive=False),
     default="text",
     help="Output format (default: text)",
 )
 @click.option("--health", is_flag=True, help="Check Pages configuration health for each site")
-def list_sites(config: Path | None, format: str, health: bool) -> None:
+def list_sites(config: Path | None, output_format: str, health: bool) -> None:
     """List all mimeo-managed sites.
 
     Shows repositories tagged with the 'mimeo' topic. This is a read-only
@@ -76,9 +77,9 @@ def list_sites(config: Path | None, format: str, health: bool) -> None:
             repos = host.list_mimeo_repositories()
 
             if not repos:
-                if format == "json":
+                if output_format == "json":
                     click.echo("[]")
-                elif format == "csv":
+                elif output_format == "csv":
                     fieldnames = ["name", "repository", "site", "updated"]
                     if health:
                         fieldnames += ["health", "https_enforced", "cert_state"]
@@ -98,12 +99,14 @@ def list_sites(config: Path | None, format: str, health: bool) -> None:
                 pages_url = repo.get("homepage") or f"https://{name}"
                 updated = repo.get("updatedAt", "")[:10]
 
-                normalized_repos.append({
-                    "name": name,
-                    "repository": url,
-                    "site": pages_url,
-                    "updated": updated,
-                })
+                normalized_repos.append(
+                    {
+                        "name": name,
+                        "repository": url,
+                        "site": pages_url,
+                        "updated": updated,
+                    }
+                )
 
             if health:
                 health_map: Dict[str, Dict[str, Any]] = {}
@@ -117,27 +120,38 @@ def list_sites(config: Path | None, format: str, health: bool) -> None:
                         health_map[name] = future.result()
 
                 for repo_data in normalized_repos:
-                    h = health_map.get(repo_data["name"], {
-                        "pages_configured": False,
-                        "https_enforced": False,
-                        "cert_state": None,
-                        "pages_status": None,
-                    })
-                    repo_data["health"] = _health_status(h)
+                    h = health_map.get(
+                        repo_data["name"],
+                        {
+                            "pages_configured": False,
+                            "https_enforced": False,
+                            "cert_state": None,
+                            "pages_status": None,
+                        },
+                    )
+                    repo_data["health"] = health_status(h)
                     repo_data["https_enforced"] = h["https_enforced"]
                     repo_data["cert_state"] = h["cert_state"]
 
             # Sort
-            _status_order = {"pages_error": 0, "no_cert": 1, "cert_pending": 2, "fixable": 3, "healthy": 4}
+            _status_order = {
+                "pages_error": 0,
+                "no_cert": 1,
+                "cert_pending": 2,
+                "fixable": 3,
+                "healthy": 4,
+            }
             if health:
-                normalized_repos.sort(key=lambda r: (_status_order.get(r.get("health", "pages_error"), 0), r["name"]))
+                normalized_repos.sort(
+                    key=lambda r: (_status_order.get(r.get("health", "pages_error"), 0), r["name"])
+                )
             else:
                 normalized_repos.sort(key=lambda r: r["name"])
 
             # Display results
-            if format == "json":
+            if output_format == "json":
                 click.echo(json.dumps(normalized_repos, indent=2))
-            elif format == "csv":
+            elif output_format == "csv":
                 fieldnames = ["name", "repository", "site", "updated"]
                 if health:
                     fieldnames += ["health", "https_enforced", "cert_state"]

@@ -2,7 +2,7 @@
 
 Living document tracking progress on the domain landing page provisioning tool.
 
-**Last updated**: 2026-02-20
+**Last updated**: 2026-03-28
 
 ---
 
@@ -42,6 +42,22 @@ conflating provisioning with repair/maintenance.
   - [x] Clean up `create` (remove `--force`, `--force-dns-update`; add `--skip-dns`)
   - [x] Clean up `list` (remove `--fix`, `--dns-check`)
   - [x] Update tests for new module structure + new commands
+- [x] Code review with 25 findings addressed (see docs/CODE_REVIEW.md)
+  - [x] Fix wrong env var name in config.toml.example
+  - [x] Remove phantom --force-dns-update from README
+  - [x] Update README project structure to match actual files
+  - [x] Add domain validation at CLI entry points
+  - [x] Add ownership check via PorkbunRegistrar.domain_exists()
+  - [x] Make _health_status and _enable_https_enforcement public API
+  - [x] Move GITHUB_PAGES_IPS to github.py
+  - [x] Remove check_nameservers from DNSProvider ABC
+  - [x] Update Host ABC signature for deploy_site
+  - [x] Add DNS propagation progress indication
+  - [x] Remove "Loading configuration..." from stdout
+  - [x] Remove dead code (NSMismatchError, Domain model)
+  - [x] Fix --format shadowing Python builtin
+  - [x] Add --workers to fix https command
+  - [x] Add EXIT_GENERAL=1 exit code
 - [ ] E2E integration test lane (separate from unit tests, gated, hits real APIs)
 - [ ] Template parameterization (substitute domain into template files post-creation)
 
@@ -105,7 +121,7 @@ Simple HTML generator with string substitution. Minimal landing pages: dark them
 
 ### Phase 1: Core Infrastructure (Complete)
 
-`Config` (TOML + env var loading), `Domain`/`DNSRecord`/`DeployResult` models, `Registrar`/`Host` ABCs, exception hierarchy.
+`Config` (TOML + env var loading), `DNSRecord`/`DeployResult` models, `Registrar`/`Host` ABCs, exception hierarchy.
 
 ### Phase 0: Research & Design (Complete)
 

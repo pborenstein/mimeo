@@ -8,7 +8,7 @@ from typing import Any, Dict
 import click
 
 from ..exceptions import HostError
-from ..providers.host.github import GitHubHost, _health_status
+from ..providers.host.github import GitHubHost, health_status
 from ._processing import _categorize_error, load_config
 
 
@@ -26,11 +26,17 @@ def fix() -> None:
     help="Path to config file (default: ~/.config/mimeo/config.toml)",
 )
 @click.option(
+    "--workers",
+    type=click.IntRange(min=1),
+    default=5,
+    help="Number of concurrent workers (default: 5)",
+)
+@click.option(
     "--dry-run",
     is_flag=True,
     help="Show what would be fixed without making changes",
 )
-def https(domains: tuple[str, ...], config: Path | None, dry_run: bool) -> None:
+def https(domains: tuple[str, ...], config: Path | None, workers: int, dry_run: bool) -> None:
     """Enable HTTPS enforcement on sites with approved SSL certificates.
 
     If specific domains are given, fix those repos. Otherwise, discover
@@ -72,10 +78,7 @@ def https(domains: tuple[str, ...], config: Path | None, dry_run: bool) -> None:
                         name = future_to_name[future]
                         health_map[name] = future.result()
 
-                targets = [
-                    name for name, h in health_map.items()
-                    if _health_status(h) == "fixable"
-                ]
+                targets = [name for name, h in health_map.items() if health_status(h) == "fixable"]
 
                 if not targets:
                     click.echo("No sites need HTTPS fixing.")
@@ -87,18 +90,29 @@ def https(domains: tuple[str, ...], config: Path | None, dry_run: bool) -> None:
                 click.echo()
 
             # Apply fixes
-            results = []
-            for domain in targets:
+            results: list[dict[str, Any]] = []
+
+            def _fix_one(domain: str) -> dict[str, Any]:
                 repo_full_name = f"{owner}/{domain}"
                 if dry_run:
                     click.echo(f"  Would enable HTTPS on {repo_full_name}")
-                    results.append({"name": domain, "success": True, "error": None})
-                else:
-                    try:
-                        host._enable_https_enforcement(repo_full_name)
-                        results.append({"name": domain, "success": True, "error": None})
-                    except HostError as e:
-                        results.append({"name": domain, "success": False, "error": str(e)})
+                    return {"name": domain, "success": True, "error": None}
+                try:
+                    host.enable_https_enforcement(repo_full_name)
+                    return {"name": domain, "success": True, "error": None}
+                except HostError as e:
+                    return {"name": domain, "success": False, "error": str(e)}
+
+            if len(targets) == 1 or dry_run:
+                for domain in targets:
+                    results.append(_fix_one(domain))
+            else:
+                with ThreadPoolExecutor(max_workers=min(len(targets), workers)) as executor:
+                    future_to_name = {
+                        executor.submit(_fix_one, domain): domain for domain in targets
+                    }
+                    for future in as_completed(future_to_name):
+                        results.append(future.result())
 
             # Summary
             click.echo()

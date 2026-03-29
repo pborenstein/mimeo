@@ -112,13 +112,17 @@ class TestCreateCommand:
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
-        mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
+        mock_host.deploy_site.return_value = DeployResult(
+            url="https://example.com", repo_created=True, https_enabled=True
+        )
         mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
         mock_registrar = MagicMock()
-        mock_registrar.check_nameservers.return_value = NameserverCheckResult(ok=True, actual=[], expected=[])
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=True, actual=[], expected=[]
+        )
         mock_registrar.__enter__.return_value = mock_registrar
         mock_registrar_class.return_value = mock_registrar
 
@@ -130,7 +134,6 @@ class TestCreateCommand:
         result = runner.invoke(create, ["example.com"])
 
         assert result.exit_code == 0
-        assert "Loading configuration" in result.output
         assert "Configuring GitHub repository" in result.output
         assert "Configuring DNS records" in result.output
         assert "Successfully created: 1/1 domain(s)" in result.output
@@ -162,13 +165,17 @@ class TestCreateCommand:
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
-        mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
+        mock_host.deploy_site.return_value = DeployResult(
+            url="https://example.com", repo_created=True, https_enabled=True
+        )
         mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
         mock_registrar = MagicMock()
-        mock_registrar.check_nameservers.return_value = NameserverCheckResult(ok=True, actual=[], expected=[])
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=True, actual=[], expected=[]
+        )
         mock_registrar.__enter__.return_value = mock_registrar
         mock_registrar_class.return_value = mock_registrar
 
@@ -233,13 +240,17 @@ class TestCreateCommand:
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
-        mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
+        mock_host.deploy_site.return_value = DeployResult(
+            url="https://example.com", repo_created=True, https_enabled=True
+        )
         mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
         mock_registrar = MagicMock()
-        mock_registrar.check_nameservers.return_value = NameserverCheckResult(ok=True, actual=[], expected=[])
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=True, actual=[], expected=[]
+        )
         mock_registrar.__enter__.return_value = mock_registrar
         mock_registrar_class.return_value = mock_registrar
 
@@ -273,7 +284,9 @@ class TestCreateCommand:
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
-        mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
+        mock_host.deploy_site.return_value = DeployResult(
+            url="https://example.com", repo_created=True, https_enabled=True
+        )
         mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
@@ -320,13 +333,17 @@ class TestCreateCommand:
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
-        mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
+        mock_host.deploy_site.return_value = DeployResult(
+            url="https://example.com", repo_created=True, https_enabled=True
+        )
         mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
         mock_registrar = MagicMock()
-        mock_registrar.check_nameservers.return_value = NameserverCheckResult(ok=True, actual=[], expected=[])
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=True, actual=[], expected=[]
+        )
         mock_registrar.__enter__.return_value = mock_registrar
         mock_registrar_class.return_value = mock_registrar
 
@@ -358,13 +375,17 @@ class TestCreateCommand:
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
-        mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
+        mock_host.deploy_site.return_value = DeployResult(
+            url="https://example.com", repo_created=True, https_enabled=True
+        )
         mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
         mock_registrar = MagicMock()
-        mock_registrar.check_nameservers.return_value = NameserverCheckResult(ok=True, actual=[], expected=[])
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=True, actual=[], expected=[]
+        )
         mock_registrar.__enter__.return_value = mock_registrar
         mock_registrar_class.return_value = mock_registrar
 
@@ -395,13 +416,17 @@ class TestCreateCommand:
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
-        mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
+        mock_host.deploy_site.return_value = DeployResult(
+            url="https://example.com", repo_created=True, https_enabled=True
+        )
         mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
         mock_registrar = MagicMock()
-        mock_registrar.check_nameservers.return_value = NameserverCheckResult(ok=True, actual=[], expected=[])
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=True, actual=[], expected=[]
+        )
         mock_registrar.__enter__.return_value = mock_registrar
         mock_registrar_class.return_value = mock_registrar
 
@@ -433,13 +458,17 @@ class TestCreateCommand:
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
-        mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
+        mock_host.deploy_site.return_value = DeployResult(
+            url="https://example.com", repo_created=True, https_enabled=True
+        )
         mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
         mock_registrar = MagicMock()
-        mock_registrar.check_nameservers.return_value = NameserverCheckResult(ok=True, actual=[], expected=[])
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=True, actual=[], expected=[]
+        )
         mock_registrar.__enter__.return_value = mock_registrar
         mock_registrar_class.return_value = mock_registrar
 
@@ -471,13 +500,17 @@ class TestCreateCommand:
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
-        mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
+        mock_host.deploy_site.return_value = DeployResult(
+            url="https://example.com", repo_created=True, https_enabled=True
+        )
         mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
         mock_registrar = MagicMock()
-        mock_registrar.check_nameservers.return_value = NameserverCheckResult(ok=True, actual=[], expected=[])
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=True, actual=[], expected=[]
+        )
         mock_registrar.__enter__.return_value = mock_registrar
         mock_registrar_class.return_value = mock_registrar
 
@@ -510,13 +543,17 @@ class TestCreateCommand:
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
-        mock_host.deploy_site.side_effect = lambda domain, **kw: DeployResult(url=f"https://{domain}", repo_created=True, https_enabled=True)
+        mock_host.deploy_site.side_effect = lambda domain, **kw: DeployResult(
+            url=f"https://{domain}", repo_created=True, https_enabled=True
+        )
         mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
         mock_registrar = MagicMock()
-        mock_registrar.check_nameservers.return_value = NameserverCheckResult(ok=True, actual=[], expected=[])
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=True, actual=[], expected=[]
+        )
         mock_registrar.__enter__.return_value = mock_registrar
         mock_registrar_class.return_value = mock_registrar
 
@@ -557,13 +594,17 @@ class TestCreateCommand:
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
-        mock_host.deploy_site.side_effect = lambda domain, **kw: DeployResult(url=f"https://{domain}", repo_created=True, https_enabled=True)
+        mock_host.deploy_site.side_effect = lambda domain, **kw: DeployResult(
+            url=f"https://{domain}", repo_created=True, https_enabled=True
+        )
         mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
         mock_registrar = MagicMock()
-        mock_registrar.check_nameservers.return_value = NameserverCheckResult(ok=True, actual=[], expected=[])
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=True, actual=[], expected=[]
+        )
         mock_registrar.__enter__.return_value = mock_registrar
         mock_registrar_class.return_value = mock_registrar
 
@@ -596,7 +637,9 @@ class TestCreateSkipDns:
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
-        mock_host.deploy_site.return_value = DeployResult(url="https://example.com", repo_created=True, https_enabled=True)
+        mock_host.deploy_site.return_value = DeployResult(
+            url="https://example.com", repo_created=True, https_enabled=True
+        )
         mock_host.required_dns_records.return_value = []
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
@@ -720,6 +763,7 @@ class TestListCommand:
         assert result.exit_code == 0
 
         import json
+
         output_data = json.loads(result.output)
         assert len(output_data) == 2
         assert output_data[0]["name"] == "example.com"
@@ -787,8 +831,13 @@ class TestListCommand:
         lines = result.output.strip().split("\n")
         assert len(lines) == 3
         assert lines[0] == "name,repository,site,updated"
-        assert "example.com,https://github.com/testuser/example.com,https://example.com,2026-02-15" in lines[1]
-        assert "test.com,https://github.com/testuser/test.com,https://test.com,2026-02-14" in lines[2]
+        assert (
+            "example.com,https://github.com/testuser/example.com,https://example.com,2026-02-15"
+            in lines[1]
+        )
+        assert (
+            "test.com,https://github.com/testuser/test.com,https://test.com,2026-02-14" in lines[2]
+        )
 
     @patch("mimeo.config.Config.load")
     @patch(f"{_LIST}.GitHubHost")
@@ -1032,8 +1081,8 @@ class TestDoctorHelpers:
         """Config check passes with a valid config file."""
         cfg_file = tmp_path / "config.toml"
         cfg_file.write_text(
-            "[porkbun]\napi_key = \"pk1_test\"\nsecret_key = \"sk1_test\"\n"
-            "[github]\ndefault_org = \"testuser\"\n"
+            '[porkbun]\napi_key = "pk1_test"\nsecret_key = "sk1_test"\n'
+            '[github]\ndefault_org = "testuser"\n'
         )
         ok, detail, fix = _check_config(cfg_file)
         assert ok is True
@@ -1057,6 +1106,7 @@ class TestDoctorHelpers:
     def test_check_nameservers_ok(self, mock_lookup: Any) -> None:
         """_check_nameservers passes when NS matches Porkbun."""
         from mimeo.providers.registrar.porkbun import PORKBUN_NAMESERVERS
+
         mock_lookup.return_value = sorted(PORKBUN_NAMESERVERS)
         ok, detail, fix = _check_nameservers("example.com")
         assert ok is True
@@ -1094,8 +1144,8 @@ class TestDoctorCommand:
         """Doctor exits 0 when all checks pass."""
         cfg_file = tmp_path / "config.toml"
         cfg_file.write_text(
-            "[porkbun]\napi_key = \"pk1_test\"\nsecret_key = \"sk1_test\"\n"
-            "[github]\ndefault_org = \"testuser\"\n"
+            '[porkbun]\napi_key = "pk1_test"\nsecret_key = "sk1_test"\n'
+            '[github]\ndefault_org = "testuser"\n'
         )
 
         def fake_run(cmd: list, **kwargs: Any) -> MagicMock:
@@ -1119,8 +1169,8 @@ class TestDoctorCommand:
         """Doctor exits non-zero and prints remediation when gh is missing."""
         cfg_file = tmp_path / "config.toml"
         cfg_file.write_text(
-            "[porkbun]\napi_key = \"pk1_test\"\nsecret_key = \"sk1_test\"\n"
-            "[github]\ndefault_org = \"testuser\"\n"
+            '[porkbun]\napi_key = "pk1_test"\nsecret_key = "sk1_test"\n'
+            '[github]\ndefault_org = "testuser"\n'
         )
 
         with patch(f"{_DOCTOR}.subprocess.run", side_effect=FileNotFoundError):
@@ -1151,21 +1201,23 @@ class TestDoctorCommand:
         assert "not found" in result.output
 
     @patch(f"{_DOCTOR}._check_nameservers")
-    def test_doctor_ns_check_ok(
-        self, mock_ns: Any, runner: CliRunner, tmp_path: Path
-    ) -> None:
+    def test_doctor_ns_check_ok(self, mock_ns: Any, runner: CliRunner, tmp_path: Path) -> None:
         """Doctor with domain args runs NS check and passes when NS is Porkbun."""
         cfg_file = tmp_path / "config.toml"
         cfg_file.write_text(
-            "[porkbun]\napi_key = \"pk1_test\"\nsecret_key = \"sk1_test\"\n"
-            "[github]\ndefault_org = \"testuser\"\n"
+            '[porkbun]\napi_key = "pk1_test"\nsecret_key = "sk1_test"\n'
+            '[github]\ndefault_org = "testuser"\n'
         )
         mock_ns.return_value = (True, "porkbun", "")
 
         def fake_run(cmd: list, **kwargs: Any) -> MagicMock:
             m = MagicMock()
             m.returncode = 0
-            m.stdout = "gh version 2.40.0\n" if "--version" in cmd else "  - Token scopes: 'repo', 'workflow'\n"
+            m.stdout = (
+                "gh version 2.40.0\n"
+                if "--version" in cmd
+                else "  - Token scopes: 'repo', 'workflow'\n"
+            )
             m.stderr = ""
             return m
 
@@ -1185,8 +1237,8 @@ class TestDoctorCommand:
         """Doctor exits non-zero and shows remediation when NS doesn't point to Porkbun."""
         cfg_file = tmp_path / "config.toml"
         cfg_file.write_text(
-            "[porkbun]\napi_key = \"pk1_test\"\nsecret_key = \"sk1_test\"\n"
-            "[github]\ndefault_org = \"testuser\"\n"
+            '[porkbun]\napi_key = "pk1_test"\nsecret_key = "sk1_test"\n'
+            '[github]\ndefault_org = "testuser"\n'
         )
         mock_ns.return_value = (
             False,
@@ -1197,7 +1249,11 @@ class TestDoctorCommand:
         def fake_run(cmd: list, **kwargs: Any) -> MagicMock:
             m = MagicMock()
             m.returncode = 0
-            m.stdout = "gh version 2.40.0\n" if "--version" in cmd else "  - Token scopes: 'repo', 'workflow'\n"
+            m.stdout = (
+                "gh version 2.40.0\n"
+                if "--version" in cmd
+                else "  - Token scopes: 'repo', 'workflow'\n"
+            )
             m.stderr = ""
             return m
 
@@ -1216,22 +1272,24 @@ class TestDoctorCommand:
         """Doctor checks NS for each domain provided."""
         cfg_file = tmp_path / "config.toml"
         cfg_file.write_text(
-            "[porkbun]\napi_key = \"pk1_test\"\nsecret_key = \"sk1_test\"\n"
-            "[github]\ndefault_org = \"testuser\"\n"
+            '[porkbun]\napi_key = "pk1_test"\nsecret_key = "sk1_test"\n'
+            '[github]\ndefault_org = "testuser"\n'
         )
         mock_ns.return_value = (True, "porkbun", "")
 
         def fake_run(cmd: list, **kwargs: Any) -> MagicMock:
             m = MagicMock()
             m.returncode = 0
-            m.stdout = "gh version 2.40.0\n" if "--version" in cmd else "  - Token scopes: 'repo', 'workflow'\n"
+            m.stdout = (
+                "gh version 2.40.0\n"
+                if "--version" in cmd
+                else "  - Token scopes: 'repo', 'workflow'\n"
+            )
             m.stderr = ""
             return m
 
         with patch(f"{_DOCTOR}.subprocess.run", side_effect=fake_run):
-            result = runner.invoke(
-                doctor, ["--config", str(cfg_file), "site1.com", "site2.com"]
-            )
+            result = runner.invoke(doctor, ["--config", str(cfg_file), "site1.com", "site2.com"])
 
         assert result.exit_code == 0
         assert "NS: site1.com" in result.output
@@ -1334,7 +1392,9 @@ class TestLogFormatOption:
         mock_host_class.return_value = mock_host
 
         mock_registrar = MagicMock()
-        mock_registrar.check_nameservers.return_value = NameserverCheckResult(ok=True, actual=[], expected=[])
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=True, actual=[], expected=[]
+        )
         mock_registrar.__enter__.return_value = mock_registrar
         mock_registrar_class.return_value = mock_registrar
 
@@ -1348,6 +1408,7 @@ class TestLogFormatOption:
         assert result.exit_code == 0
         assert "SUMMARY" not in result.output
         import json as json_mod
+
         json_lines = [l for l in result.output.splitlines() if l.strip().startswith("{")]
         assert len(json_lines) > 0
         for line in json_lines:
@@ -1362,8 +1423,8 @@ class TestLogFormatOption:
 
         cfg_file = tmp_path / "config.toml"
         cfg_file.write_text(
-            "[porkbun]\napi_key = \"pk1_test\"\nsecret_key = \"sk1_test\"\n"
-            "[github]\ndefault_org = \"testuser\"\n"
+            '[porkbun]\napi_key = "pk1_test"\nsecret_key = "sk1_test"\n'
+            '[github]\ndefault_org = "testuser"\n'
         )
 
         def fake_run(cmd: list, **kwargs: Any) -> MagicMock:
@@ -1425,14 +1486,14 @@ class TestFixHttpsCommand:
             "cert_state": "approved",
             "pages_status": None,
         }
-        mock_host._enable_https_enforcement.return_value = True
+        mock_host.enable_https_enforcement.return_value = True
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
         result = runner.invoke(https, [])
 
         assert result.exit_code == 0
-        mock_host._enable_https_enforcement.assert_called_once_with("testuser/fixable.com")
+        mock_host.enable_https_enforcement.assert_called_once_with("testuser/fixable.com")
         assert "fixable.com" in result.output
 
     @patch("mimeo.config.Config.load")
@@ -1450,14 +1511,14 @@ class TestFixHttpsCommand:
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
-        mock_host._enable_https_enforcement.return_value = True
+        mock_host.enable_https_enforcement.return_value = True
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
         result = runner.invoke(https, ["example.com"])
 
         assert result.exit_code == 0
-        mock_host._enable_https_enforcement.assert_called_once_with("testuser/example.com")
+        mock_host.enable_https_enforcement.assert_called_once_with("testuser/example.com")
 
 
 class TestDnsCommands:
@@ -1487,12 +1548,18 @@ class TestDnsCommands:
         mock_host_class.return_value = mock_host
 
         mock_registrar = MagicMock()
-        mock_registrar.check_nameservers.return_value = NameserverCheckResult(ok=True, actual=["curitiba.ns.porkbun.com"], expected=[])
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=True, actual=["curitiba.ns.porkbun.com"], expected=[]
+        )
         mock_registrar.__enter__.return_value = mock_registrar
         mock_registrar_class.return_value = mock_registrar
 
         mock_dns_provider = MagicMock()
-        mock_dns_provider.check_dns_drift.return_value = {"status": "ok", "missing": [], "extra": []}
+        mock_dns_provider.check_dns_drift.return_value = {
+            "status": "ok",
+            "missing": [],
+            "extra": [],
+        }
         mock_dns_provider.__enter__.return_value = mock_dns_provider
         mock_dns_provider_class.return_value = mock_dns_provider
 
@@ -1527,7 +1594,9 @@ class TestDnsCommands:
         mock_host_class.return_value = mock_host
 
         mock_registrar = MagicMock()
-        mock_registrar.check_nameservers.return_value = NameserverCheckResult(ok=True, actual=[], expected=[])
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=True, actual=[], expected=[]
+        )
         mock_registrar.__enter__.return_value = mock_registrar
         mock_registrar_class.return_value = mock_registrar
 
@@ -1633,7 +1702,9 @@ class TestTemplateApplyCommand:
         result = runner.invoke(apply, ["example.com", "--template", "mimeo.lol", "--yes"])
 
         assert result.exit_code == 0
-        mock_host.deploy_site.assert_called_once_with("example.com", template="mimeo.lol", force=True)
+        mock_host.deploy_site.assert_called_once_with(
+            "example.com", template="mimeo.lol", force=True
+        )
 
 
 class TestRegistrarListCommand:

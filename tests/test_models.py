@@ -2,52 +2,7 @@
 
 import pytest
 
-from mimeo.models import DNSRecord, Domain
-
-
-class TestDomain:
-    """Tests for Domain model."""
-
-    def test_valid_domain(self) -> None:
-        """Domain should accept valid domain names."""
-        domain = Domain("example.com")
-        assert domain.name == "example.com"
-
-    def test_valid_subdomain(self) -> None:
-        """Domain should accept subdomains."""
-        domain = Domain("www.example.com")
-        assert domain.name == "www.example.com"
-
-    def test_invalid_domain_no_tld(self) -> None:
-        """Domain should reject names without TLD."""
-        with pytest.raises(ValueError, match="Invalid domain name"):
-            Domain("localhost")
-
-    def test_invalid_domain_spaces(self) -> None:
-        """Domain should reject names with spaces."""
-        with pytest.raises(ValueError, match="Invalid domain name"):
-            Domain("example .com")
-
-    def test_invalid_domain_special_chars(self) -> None:
-        """Domain should reject names with special characters."""
-        with pytest.raises(ValueError, match="Invalid domain name"):
-            Domain("example@com")
-
-    def test_tld_extraction(self) -> None:
-        """Domain should extract TLD correctly."""
-        domain = Domain("example.com")
-        assert domain.tld == "com"
-
-        domain2 = Domain("example.co.uk")
-        assert domain2.tld == "uk"
-
-    def test_sld_extraction(self) -> None:
-        """Domain should extract SLD correctly."""
-        domain = Domain("example.com")
-        assert domain.sld == "example"
-
-        domain2 = Domain("www.example.com")
-        assert domain2.sld == "www.example"
+from mimeo.models import DNSRecord
 
 
 class TestDNSRecord:
@@ -82,5 +37,3 @@ class TestDNSRecord:
         """DNSRecord should reject empty content."""
         with pytest.raises(ValueError, match="content cannot be empty"):
             DNSRecord(type="A", name="@", content="")
-
-

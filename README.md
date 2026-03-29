@@ -144,7 +144,7 @@ mimeo create example.com --stop-on-error
 mimeo create example.com another.lol --sequential
 
 # Reset nameservers to Porkbun and configure DNS even if NS points elsewhere
-mimeo create example.com --force-dns-update
+mimeo dns repair example.com --reset-nameservers
 ```
 
 Multiple domains are processed concurrently (up to 5 workers). Use `--sequential` for verbose per-step output or when debugging.
@@ -244,8 +244,17 @@ uv sync --frozen && uv run pytest && uv run ruff check mimeo && uv run mypy mime
 mimeo/
 ├── mimeo/
 │   ├── cli.py                          # CLI entry point (Click)
+│   ├── cli/
+│   │   ├── __init__.py                 # Command group registration
+│   │   ├── _processing.py              # Shared concurrent processing + output helpers
+│   │   ├── create.py                   # Create command
+│   │   ├── list_cmd.py                 # List command
+│   │   ├── doctor.py                   # Doctor command
+│   │   ├── registrar.py                # Registrar list command
+│   │   ├── dns.py                      # DNS check/repair commands
+│   │   ├── fix.py                      # Fix https command
+│   │   └── template.py                 # Template apply command
 │   ├── config.py                       # Config loading (~/.config/mimeo/config.toml)
-│   ├── content.py                      # Landing page HTML generation
 │   ├── exceptions.py                   # Exception hierarchy + exit codes
 │   ├── models.py                       # Domain, DNSRecord, NameserverCheckResult
 │   ├── providers/
@@ -253,7 +262,7 @@ mimeo/
 │   │   ├── registrar/porkbun.py        # Porkbun registrar + DNS provider
 │   │   └── host/github.py             # GitHub Pages automation (via gh CLI)
 │   └── utils/
-│       ├── http.py                     # requests.Session with retry strategy
+│       ├── http.py                     # requests.Session with error handling
 │       └── retry.py                    # retry_with_jitter() for transient errors
 ├── tests/
 ├── scripts/                            # Smoke tests and utilities

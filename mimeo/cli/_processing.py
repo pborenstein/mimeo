@@ -1,6 +1,7 @@
 """Shared concurrent domain processing and output helpers."""
 
 import json
+import re
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -12,6 +13,7 @@ import click
 from ..exceptions import (
     EXIT_AUTH,
     EXIT_CONFIG,
+    EXIT_GENERAL,
     EXIT_PARTIAL,
     EXIT_RATE_LIMIT,
     EXIT_TRANSIENT,
@@ -40,6 +42,32 @@ def get_log_format() -> str:
     return _log_format
 
 
+_DOMAIN_PATTERN = re.compile(r"^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$")
+
+
+def validate_domains(domains: tuple[str, ...]) -> None:
+    """Validate domain name format for all given domains.
+
+    Args:
+        domains: Tuple of domain names to validate
+
+    Raises:
+        SystemExit: If any domain name is invalid
+    """
+    invalid = []
+    for d in domains:
+        if not _DOMAIN_PATTERN.match(d.lower()):
+            invalid.append(d)
+    if invalid:
+        for d in invalid:
+            click.secho(f"Invalid domain name: {d}", fg="red", err=True)
+        click.echo(
+            "Domain names must consist of letters, digits, hyphens, and dots, with a valid TLD.",
+            err=True,
+        )
+        sys.exit(EXIT_CONFIG)
+
+
 def _emit(level: str, message: str, domain: str | None = None) -> None:
     """Emit a structured log line to stderr (JSON mode) or do nothing (text mode).
 
@@ -57,7 +85,13 @@ def _emit(level: str, message: str, domain: str | None = None) -> None:
     click.echo(json.dumps(record), err=True)
 
 
-_AUTH_KEYWORDS = ("unauthorized", "authentication", "forbidden", "invalid api key", "bad credentials")
+_AUTH_KEYWORDS = (
+    "unauthorized",
+    "authentication",
+    "forbidden",
+    "invalid api key",
+    "bad credentials",
+)
 _RATE_LIMIT_KEYWORDS = ("rate limit", "429")
 _TRANSIENT_KEYWORDS = ("502", "503", "500", "timeout", "connection")
 
@@ -110,11 +144,13 @@ def load_config(config_path: Any) -> Any:
     from ..config import Config
 
     try:
-        click.echo("Loading configuration...")
         return Config.load(config_path)
     except ConfigurationError as e:
         click.secho(f"[config] {e}", fg="red", err=True)
         sys.exit(EXIT_CONFIG)
+    except Exception as e:
+        click.secho(f"[config] {e}", fg="red", err=True)
+        sys.exit(EXIT_GENERAL)
 
 
 def process_domains_concurrent(
@@ -185,10 +221,17 @@ def process_domains_concurrent(
                         if result["success"]:
                             click.secho(f"ok {domain} completed", fg="green")
                         else:
-                            click.secho(f"xx {domain} failed: {result.get('error', 'Unknown error')}", fg="red")
+                            click.secho(
+                                f"xx {domain} failed: {result.get('error', 'Unknown error')}",
+                                fg="red",
+                            )
                     else:
                         level = "info" if result["success"] else "error"
-                        msg = f"{domain} completed" if result["success"] else f"{domain} failed: {result.get('error', 'Unknown error')}"
+                        msg = (
+                            f"{domain} completed"
+                            if result["success"]
+                            else f"{domain} failed: {result.get('error', 'Unknown error')}"
+                        )
                         _emit(level, msg, domain=domain)
 
                 except Exception as e:
@@ -196,11 +239,13 @@ def process_domains_concurrent(
                         click.secho(f"xx {domain} failed unexpectedly: {e}", fg="red")
                     else:
                         _emit("error", f"{domain} failed unexpectedly: {e}", domain=domain)
-                    results.append({
-                        "domain": domain,
-                        "success": False,
-                        "error": str(e),
-                    })
+                    results.append(
+                        {
+                            "domain": domain,
+                            "success": False,
+                            "error": str(e),
+                        }
+                    )
 
         domain_order = {domain: idx for idx, domain in enumerate(domains)}
         results.sort(key=lambda r: domain_order.get(r["domain"], 999))
@@ -223,5 +268,8 @@ def exit_on_failures(results: list[dict]) -> None:
             "partial": EXIT_PARTIAL,
         }
         failed = [r for r in results if not r["success"]]
-        codes = [_category_to_code.get(r.get("error_category") or "transient", EXIT_TRANSIENT) for r in failed]
+        codes = [
+            _category_to_code.get(r.get("error_category") or "transient", EXIT_TRANSIENT)
+            for r in failed
+        ]
         sys.exit(min(codes))

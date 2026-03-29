@@ -36,10 +36,6 @@ class ConcreteDNSProvider(DNSProvider):
         """Test implementation."""
         return True
 
-    def check_nameservers(self, domain: str) -> NameserverCheckResult:
-        """Test implementation."""
-        return NameserverCheckResult(ok=True, actual=[], expected=[])
-
 
 class ConcreteHost(Host):
     """Concrete implementation of Host for testing."""
@@ -51,6 +47,10 @@ class ConcreteHost(Host):
     def required_dns_records(self, domain: str) -> list[DNSRecord]:
         """Test implementation."""
         return [DNSRecord(type="A", name="", content="1.2.3.4")]
+
+    def enable_https_enforcement(self, repo_full_name: str) -> bool:
+        """Test implementation."""
+        return True
 
 
 def test_registrar_can_be_instantiated() -> None:
@@ -99,13 +99,6 @@ def test_dns_provider_has_verify_dns_method() -> None:
     records = [DNSRecord(type="A", name="@", content="1.2.3.4")]
     result = provider.verify_dns("example.com", records)
     assert result is True
-
-
-def test_dns_provider_has_check_nameservers_method() -> None:
-    """DNSProvider should have check_nameservers method."""
-    provider = ConcreteDNSProvider()
-    result = provider.check_nameservers("example.com")
-    assert isinstance(result, NameserverCheckResult)
 
 
 def test_host_can_be_instantiated() -> None:

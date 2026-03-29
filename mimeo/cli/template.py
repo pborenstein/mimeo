@@ -13,6 +13,7 @@ from ._processing import (
     get_log_format,
     load_config,
     process_domains_concurrent,
+    validate_domains,
 )
 
 
@@ -71,11 +72,16 @@ def apply(
         mimeo template apply site1.com site2.com --template new-theme --yes
         mimeo template apply example.com --template mimeo.lol --dry-run
     """
+    validate_domains(domains)
     cfg = load_config(config)
     log_format = get_log_format()
 
     if not dry_run and not yes:
-        click.secho("WARNING: This will delete and recreate the following repositories:", fg="red", bold=True)
+        click.secho(
+            "WARNING: This will delete and recreate the following repositories:",
+            fg="red",
+            bold=True,
+        )
         for d in domains:
             click.echo(f"  - {cfg.github_username}/{d}")
         click.echo()
@@ -115,7 +121,9 @@ def apply(
 
         try:
             if dry_run:
-                log(f"Would delete and recreate {cfg.github_username}/{domain} from template '{template_repo}'")
+                log(
+                    f"Would delete and recreate {cfg.github_username}/{domain} from template '{template_repo}'"
+                )
                 log("Would re-enable GitHub Pages")
                 log(f"Would configure custom domain: {domain}")
                 result["success"] = True
@@ -151,7 +159,9 @@ def apply(
         return result
 
     results = process_domains_concurrent(
-        domains, _apply_template, workers,
+        domains,
+        _apply_template,
+        workers,
         sequential=(len(domains) == 1),
         stop_on_error=False,
         dry_run=dry_run,

@@ -2,6 +2,7 @@
 
 # Exit codes
 EXIT_OK = 0
+EXIT_GENERAL = 1
 EXIT_CONFIG = 2
 EXIT_AUTH = 3
 EXIT_RATE_LIMIT = 4
@@ -29,12 +30,6 @@ class ProviderError(MimeoError):
 
 class RegistrarError(ProviderError):
     """Raised when registrar operations fail."""
-
-    pass
-
-
-class NSMismatchError(RegistrarError):
-    """Raised when nameservers don't match the expected provider."""
 
     pass
 

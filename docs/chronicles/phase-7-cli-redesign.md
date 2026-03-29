@@ -1,5 +1,31 @@
 # Phase 7: CLI Redesign Chronicles
 
+## Entry 28: Comprehensive code review -- 25 findings fixed (2026-03-28)
+
+**What**: Performed a critical user-perspective code review, documented 25 findings
+in `docs/CODE_REVIEW.md`, and fixed all of them on branch `fix/code-review-findings`.
+
+**Why**: Pre-1.0 polish. Several issues would bite new users immediately (wrong env
+var name in config example, phantom flag in README, no domain validation, noisy stdout
+breaking pipes).
+
+**How**: Changes span 19 files, +585/-384 lines. Key fixes:
+- Domain validation regex added to `_processing.py`, called from all domain-accepting commands
+- `PorkbunRegistrar.domain_exists()` added for ownership verification before GitHub deploy
+- `GITHUB_PAGES_IPS` moved from porkbun.py to github.py (host owns its own config data)
+- Private methods made public: `health_status`, `enable_https_enforcement` (added to Host ABC)
+- `check_nameservers` removed from DNSProvider ABC (registrar-only concern)
+- DNS verification now shows progress via callback
+- Dead code removed: `NSMismatchError`, unused `Domain` model
+- `EXIT_GENERAL = 1` added for non-ConfigurationError failures
+- `load_config` no longer prints to stdout
+
+**Decisions**: DEC-019 (domain validation at CLI layer), DEC-020 (public provider API for CLI)
+
+**Files**: 19 files changed. See `docs/CODE_REVIEW.md` for full finding list.
+
+---
+
 ## Entry 27: --force flag and CLI design rethink (2026-03-19)
 
 **What**: Added `--force` flag to `create` that deletes and recreates an existing

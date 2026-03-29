@@ -342,6 +342,38 @@ Also converted `mimeo/cli.py` (1084 lines) to a `mimeo/cli/` package with one fi
 
 ---
 
+### DEC-019: Domain Validation at CLI Layer (2026-03-28)
+
+**Status**: Active
+
+**Context**: The `Domain` model existed with regex validation but was never used. The CLI accepted any string as a domain argument, including empty strings and non-domain text. Garbage input would propagate to GitHub and Porkbun API calls before failing.
+
+**Decision**: Add `validate_domains()` in `_processing.py` using a regex pattern, called at the top of every CLI command that accepts domain arguments. Fail fast with exit code EXIT_CONFIG before making any API calls. Removed the unused `Domain` model from `models.py`.
+
+**Alternatives considered**:
+- Use the Domain model: Over-engineered (tld/sld extraction not needed), added unnecessary class hierarchy for simple validation
+- Validate in each command separately: Duplication, easy to miss one
+
+**Consequences**: All domain-accepting commands (`create`, `dns check`, `dns repair`, `template apply`) now reject invalid domains immediately. The `Domain` class is removed since it was never used outside tests. 233 tests pass.
+
+---
+
+### DEC-020: Public Provider Methods for CLI-Facing Operations (2026-03-28)
+
+**Context**: CLI code was calling private methods on providers (`host._enable_https_enforcement()`, `dns_prov._get_domain_records()`). This defeated the ABC abstraction -- if provider implementations changed, CLI would break silently.
+
+**Decision**: Make CLI-facing provider operations public API:
+- `_health_status` -> `health_status` (module-level in github.py)
+- `_enable_https_enforcement` -> `enable_https_enforcement` (added to Host ABC)
+
+**Alternatives considered**:
+- Keep private and accept coupling: Fragile, defeats abstraction purpose
+- Create wrapper functions in a separate module: Unnecessary indirection
+
+**Consequences**: Host ABC has `enable_https_enforcement` as an abstract method. Any new host provider must implement it. CLI goes through the public interface.
+
+---
+
 ## Superseded/Deprecated
 
 [No superseded decisions yet]

@@ -1,22 +1,18 @@
 ---
 phase: 7
 phase_name: CLI Redesign
-updated: 2026-03-19
-last_commit: 928c6aa
+updated: 2026-03-28
+last_commit: 5b5d2fc
 ---
 
 ## Current Focus
 
-Added `--force` flag to `mimeo create` for replacing existing repos with a new
-template. Set `is_template=true` on all 5 tepiton template repos. Identified
-that `create` is overloaded -- doing both provisioning and repair. CLI options
-are becoming a hodgepodge. Need to rethink the command structure from first
-principles before adding more flags.
+Completed comprehensive code review with 25 findings and fixed all of them.
+Branch `fix/code-review-findings` has all changes, uncommitted.
 
 ## Active Tasks
 
-- [ ] Rethink `create` command structure (provisioning vs repair)
-- [ ] E2E integration test lane
+- [ ] E2E integration test lane (separate from unit tests, gated, hits real APIs)
 - [ ] Template parameterization (substitute domain into template files)
 
 ## Blockers
@@ -25,16 +21,14 @@ None.
 
 ## Context
 
-- 242 tests passing; mypy and ruff clean
-- All 5 templates in tepiton org have is_template=true
-- `--force` implemented but uncommitted -- deletes and recreates repo from template
-- Warning shown when repo exists and template not applied
-- DNS always runs even when repo already exists -- wasteful
-- `--force` vs `--force-dns-update` naming is confusing
-- User wants to rethink CLI design from first principles (switching to opus)
+- 233 tests passing; mypy and ruff clean
+- All 25 code review items addressed (see docs/CODE_REVIEW.md)
+- Key changes: domain validation at CLI layer, ownership check via PorkbunRegistrar.domain_exists(), GITHUB_PAGES_IPS moved to github.py, removed dead code (Domain model, NSMismatchError), DNS progress indication, EXIT_GENERAL=1 added
+- Provider ABCs now have public methods for CLI-facing operations (health_status, enable_https_enforcement)
+- check_nameservers removed from DNSProvider ABC (registrar-only concern)
+- "Loading configuration..." message removed from stdout (was polluting pipe output)
+- config.toml.example had wrong env var name (MIMEO_PORKBUN_SECRET_KEY -> MIMEO_PORKBUN_SECRET)
 
 ## Next Session
 
-Redesign `mimeo create` command structure. The current flag set (`--force`,
-`--force-dns-update`, `--template`) suggests `create` is doing too much.
-Consider separating provisioning from repair/maintenance commands.
+Commit the code review fixes. Consider E2E integration tests or template parameterization as next feature work.

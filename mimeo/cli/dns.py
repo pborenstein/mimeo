@@ -16,6 +16,7 @@ from ._processing import (
     get_log_format,
     load_config,
     process_domains_concurrent,
+    validate_domains,
 )
 
 
@@ -57,6 +58,7 @@ def check(domains: tuple[str, ...], config: Path | None, output_format: str, wor
         mimeo dns check example.com
         mimeo dns check site1.com site2.com --format json
     """
+    validate_domains(domains)
     try:
         cfg = load_config(config)
         results: List[Dict[str, Any]] = []
@@ -71,7 +73,12 @@ def check(domains: tuple[str, ...], config: Path | None, output_format: str, wor
                         try:
                             drift = dns_provider.check_dns_drift(domain, expected)
                         except Exception as exc:
-                            drift = {"status": "error", "missing": [], "extra": [], "error": str(exc)}
+                            drift = {
+                                "status": "error",
+                                "missing": [],
+                                "extra": [],
+                                "error": str(exc),
+                            }
 
                         return {
                             "domain": domain,
@@ -101,6 +108,7 @@ def check(domains: tuple[str, ...], config: Path | None, output_format: str, wor
             click.echo(json.dumps(results, indent=2))
         elif output_format == "csv":
             import csv
+
             fieldnames = ["domain", "ns_ok", "nameservers", "dns_status"]
             writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames, extrasaction="ignore")
             writer.writeheader()
@@ -115,7 +123,13 @@ def check(domains: tuple[str, ...], config: Path | None, output_format: str, wor
 
             for r in results:
                 click.secho(f"  {r['domain']}", bold=True)
-                ns_label = "ok (porkbun)" if r["ns_ok"] else ", ".join(r["nameservers"]) if r["nameservers"] else "unknown"
+                ns_label = (
+                    "ok (porkbun)"
+                    if r["ns_ok"]
+                    else ", ".join(r["nameservers"])
+                    if r["nameservers"]
+                    else "unknown"
+                )
                 click.echo("    NS: ", nl=False)
                 click.secho(ns_label, fg=_ns_colors.get(r["ns_ok"], "white"))
 
@@ -123,9 +137,14 @@ def check(domains: tuple[str, ...], config: Path | None, output_format: str, wor
                 click.secho(r["dns_status"], fg=_dns_colors.get(r["dns_status"], "white"))
 
                 for rec in r.get("missing", []):
-                    click.secho(f"      missing: {rec['type']} {rec['name']} -> {rec['content']}", fg="red")
+                    click.secho(
+                        f"      missing: {rec['type']} {rec['name']} -> {rec['content']}", fg="red"
+                    )
                 for rec in r.get("extra", []):
-                    click.secho(f"      extra:   {rec['type']} {rec['name']} -> {rec['content']}", fg="yellow")
+                    click.secho(
+                        f"      extra:   {rec['type']} {rec['name']} -> {rec['content']}",
+                        fg="yellow",
+                    )
                 if r.get("error"):
                     click.secho(f"      error: {r['error']}", fg="red")
                 click.echo()
@@ -177,6 +196,7 @@ def repair(
         mimeo dns repair site1.com site2.com --reset-nameservers
         mimeo dns repair example.com --dry-run
     """
+    validate_domains(domains)
     cfg = load_config(config)
     log_format = get_log_format()
 
@@ -221,7 +241,10 @@ def repair(
                         if dry_run:
                             log(f"Would reset nameservers from {actual_ns} to Porkbun", "warning")
                         else:
-                            log(f"NS records point to {actual_ns} -- resetting to Porkbun", "warning")
+                            log(
+                                f"NS records point to {actual_ns} -- resetting to Porkbun",
+                                "warning",
+                            )
                             registrar.update_nameservers(domain)
                             log("Nameservers updated to Porkbun", "success")
                     else:
@@ -250,11 +273,22 @@ def repair(
                 log("DNS records created", "success")
 
                 log("Verifying DNS propagation")
-                verified = dns_prov.verify_dns(domain, dns_records, max_attempts=10, delay=5)
+                verified = dns_prov.verify_dns(
+                    domain,
+                    dns_records,
+                    max_attempts=10,
+                    delay=5,
+                    progress_callback=lambda attempt, max_att: click.echo(
+                        f"  DNS check {attempt}/{max_att} -- retrying..."
+                    ),
+                )
                 if verified:
                     log("DNS records verified", "success")
                 else:
-                    log("DNS records created but not yet propagated (may take up to 24 hours)", "warning")
+                    log(
+                        "DNS records created but not yet propagated (may take up to 24 hours)",
+                        "warning",
+                    )
 
             result["success"] = True
 
@@ -267,7 +301,9 @@ def repair(
         return result
 
     results = process_domains_concurrent(
-        domains, _repair_domain, workers,
+        domains,
+        _repair_domain,
+        workers,
         sequential=(len(domains) == 1),
         stop_on_error=False,
         dry_run=dry_run,
@@ -287,4 +323,5 @@ def repair(
         click.echo()
 
     from ._processing import exit_on_failures
+
     exit_on_failures(results)

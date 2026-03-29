@@ -18,6 +18,7 @@ from ._processing import (
     get_log_format,
     load_config,
     process_domains_concurrent,
+    validate_domains,
 )
 
 
@@ -78,12 +79,19 @@ def _process_single_domain(
             if not skip_dns:
                 log("Would check nameservers before configuring DNS")
                 log("Would configure DNS records (if NS points to Porkbun):")
-                from mimeo.providers.registrar.porkbun import GITHUB_PAGES_IPS
+                from mimeo.providers.host.github import GITHUB_PAGES_IPS
                 from mimeo.models import DNSRecord as _DNSRecord
+
                 dry_records = [
-                    _DNSRecord(type="A", name="", content=ip, ttl=600)
-                    for ip in GITHUB_PAGES_IPS
-                ] + [_DNSRecord(type="CNAME", name="www", content=f"{cfg.github_username}.github.io", ttl=600)]
+                    _DNSRecord(type="A", name="", content=ip, ttl=600) for ip in GITHUB_PAGES_IPS
+                ] + [
+                    _DNSRecord(
+                        type="CNAME",
+                        name="www",
+                        content=f"{cfg.github_username}.github.io",
+                        ttl=600,
+                    )
+                ]
                 for record in dry_records:
                     log(f"  - {record.type} {record.name or '@'} -> {record.content}")
             else:
@@ -104,10 +112,15 @@ def _process_single_domain(
                 result["repo_url"] = f"https://github.com/{cfg.github_username}/{domain}"
 
                 if deploy.repo_created:
-                    log(f"Repository created from template '{template}': {cfg.github_username}/{domain}", "success")
+                    log(
+                        f"Repository created from template '{template}': {cfg.github_username}/{domain}",
+                        "success",
+                    )
                 else:
                     log(f"Repository already exists: {cfg.github_username}/{domain}", "warning")
-                    log("Use 'mimeo template apply' to replace with a different template", "warning")
+                    log(
+                        "Use 'mimeo template apply' to replace with a different template", "warning"
+                    )
                     # Still configure Pages and domain for existing repos
 
                 log("GitHub Pages enabled", "success")
@@ -144,7 +157,7 @@ def _process_single_domain(
                     result["ns_mismatch"] = ns_result.actual
                 else:
                     with PorkbunDNSProvider(cfg.porkbun_api_key, cfg.porkbun_secret) as dns:
-                        for record in (dns_records or []):
+                        for record in dns_records or []:
                             record_name = record.name or "@"
                             log(f"Creating {record.type} record: {record_name} -> {record.content}")
 
@@ -152,11 +165,22 @@ def _process_single_domain(
                         log("DNS records created", "success")
 
                         log("Verifying DNS propagation")
-                        verified = dns.verify_dns(domain, dns_records or [], max_attempts=10, delay=5)
+                        verified = dns.verify_dns(
+                            domain,
+                            dns_records or [],
+                            max_attempts=10,
+                            delay=5,
+                            progress_callback=lambda attempt, max_att: click.echo(
+                                f"  DNS check {attempt}/{max_att} -- retrying..."
+                            ),
+                        )
                         if verified:
                             log("DNS records verified", "success")
                         else:
-                            log("DNS records created but not yet propagated (may take up to 24 hours)", "warning")
+                            log(
+                                "DNS records created but not yet propagated (may take up to 24 hours)",
+                                "warning",
+                            )
                             result["dns_pending"] = True
 
         except RegistrarError as e:
@@ -243,6 +267,7 @@ def create(
         mimeo create site1.com site2.com --sequential
         mimeo create example.com --skip-dns
     """
+    validate_domains(domains)
     cfg = load_config(config)
     log_format = get_log_format()
 
@@ -253,14 +278,21 @@ def create(
     def process_fn(domain: str) -> dict:
         use_verbose = dry_run or sequential or len(domains) == 1
         return _process_single_domain(
-            domain, cfg, dry_run,
+            domain,
+            cfg,
+            dry_run,
             verbose=use_verbose,
             skip_dns=skip_dns,
             template=template,
         )
 
     results = process_domains_concurrent(
-        domains, process_fn, workers, sequential, stop_on_error, dry_run,
+        domains,
+        process_fn,
+        workers,
+        sequential,
+        stop_on_error,
+        dry_run,
     )
 
     # Print summary
@@ -276,7 +308,11 @@ def create(
         _emit("info", summary_msg)
         for result in results:
             level = "info" if result["success"] else "error"
-            _emit(level, "success" if result["success"] else result.get("error", "unknown error"), domain=result["domain"])
+            _emit(
+                level,
+                "success" if result["success"] else result.get("error", "unknown error"),
+                domain=result["domain"],
+            )
     else:
         click.echo()
         click.secho("=" * 60, fg="white", bold=True)
@@ -287,7 +323,10 @@ def create(
         if dry_run:
             click.secho(f"DRY RUN: Would process {total_count} domain(s)", fg="cyan")
         else:
-            click.secho(f"Successfully created: {success_count}/{total_count} domain(s)", fg="green" if success_count == total_count else "yellow")
+            click.secho(
+                f"Successfully created: {success_count}/{total_count} domain(s)",
+                fg="green" if success_count == total_count else "yellow",
+            )
 
         click.echo()
 

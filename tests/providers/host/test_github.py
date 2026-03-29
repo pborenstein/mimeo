@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from mimeo.exceptions import HostError
-from mimeo.providers.host.github import DEFAULT_TEMPLATE, TEMPLATE_ORG, GitHubHost, _health_status
+from mimeo.providers.host.github import DEFAULT_TEMPLATE, TEMPLATE_ORG, GitHubHost, health_status
 
 
 class TestGitHubHost:
@@ -239,7 +239,7 @@ class TestGitHubHost:
         with patch.object(host, "_create_from_template") as mock_create:
             with patch.object(host, "_enable_github_pages") as mock_pages:
                 with patch.object(host, "_set_custom_domain") as mock_domain:
-                    with patch.object(host, "_enable_https_enforcement") as mock_https:
+                    with patch.object(host, "enable_https_enforcement") as mock_https:
                         mock_create.return_value = ("testorg/example.com", True, False)
                         mock_https.return_value = True
 
@@ -263,7 +263,7 @@ class TestGitHubHost:
         with patch.object(host, "_create_from_template") as mock_create:
             with patch.object(host, "_enable_github_pages"):
                 with patch.object(host, "_set_custom_domain"):
-                    with patch.object(host, "_enable_https_enforcement") as mock_https:
+                    with patch.object(host, "enable_https_enforcement") as mock_https:
                         mock_create.return_value = ("testorg/example.com", False, True)
                         mock_https.return_value = False
 
@@ -277,7 +277,7 @@ class TestGitHubHost:
         with patch.object(host, "_create_from_template") as mock_create:
             with patch.object(host, "_enable_github_pages"):
                 with patch.object(host, "_set_custom_domain"):
-                    with patch.object(host, "_enable_https_enforcement", return_value=True):
+                    with patch.object(host, "enable_https_enforcement", return_value=True):
                         mock_create.return_value = ("testorg/example.com", True, False)
 
                         host.deploy_site("example.com", template="pandoc-simple")
@@ -299,10 +299,10 @@ class TestGitHubHost:
 
             assert "failed to deploy" in str(exc_info.value).lower()
 
-    def test_enable_https_enforcement_success(self, host: GitHubHost) -> None:
+    def testenable_https_enforcement_success(self, host: GitHubHost) -> None:
         """Test enabling HTTPS enforcement when certificate is ready."""
         with patch.object(host, "_gh_api") as mock_api:
-            result = host._enable_https_enforcement("testorg/example.com")
+            result = host.enable_https_enforcement("testorg/example.com")
 
             assert result is True
             mock_api.assert_called_once_with(
@@ -311,22 +311,22 @@ class TestGitHubHost:
                 data={"https_enforced": True},
             )
 
-    def test_enable_https_enforcement_certificate_not_ready(self, host: GitHubHost) -> None:
+    def testenable_https_enforcement_certificate_not_ready(self, host: GitHubHost) -> None:
         """Test enabling HTTPS enforcement when certificate is not ready."""
         with patch.object(host, "_gh_api") as mock_api:
             mock_api.side_effect = HostError("The certificate does not exist yet")
 
-            result = host._enable_https_enforcement("testorg/example.com")
+            result = host.enable_https_enforcement("testorg/example.com")
 
             assert result is False
 
-    def test_enable_https_enforcement_other_error(self, host: GitHubHost) -> None:
+    def testenable_https_enforcement_other_error(self, host: GitHubHost) -> None:
         """Test that other errors during HTTPS enforcement are raised."""
         with patch.object(host, "_gh_api") as mock_api:
             mock_api.side_effect = HostError("Some other error")
 
             with pytest.raises(HostError) as exc_info:
-                host._enable_https_enforcement("testorg/example.com")
+                host.enable_https_enforcement("testorg/example.com")
 
             assert "Some other error" in str(exc_info.value)
 
@@ -403,7 +403,7 @@ class TestGitHubHost:
 
     def test_required_dns_records(self, host: GitHubHost) -> None:
         """required_dns_records returns 4 A records + 1 CNAME."""
-        from mimeo.providers.registrar.porkbun import GITHUB_PAGES_IPS
+        from mimeo.providers.host.github import GITHUB_PAGES_IPS
 
         with patch.object(host, "_get_authenticated_user", return_value="testorg"):
             records = host.required_dns_records("example.com")
@@ -504,9 +504,7 @@ class TestGitHubHostRetry:
     def test_no_retry_on_auth_failure(self, mock_sleep, host: GitHubHost) -> None:
         """Does not retry when gh CLI reports an authentication failure."""
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = Mock(
-                returncode=1, stdout="", stderr="authentication required"
-            )
+            mock_run.return_value = Mock(returncode=1, stdout="", stderr="authentication required")
             with pytest.raises(Exception):
                 host._run_gh_command(["api", "user"])
             # Non-transient error — subprocess called once, no retry
@@ -527,39 +525,74 @@ class TestGitHubHostRetry:
 
 
 class TestHealthStatus:
-    """Tests for _health_status helper function."""
+    """Tests for health_status helper function."""
 
     def test_healthy(self) -> None:
         """Returns healthy when https_enforced is True."""
-        health = {"pages_configured": True, "https_enforced": True, "cert_state": "approved", "pages_status": None}
-        assert _health_status(health) == "healthy"
+        health = {
+            "pages_configured": True,
+            "https_enforced": True,
+            "cert_state": "approved",
+            "pages_status": None,
+        }
+        assert health_status(health) == "healthy"
 
     def test_fixable(self) -> None:
         """Returns fixable when cert is approved but https not enforced."""
-        health = {"pages_configured": True, "https_enforced": False, "cert_state": "approved", "pages_status": None}
-        assert _health_status(health) == "fixable"
+        health = {
+            "pages_configured": True,
+            "https_enforced": False,
+            "cert_state": "approved",
+            "pages_status": None,
+        }
+        assert health_status(health) == "fixable"
 
     def test_cert_pending_new(self) -> None:
         """Returns cert_pending when cert state is new."""
-        health = {"pages_configured": True, "https_enforced": False, "cert_state": "new", "pages_status": None}
-        assert _health_status(health) == "cert_pending"
+        health = {
+            "pages_configured": True,
+            "https_enforced": False,
+            "cert_state": "new",
+            "pages_status": None,
+        }
+        assert health_status(health) == "cert_pending"
 
     def test_cert_pending_authorization_created(self) -> None:
         """Returns cert_pending when cert state is authorization_created."""
-        health = {"pages_configured": True, "https_enforced": False, "cert_state": "authorization_created", "pages_status": None}
-        assert _health_status(health) == "cert_pending"
+        health = {
+            "pages_configured": True,
+            "https_enforced": False,
+            "cert_state": "authorization_created",
+            "pages_status": None,
+        }
+        assert health_status(health) == "cert_pending"
 
     def test_cert_pending_issued(self) -> None:
         """Returns cert_pending when cert state is issued."""
-        health = {"pages_configured": True, "https_enforced": False, "cert_state": "issued", "pages_status": None}
-        assert _health_status(health) == "cert_pending"
+        health = {
+            "pages_configured": True,
+            "https_enforced": False,
+            "cert_state": "issued",
+            "pages_status": None,
+        }
+        assert health_status(health) == "cert_pending"
 
     def test_no_cert(self) -> None:
         """Returns no_cert when cert_state is None."""
-        health = {"pages_configured": True, "https_enforced": False, "cert_state": None, "pages_status": None}
-        assert _health_status(health) == "no_cert"
+        health = {
+            "pages_configured": True,
+            "https_enforced": False,
+            "cert_state": None,
+            "pages_status": None,
+        }
+        assert health_status(health) == "no_cert"
 
     def test_pages_error(self) -> None:
         """Returns pages_error when pages not configured."""
-        health = {"pages_configured": False, "https_enforced": False, "cert_state": None, "pages_status": None}
-        assert _health_status(health) == "pages_error"
+        health = {
+            "pages_configured": False,
+            "https_enforced": False,
+            "cert_state": None,
+            "pages_status": None,
+        }
+        assert health_status(health) == "pages_error"

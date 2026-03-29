@@ -8,8 +8,8 @@ import dns.resolver
 
 from mimeo.exceptions import RegistrarError, DNSError
 from mimeo.models import DNSRecord, NameserverCheckResult
+from mimeo.providers.host.github import GITHUB_PAGES_IPS
 from mimeo.providers.registrar.porkbun import (
-    GITHUB_PAGES_IPS,
     PORKBUN_NAMESERVERS,
     PorkbunDNSProvider,
     PorkbunRegistrar,
@@ -19,6 +19,7 @@ from mimeo.providers.registrar.porkbun import (
 # ---------------------------------------------------------------------------
 # Shared retry tests (use PorkbunDNSProvider since it exercises _make_request)
 # ---------------------------------------------------------------------------
+
 
 class TestPorkbunRetry:
     """Tests for retry behaviour in _make_request."""
@@ -90,6 +91,7 @@ class TestPorkbunRetry:
 # PorkbunRegistrar tests
 # ---------------------------------------------------------------------------
 
+
 class TestPorkbunRegistrar:
     """Tests for PorkbunRegistrar class."""
 
@@ -117,9 +119,7 @@ class TestPorkbunRegistrar:
             assert registrar.api_key == "pk1_test"
 
     @patch("mimeo.providers.registrar.porkbun._lookup_nameservers")
-    def test_check_nameservers_ok(
-        self, mock_lookup: Mock, registrar: PorkbunRegistrar
-    ) -> None:
+    def test_check_nameservers_ok(self, mock_lookup: Mock, registrar: PorkbunRegistrar) -> None:
         """check_nameservers returns ok=True when NS matches Porkbun."""
         mock_lookup.return_value = sorted(PORKBUN_NAMESERVERS)
 
@@ -146,9 +146,7 @@ class TestPorkbunRegistrar:
         assert result.expected == sorted(PORKBUN_NAMESERVERS)
 
     @patch("mimeo.providers.registrar.porkbun._lookup_nameservers")
-    def test_check_nameservers_empty(
-        self, mock_lookup: Mock, registrar: PorkbunRegistrar
-    ) -> None:
+    def test_check_nameservers_empty(self, mock_lookup: Mock, registrar: PorkbunRegistrar) -> None:
         """check_nameservers returns ok=False when DNS lookup returns nothing."""
         mock_lookup.return_value = []
 
@@ -171,6 +169,7 @@ class TestPorkbunRegistrar:
 
         assert len(responses.calls) == 1
         import json
+
         payload = json.loads(responses.calls[0].request.body)
         assert payload["ns"] == PORKBUN_NAMESERVERS
 
@@ -196,8 +195,18 @@ class TestPorkbunRegistrar:
             json={
                 "status": "SUCCESS",
                 "domains": [
-                    {"domain": "example.com", "tld": "com", "expireDate": "2027-01-01", "autoRenew": "1"},
-                    {"domain": "example.net", "tld": "net", "expireDate": "2027-06-01", "autoRenew": "0"},
+                    {
+                        "domain": "example.com",
+                        "tld": "com",
+                        "expireDate": "2027-01-01",
+                        "autoRenew": "1",
+                    },
+                    {
+                        "domain": "example.net",
+                        "tld": "net",
+                        "expireDate": "2027-06-01",
+                        "autoRenew": "0",
+                    },
                 ],
             },
             status=200,
@@ -239,6 +248,7 @@ class TestPorkbunRegistrar:
 # PorkbunDNSProvider tests
 # ---------------------------------------------------------------------------
 
+
 class TestPorkbunDNSProvider:
     """Tests for PorkbunDNSProvider class."""
 
@@ -266,26 +276,6 @@ class TestPorkbunDNSProvider:
     def test_context_manager(self) -> None:
         with PorkbunDNSProvider(api_key="pk1_test", secret_key="sk1_test") as provider:
             assert provider.api_key == "pk1_test"
-
-    @patch("mimeo.providers.registrar.porkbun._lookup_nameservers")
-    def test_check_nameservers_ok(
-        self, mock_lookup: Mock, provider: PorkbunDNSProvider
-    ) -> None:
-        """check_nameservers returns ok=True when NS matches Porkbun."""
-        mock_lookup.return_value = sorted(PORKBUN_NAMESERVERS)
-
-        result = provider.check_nameservers("example.com")
-
-        assert result.ok is True
-        assert result.actual == sorted(PORKBUN_NAMESERVERS)
-
-    @patch("mimeo.providers.registrar.porkbun._lookup_nameservers")
-    def test_check_nameservers_mismatch(
-        self, mock_lookup: Mock, provider: PorkbunDNSProvider
-    ) -> None:
-        mock_lookup.return_value = ["ns1.other.com", "ns2.other.com"]
-        result = provider.check_nameservers("example.com")
-        assert result.ok is False
 
     @responses.activate
     def test_make_request_success(self, provider: PorkbunDNSProvider) -> None:
@@ -381,10 +371,9 @@ class TestPorkbunDNSProvider:
                 status=200,
             )
 
-        records = [
-            DNSRecord(type="A", name="", content=ip, ttl=600)
-            for ip in GITHUB_PAGES_IPS
-        ] + [DNSRecord(type="CNAME", name="www", content="testuser.github.io", ttl=600)]
+        records = [DNSRecord(type="A", name="", content=ip, ttl=600) for ip in GITHUB_PAGES_IPS] + [
+            DNSRecord(type="CNAME", name="www", content="testuser.github.io", ttl=600)
+        ]
         provider.configure_dns("example.com", records)
 
         # 1 retrieve + 1 delete + 5 creates = 7 total
@@ -546,9 +535,7 @@ class TestPorkbunDNSProvider:
         assert "Domain not found" in str(exc_info.value)
 
     @responses.activate
-    def test_configure_dns_apex_with_full_domain_name(
-        self, provider: PorkbunDNSProvider
-    ) -> None:
+    def test_configure_dns_apex_with_full_domain_name(self, provider: PorkbunDNSProvider) -> None:
         """Apex records are matched when API returns full domain name."""
         responses.add(
             responses.POST,
@@ -557,7 +544,12 @@ class TestPorkbunDNSProvider:
                 "status": "SUCCESS",
                 "records": [
                     {"id": "123", "type": "A", "name": "example.com", "content": "5.6.7.8"},
-                    {"id": "124", "type": "ALIAS", "name": "example.com", "content": "pixie.porkbun.com"},
+                    {
+                        "id": "124",
+                        "type": "ALIAS",
+                        "name": "example.com",
+                        "content": "pixie.porkbun.com",
+                    },
                 ],
             },
             status=200,
@@ -588,17 +580,25 @@ class TestPorkbunDNSProvider:
         assert len(responses.calls) == 4
 
     @responses.activate
-    def test_configure_dns_deletes_parking_records(
-        self, provider: PorkbunDNSProvider
-    ) -> None:
+    def test_configure_dns_deletes_parking_records(self, provider: PorkbunDNSProvider) -> None:
         responses.add(
             responses.POST,
             "https://api-ipv4.porkbun.com/api/json/v3/dns/retrieve/example.com",
             json={
                 "status": "SUCCESS",
                 "records": [
-                    {"id": "parking-1", "type": "ALIAS", "name": "example.com", "content": "pixie.porkbun.com"},
-                    {"id": "parking-2", "type": "CNAME", "name": "www.example.com", "content": "pixie.porkbun.com"},
+                    {
+                        "id": "parking-1",
+                        "type": "ALIAS",
+                        "name": "example.com",
+                        "content": "pixie.porkbun.com",
+                    },
+                    {
+                        "id": "parking-2",
+                        "type": "CNAME",
+                        "name": "www.example.com",
+                        "content": "pixie.porkbun.com",
+                    },
                 ],
             },
             status=200,
@@ -623,10 +623,9 @@ class TestPorkbunDNSProvider:
                 status=200,
             )
 
-        records = [
-            DNSRecord(type="A", name="", content=ip, ttl=600)
-            for ip in GITHUB_PAGES_IPS
-        ] + [DNSRecord(type="CNAME", name="www", content="testuser.github.io", ttl=600)]
+        records = [DNSRecord(type="A", name="", content=ip, ttl=600) for ip in GITHUB_PAGES_IPS] + [
+            DNSRecord(type="CNAME", name="www", content="testuser.github.io", ttl=600)
+        ]
         provider.configure_dns("example.com", records)
 
         # 1 retrieve + 2 deletes + 5 creates = 8 total
@@ -636,8 +635,7 @@ class TestPorkbunDNSProvider:
     def test_check_dns_drift_ok(self, provider: PorkbunDNSProvider) -> None:
         """check_dns_drift returns ok when all expected records are present."""
         expected = [
-            DNSRecord(type="A", name="", content=ip, ttl=600)
-            for ip in GITHUB_PAGES_IPS
+            DNSRecord(type="A", name="", content=ip, ttl=600) for ip in GITHUB_PAGES_IPS
         ] + [DNSRecord(type="CNAME", name="www", content="testuser.github.io", ttl=600)]
 
         responses.add(
@@ -648,8 +646,15 @@ class TestPorkbunDNSProvider:
                 "records": [
                     {"id": str(i), "type": "A", "name": "", "content": ip, "ttl": "600"}
                     for i, ip in enumerate(GITHUB_PAGES_IPS)
-                ] + [
-                    {"id": "10", "type": "CNAME", "name": "www", "content": "testuser.github.io", "ttl": "600"},
+                ]
+                + [
+                    {
+                        "id": "10",
+                        "type": "CNAME",
+                        "name": "www",
+                        "content": "testuser.github.io",
+                        "ttl": "600",
+                    },
                 ],
             },
             status=200,
@@ -662,8 +667,7 @@ class TestPorkbunDNSProvider:
     @responses.activate
     def test_check_dns_drift_missing(self, provider: PorkbunDNSProvider) -> None:
         expected = [
-            DNSRecord(type="A", name="", content=ip, ttl=600)
-            for ip in GITHUB_PAGES_IPS
+            DNSRecord(type="A", name="", content=ip, ttl=600) for ip in GITHUB_PAGES_IPS
         ] + [DNSRecord(type="CNAME", name="www", content="testuser.github.io", ttl=600)]
 
         responses.add(
@@ -672,7 +676,13 @@ class TestPorkbunDNSProvider:
             json={
                 "status": "SUCCESS",
                 "records": [
-                    {"id": "1", "type": "A", "name": "", "content": GITHUB_PAGES_IPS[0], "ttl": "600"},
+                    {
+                        "id": "1",
+                        "type": "A",
+                        "name": "",
+                        "content": GITHUB_PAGES_IPS[0],
+                        "ttl": "600",
+                    },
                 ],
             },
             status=200,
@@ -692,7 +702,13 @@ class TestPorkbunDNSProvider:
             json={
                 "status": "SUCCESS",
                 "records": [
-                    {"id": "1", "type": "A", "name": "", "content": GITHUB_PAGES_IPS[0], "ttl": "600"},
+                    {
+                        "id": "1",
+                        "type": "A",
+                        "name": "",
+                        "content": GITHUB_PAGES_IPS[0],
+                        "ttl": "600",
+                    },
                     {"id": "2", "type": "A", "name": "", "content": "1.2.3.4", "ttl": "600"},
                 ],
             },
@@ -714,7 +730,12 @@ class TestPorkbunDNSProvider:
             json={
                 "status": "SUCCESS",
                 "records": [
-                    {"id": "alias-123", "type": "ALIAS", "name": "example.com", "content": "uixie.porkbun.com"},
+                    {
+                        "id": "alias-123",
+                        "type": "ALIAS",
+                        "name": "example.com",
+                        "content": "uixie.porkbun.com",
+                    },
                 ],
             },
             status=200,
@@ -742,6 +763,7 @@ class TestPorkbunDNSProvider:
 # ---------------------------------------------------------------------------
 # PORKBUN_NAMESERVERS constant
 # ---------------------------------------------------------------------------
+
 
 def test_porkbun_nameservers_constant() -> None:
     """PORKBUN_NAMESERVERS contains the four expected city names."""

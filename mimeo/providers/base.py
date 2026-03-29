@@ -79,18 +79,6 @@ class DNSProvider(ABC):
         """
         pass
 
-    @abstractmethod
-    def check_nameservers(self, domain: str) -> NameserverCheckResult:
-        """Check whether the domain's nameservers point to this provider.
-
-        Args:
-            domain: Domain name to check
-
-        Returns:
-            NameserverCheckResult with ok flag and actual/expected nameservers
-        """
-        pass
-
 
 @dataclass
 class DeployResult:
@@ -129,5 +117,17 @@ class Host(ABC):
 
         Returns:
             List of DNSRecord objects that must be configured
+        """
+        pass
+
+    @abstractmethod
+    def enable_https_enforcement(self, repo_full_name: str) -> bool:
+        """Enable HTTPS enforcement for a site.
+
+        Args:
+            repo_full_name: Full repository name (owner/repo)
+
+        Returns:
+            True if HTTPS enforcement was enabled, False if certificate not ready
         """
         pass

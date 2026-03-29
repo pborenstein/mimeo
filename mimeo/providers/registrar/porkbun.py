@@ -1,7 +1,7 @@
 """Porkbun registrar and DNS provider implementations."""
 
 import time
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 import dns.resolver
 
@@ -11,14 +11,6 @@ from mimeo.providers.base import DNSProvider, Registrar
 from mimeo.utils.http import HTTPClient
 from mimeo.utils.retry import retry_with_jitter
 
-
-# GitHub Pages IP addresses for A records
-GITHUB_PAGES_IPS = [
-    "185.199.108.153",
-    "185.199.109.153",
-    "185.199.110.153",
-    "185.199.111.153",
-]
 
 # Porkbun authoritative nameservers
 PORKBUN_NAMESERVERS = [
@@ -69,9 +61,7 @@ class _PorkbunClient:
     def _make_request(self, endpoint: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         full_payload = {**self._auth_payload(), **payload}
         try:
-            response = retry_with_jitter(
-                lambda: self.client.post(endpoint, json=full_payload)
-            )
+            response = retry_with_jitter(lambda: self.client.post(endpoint, json=full_payload))
             if response.get("status") != "SUCCESS":
                 error_msg = response.get("message", "Unknown error")
                 raise RegistrarError(f"Porkbun API error: {error_msg}")
@@ -132,6 +122,21 @@ class PorkbunRegistrar(_PorkbunClient, Registrar):
             {"ns": PORKBUN_NAMESERVERS},
         )
 
+    def domain_exists(self, domain: str) -> bool:
+        """Check if a domain is registered in this Porkbun account.
+
+        Args:
+            domain: Domain name to check
+
+        Returns:
+            True if the domain exists in the account
+        """
+        try:
+            self._make_request(f"/domain/getNs/{domain}", {})
+            return True
+        except RegistrarError:
+            return False
+
     def list_domains(self) -> List[Dict[str, Any]]:
         """Return all domains in the Porkbun account.
 
@@ -170,20 +175,6 @@ class PorkbunDNSProvider(_PorkbunClient, DNSProvider):
             RegistrarError: If credentials are invalid
         """
         _PorkbunClient.__init__(self, api_key, secret_key)
-
-    def check_nameservers(self, domain: str) -> NameserverCheckResult:
-        """Check whether the domain's NS records point to Porkbun.
-
-        Args:
-            domain: Domain name to check
-
-        Returns:
-            NameserverCheckResult with ok flag and actual/expected nameservers
-        """
-        actual = _lookup_nameservers(domain)
-        expected = sorted(PORKBUN_NAMESERVERS)
-        ok = actual == expected
-        return NameserverCheckResult(ok=ok, actual=actual, expected=expected)
 
     def _get_domain_records(self, domain: str) -> List[Dict[str, Any]]:
         """Retrieve all DNS records for a domain."""
@@ -247,8 +238,7 @@ class PorkbunDNSProvider(_PorkbunClient, DNSProvider):
             existing_records = self._get_domain_records(domain)
 
             managed_records = {
-                (r.type, self._normalize_record_name(r.name, domain))
-                for r in records
+                (r.type, self._normalize_record_name(r.name, domain)) for r in records
             }
 
             for existing in existing_records:
@@ -281,6 +271,7 @@ class PorkbunDNSProvider(_PorkbunClient, DNSProvider):
         records: List[DNSRecord],
         max_attempts: int = 10,
         delay: int = 5,
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> bool:
         """Verify DNS records have propagated.
 
@@ -337,6 +328,8 @@ class PorkbunDNSProvider(_PorkbunClient, DNSProvider):
                     return True
 
                 if attempt < max_attempts - 1:
+                    if progress_callback is not None:
+                        progress_callback(attempt + 1, max_attempts)
                     time.sleep(delay)
 
             except Exception as e:
@@ -374,8 +367,7 @@ class PorkbunDNSProvider(_PorkbunClient, DNSProvider):
         }
 
         missing = [
-            {"type": t, "name": n or "@", "content": c}
-            for t, n, c in expected_set - live_set
+            {"type": t, "name": n or "@", "content": c} for t, n, c in expected_set - live_set
         ]
         extra = [
             {"type": t, "name": n or "@", "content": c}

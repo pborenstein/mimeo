@@ -7,14 +7,20 @@ from typing import Any, Dict
 from mimeo.exceptions import HostError
 from mimeo.models import DNSRecord
 from mimeo.providers.base import DeployResult, Host
-from mimeo.providers.registrar.porkbun import GITHUB_PAGES_IPS
 from mimeo.utils.retry import retry_with_jitter
 
 TEMPLATE_ORG = "tepiton"
 DEFAULT_TEMPLATE = "mimeo.lol"
 
+GITHUB_PAGES_IPS = [
+    "185.199.108.153",
+    "185.199.109.153",
+    "185.199.110.153",
+    "185.199.111.153",
+]
 
-def _health_status(health: Dict[str, Any]) -> str:
+
+def health_status(health: Dict[str, Any]) -> str:
     """Derive a human-readable health status from a get_pages_health() result."""
     if not health["pages_configured"]:
         return "pages_error"
@@ -69,9 +75,7 @@ class GitHubHost(Host):
                 check=False,
             )
             if result.returncode != 0:
-                raise HostError(
-                    "GitHub CLI (gh) is not authenticated. Run 'gh auth login' first."
-                )
+                raise HostError("GitHub CLI (gh) is not authenticated. Run 'gh auth login' first.")
         except FileNotFoundError:
             raise HostError(
                 "GitHub CLI (gh) is not installed. Install it from https://cli.github.com"
@@ -236,7 +240,9 @@ class GitHubHost(Host):
         )
         full_name = response.get("full_name")
         if not full_name:
-            raise HostError(f"Failed to create repository from template {TEMPLATE_ORG}/{template_repo}")
+            raise HostError(
+                f"Failed to create repository from template {TEMPLATE_ORG}/{template_repo}"
+            )
 
         self._set_repository_topics(str(full_name), ["mimeo", "landing-page", "github-pages"])
 
@@ -320,7 +326,7 @@ class GitHubHost(Host):
             data=data,
         )
 
-    def _enable_https_enforcement(self, repo_full_name: str) -> bool:
+    def enable_https_enforcement(self, repo_full_name: str) -> bool:
         """Enable HTTPS enforcement for GitHub Pages.
 
         This can only be enabled after GitHub provisions an SSL certificate
@@ -353,7 +359,9 @@ class GitHubHost(Host):
             # Other errors should be raised
             raise
 
-    def deploy_site(self, domain: str, template: str = DEFAULT_TEMPLATE, force: bool = False) -> DeployResult:
+    def deploy_site(
+        self, domain: str, template: str = DEFAULT_TEMPLATE, force: bool = False
+    ) -> DeployResult:
         """Deploy a site to GitHub Pages using a template repository.
 
         This will:
@@ -387,7 +395,7 @@ class GitHubHost(Host):
 
             self._enable_github_pages(repo_full_name)
             self._set_custom_domain(repo_full_name, domain)
-            https_enabled = self._enable_https_enforcement(repo_full_name)
+            https_enabled = self.enable_https_enforcement(repo_full_name)
 
             return DeployResult(
                 url=f"https://{domain}",
@@ -440,15 +448,22 @@ class GitHubHost(Host):
 
         # Use GitHub search API to find repos with mimeo topic
         try:
-            result = self._run_gh_command([
-                "search", "repos",
-                f"user:{owner}",
-                "topic:mimeo",
-                "--limit", "1000",  # Maximum allowed by GitHub search API
-                "--json", "name,url,homepage,updatedAt",
-                "--jq", ".",
-            ])
+            result = self._run_gh_command(
+                [
+                    "search",
+                    "repos",
+                    f"user:{owner}",
+                    "topic:mimeo",
+                    "--limit",
+                    "1000",  # Maximum allowed by GitHub search API
+                    "--json",
+                    "name,url,homepage,updatedAt",
+                    "--jq",
+                    ".",
+                ]
+            )
             import json
+
             repos: list[Dict[str, Any]] = json.loads(result)
             return repos
         except Exception as e:
@@ -469,9 +484,7 @@ class GitHubHost(Host):
         for ip in GITHUB_PAGES_IPS:
             records.append(DNSRecord(type="A", name="", content=ip, ttl=600))
 
-        records.append(
-            DNSRecord(type="CNAME", name="www", content=f"{owner}.github.io", ttl=600)
-        )
+        records.append(DNSRecord(type="CNAME", name="www", content=f"{owner}.github.io", ttl=600))
 
         return records
 

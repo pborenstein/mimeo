@@ -43,3 +43,23 @@ on an existing domain silently skipped the template. DNS also ran unnecessarily.
 warns when template not applied, suggests `--force`.
 
 **Files**: `mimeo/providers/host/github.py`, `mimeo/cli.py`, `mimeo/providers/base.py`
+
+---
+
+## Entry 29: Documentation audit and alignment (2026-03-28)
+
+**What**: Audited all user-facing documentation (README, ARCHITECTURE, TROUBLESHOOTING,
+docs/README, LIST_COMMAND) and fixed every reference that was stale after the CLI
+redesign and code review.
+
+**Why**: After Phase 7 CLI redesign and 25 code review fixes, docs still described the
+old command structure (`list --fix`, `list --dns-check`, `content.py`), referenced
+removed classes (`Domain`, `NSMismatchError`), and had wrong test counts and exit codes.
+
+**How**: README.md updated with new command sections (dns check/repair, template apply,
+fix https), removed stale flags, corrected architecture diagram. ARCHITECTURE.md fully
+rewritten (532 lines) to reflect cli/ package, template repo API, updated ABC signatures.
+TROUBLESHOOTING.md updated to point users at `mimeo fix https` and `mimeo dns repair`
+instead of removed flags.
+
+**Files**: `README.md`, `docs/ARCHITECTURE.md`, `docs/TROUBLESHOOTING.md`, `docs/README.md`

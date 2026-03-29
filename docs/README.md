@@ -11,7 +11,7 @@ Navigation index for all Mimeo documentation files.
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Operators | Failure diagnosis and remediation by category |
 | [LIST_COMMAND.md](LIST_COMMAND.md) | Operators | `mimeo list` format reference and scripting examples |
 | [IMPLEMENTATION.md](IMPLEMENTATION.md) | Contributors | Phase tracker, current tasks, completed work |
-| [DECISIONS.md](DECISIONS.md) | Contributors | Architectural decision registry (DEC-001 through DEC-014) |
+| [DECISIONS.md](DECISIONS.md) | Contributors | Architectural decision registry (DEC-001 through DEC-020) |
 | [CONTEXT.md](CONTEXT.md) | Contributors | Current session state, active tasks, blockers |
 
 ## Contributor Entry Points
@@ -41,7 +41,7 @@ Navigation index for all Mimeo documentation files.
 
 ## Phase Status
 
-Current phase: **Phase 6 — Hardening**
+Current phase: **Phase 7 — CLI Redesign**
 
 | Phase | Status |
 |:------|:-------|
@@ -51,6 +51,7 @@ Current phase: **Phase 6 — Hardening**
 | Phase 3: GitHub Pages Integration | Complete |
 | Phase 4: Content Generation | Complete |
 | Phase 5: CLI Integration | Complete |
-| Phase 6: Hardening | In progress |
+| Phase 6: Hardening | Complete |
+| Phase 7: CLI Redesign | In progress |
 
 See [IMPLEMENTATION.md](IMPLEMENTATION.md) for detailed task breakdown.

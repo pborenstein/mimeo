@@ -29,11 +29,10 @@ mimeo create example.com
 
 `mimeo create example.com` orchestrates the full workflow:
 
-1. Generates a minimal landing page (dark theme, domain name centered)
-2. Creates a GitHub repository for the domain
-3. Pushes content with a GitHub Actions Pages workflow
-4. Configures DNS via Porkbun API (4 A records + CNAME)
-5. Enables HTTPS enforcement when the cert is ready
+1. Creates a GitHub repository from a template (default: mimeo.lol)
+2. Enables GitHub Pages with a custom domain
+3. Configures DNS via Porkbun API (4 A records + CNAME)
+4. Enables HTTPS enforcement when the cert is ready
 
 Idempotent: safe to re-run against an existing deployment.
 
@@ -142,9 +141,6 @@ mimeo create example.com --stop-on-error
 
 # Run sequentially instead of concurrently
 mimeo create example.com another.lol --sequential
-
-# Reset nameservers to Porkbun and configure DNS even if NS points elsewhere
-mimeo dns repair example.com --reset-nameservers
 ```
 
 Multiple domains are processed concurrently (up to 5 workers). Use `--sequential` for verbose per-step output or when debugging.
@@ -165,18 +161,50 @@ mimeo list --format csv
 
 # Include GitHub Pages health status
 mimeo list --health
-
-# Fix HTTPS enforcement for sites with approved certs
-mimeo list --fix
-
-# Check DNS records for drift against expected configuration
-mimeo list --dns-check
 ```
 
 Health status values: `healthy`, `fixable`, `cert_pending`, `no_cert`, `pages_error`.
 Output is sorted by severity (problems first).
 
 See [docs/LIST_COMMAND.md](./docs/LIST_COMMAND.md) for detailed format reference and scripting examples.
+
+### `mimeo dns check <domain> [<domain> ...]`
+
+Check DNS records and nameserver configuration for drift.
+
+```bash
+mimeo dns check example.com
+mimeo dns check site1.com site2.com --format json
+```
+
+### `mimeo dns repair <domain> [<domain> ...]`
+
+Re-apply expected DNS records.
+
+```bash
+mimeo dns repair example.com
+mimeo dns repair site1.com site2.com --reset-nameservers
+mimeo dns repair example.com --dry-run
+```
+
+### `mimeo template apply <domain> [<domain> ...]`
+
+Replace repository content with a different template.
+
+```bash
+mimeo template apply example.com --template eleventy-folio
+mimeo template apply example.com --dry-run
+```
+
+### `mimeo fix https [DOMAIN]...`
+
+Enable HTTPS enforcement on sites with approved SSL certificates.
+
+```bash
+mimeo fix https
+mimeo fix https example.com
+mimeo fix https --dry-run
+```
 
 ### `mimeo registrar list`
 
@@ -214,11 +242,8 @@ mimeo registrar list --format csv --with-dns > inventory.csv
 ```
 mimeo create example.com
         |
-        +--> Generate content (tempdir)
-        |      index.html, static.yml, README.md
-        |
         +--> GitHub Pages (gh CLI)
-        |      create repo, push content
+        |      create repo from template
         |      enable Pages, set custom domain
         |      attempt HTTPS enforcement
         |
@@ -236,14 +261,13 @@ The tool uses provider abstractions (`Registrar`, `Host` ABCs) that allow adding
 uv sync --frozen && uv run pytest && uv run ruff check mimeo && uv run mypy mimeo
 ```
 
-258 tests. Linting and type checking are expected to be clean.
+233 tests. Linting and type checking are expected to be clean.
 
 ## Project structure
 
 ```
 mimeo/
 ├── mimeo/
-│   ├── cli.py                          # CLI entry point (Click)
 │   ├── cli/
 │   │   ├── __init__.py                 # Command group registration
 │   │   ├── _processing.py              # Shared concurrent processing + output helpers
@@ -256,7 +280,7 @@ mimeo/
 │   │   └── template.py                 # Template apply command
 │   ├── config.py                       # Config loading (~/.config/mimeo/config.toml)
 │   ├── exceptions.py                   # Exception hierarchy + exit codes
-│   ├── models.py                       # Domain, DNSRecord, NameserverCheckResult
+│   ├── models.py                       # DNSRecord, NameserverCheckResult
 │   ├── providers/
 │   │   ├── base.py                     # Registrar / DNSProvider / Host ABCs
 │   │   ├── registrar/porkbun.py        # Porkbun registrar + DNS provider

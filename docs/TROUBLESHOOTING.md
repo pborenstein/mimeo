@@ -253,7 +253,19 @@ uv run scripts/smoke_test_porkbun.py
 - `create` completes with warning: `DNS records created but not yet propagated`
 - `dns_pending: True` in summary
 
-This is normal behavior, not an error. The records were created successfully. DNS propagation takes time that Mimeo does not wait for. Re-running `create` after propagation will verify the records exist and skip recreation.
+This is normal behavior, not an error. The records were created successfully. DNS propagation takes time that Mimeo does not wait for. To repair DNS records without reprovisioning the entire site:
+
+```bash
+mimeo dns repair example.com
+```
+
+For nameserver mismatches, reset nameservers as part of the repair:
+
+```bash
+mimeo dns repair example.com --reset-nameservers
+```
+
+For full reprovisioning (repository, Pages, and DNS), re-run `mimeo create`.
 
 ### Conflicting DNS records
 
@@ -271,7 +283,7 @@ This is normal behavior, not an error. The records were created successfully. DN
    ```
 
 2. Remove conflicting records via the Porkbun web UI
-3. Re-run `mimeo create`
+3. Run `mimeo dns repair example.com` to fix DNS records without reprovisioning
 
 ---
 
@@ -298,21 +310,21 @@ This is normal behavior, not an error. The records were created successfully. DN
 
 3. Once `fixable`, enable HTTPS enforcement:
    ```bash
-   mimeo list --fix
+   mimeo fix https
    ```
 
-### "fixable" status but --fix fails
+### "fixable" status but fix fails
 
 **Symptoms:**
 
 - `mimeo list --health` shows `fixable`
-- `mimeo list --fix` reports an error for the site
+- `mimeo fix https` reports an error for the site
 
 **Cause:** The certificate transitioned states between the health check and the fix attempt.
 
 **Solutions:**
 
-1. Re-run `mimeo list --fix` — the operation is safe to retry
+1. Re-run `mimeo fix https` — the operation is safe to retry
 2. If it persists, check the Pages configuration directly:
    ```bash
    gh api repos/username/example.com/pages --jq '{https_enforced, https_certificate}'
@@ -386,6 +398,8 @@ The `create` command is safe to re-run at any point. It checks for existing stat
 - Existing repository: skips creation and push
 - Existing Pages configuration: skips Pages setup
 - Existing DNS records: deletes matching records and recreates them
+
+For DNS-only issues, use `mimeo dns repair example.com` to fix records without touching the repository or Pages configuration. For nameserver mismatches, add `--reset-nameservers`.
 
 The only non-idempotent behavior is the content push — it is skipped if the repository already exists. To update site content on an existing repository, push directly to the repository.
 

@@ -1,5 +1,25 @@
 # Phase 7: CLI Redesign Chronicles
 
+## Entry 30: Race condition fix — wait for repo after generate (2026-04-03)
+
+**What**: Fixed a race condition where `mimeo create` failed with 404 on topics,
+pages, and custom domain calls immediately after `repos/.../generate` returned.
+
+**Why**: GitHub's template-generate API returns before the repo is actually
+accessible. Every subsequent API call (topics, pages, domain) hit a repo that
+didn't exist yet. Diagnosed via a bug report from a real `mimeo create` run on
+`tantamount.rodeo` — improved error messages (endpoint included) made the
+failing call visible for the first time.
+
+**How**: Added `_wait_for_repo()` to `GitHubHost` — polls `repos/{owner}/{name}`
+up to 30s with 2s intervals before proceeding. Also improved `_gh_api` to
+include `METHOD endpoint` in error messages so future failures are identifiable.
+
+**Files**: `mimeo/providers/host/github.py`
+
+---
+
+
 ## Entry 28: Comprehensive code review -- 25 findings fixed (2026-03-28)
 
 **What**: Performed a critical user-perspective code review, documented 25 findings

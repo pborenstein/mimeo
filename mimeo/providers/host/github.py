@@ -2,6 +2,7 @@
 
 import json
 import subprocess
+import time
 from typing import Any, Dict
 
 from mimeo.exceptions import HostError
@@ -150,7 +151,10 @@ class GitHubHost(Host):
             input_json = json.dumps(data)
             args.extend(["--input", "-"])
 
-        output = self._run_gh_command(args, input_data=input_json)
+        try:
+            output = self._run_gh_command(args, input_data=input_json)
+        except HostError as e:
+            raise HostError(f"{method} {endpoint}: {e}") from e
 
         if not output:
             return {}
@@ -244,6 +248,7 @@ class GitHubHost(Host):
                 f"Failed to create repository from template {TEMPLATE_ORG}/{template_repo}"
             )
 
+        self._wait_for_repo(str(full_name))
         self._set_repository_topics(str(full_name), ["mimeo", "landing-page", "github-pages"])
 
         return str(full_name), True, repo_existed
@@ -267,6 +272,25 @@ class GitHubHost(Host):
             method="PUT",
             data=data,
         )
+
+    def _wait_for_repo(self, repo_full_name: str, timeout: int = 30) -> None:
+        """Poll until the repository is accessible, up to timeout seconds.
+
+        Args:
+            repo_full_name: Full repository name (owner/repo)
+            timeout: Maximum seconds to wait
+
+        Raises:
+            HostError: If the repository is not accessible within timeout
+        """
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                self._gh_api(f"repos/{repo_full_name}")
+                return
+            except HostError:
+                time.sleep(2)
+        raise HostError(f"Repository {repo_full_name} not accessible after {timeout}s")
 
     def _enable_github_pages(
         self,

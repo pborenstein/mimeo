@@ -1,14 +1,14 @@
 ---
 phase: 7
 phase_name: CLI Redesign
-updated: 2026-03-28
-last_commit: 908ffa0
+updated: 2026-04-03
+last_commit: 90c5c7f
 ---
 
 ## Current Focus
 
-All documentation (README, ARCHITECTURE, TROUBLESHOOTING, docs/README) aligned
-with current codebase after CLI redesign and code review fixes.
+Fixed race condition in `mimeo create`: GitHub template-generate API returns
+before repo is accessible, causing 404s on all subsequent calls.
 
 ## Active Tasks
 
@@ -21,10 +21,10 @@ None.
 
 ## Context
 
+- `_wait_for_repo()` added to `GitHubHost` — polls up to 30s after generate before proceeding
+- `_gh_api` now includes `METHOD endpoint` in error messages for easier diagnosis
+- Race condition surfaced via improved error messages added earlier this session
 - 233 tests passing; mypy and ruff clean
-- All user-facing docs audited and updated to match code
-- Key stale references fixed: --fix/--dns-check removed from list, content.py references removed, NSMismatchError removed, exit codes updated, Domain model removed
-- ARCHITECTURE.md fully rewritten to reflect cli/ package structure and new commands
 
 ## Next Session
 

@@ -35,14 +35,19 @@ front-door verbs than it started with. See DEC-021.
 
 **Tasks**:
 
-- [ ] Stage 1: Shared domain-operation engine (debt paydown, no behavior change)
-  - [ ] Extend `_processing.py` into one fan-out engine: run an operation
-        across domains (thread pool or sequential), collect partial results
-        with `error`/`error_category` per domain, render text/json/csv,
-        exit by failure taxonomy
-  - [ ] Migrate `registrar list`, `dns check`, `dns show`, `fix https`,
-        and `list` onto it (each currently hand-rolls some or all of this)
-  - [ ] Measure: `cli/` is ~1,850 lines today; expect a meaningful shrink
+- [x] Stage 1: Shared domain-operation engine (debt paydown, no behavior change)
+  - [x] Extend `_processing.py` into one fan-out engine: `map_items` (ordered
+        partial results, exceptions become error rows), `render_results`
+        (text/json/csv dispatch), `exit_on_errors` (partial -> EXIT_PARTIAL,
+        total -> category code)
+  - [x] Migrate `registrar list`, `dns check`, `dns show`, `fix https`,
+        and `list` onto it (four hand-rolled thread pools removed; three of
+        them crashed entirely on one bad future.result())
+  - [x] Measure: command files shrank ~65 lines but the engine added ~110,
+        so cli/ net +51 lines; the payoff is structural (one pool, one
+        dispatch) and compounds when status/sync build on it
+  - [ ] Follow-up: fold `process_domains_concurrent` (create, dns repair,
+        template apply) into `map_items` — the remaining duplicate pool
 - [ ] Stage 2: `mimeo status [DOMAINS...]` — the cross-provider join
   - [ ] One table joining Porkbun domains x GitHub repos x DNS drift x
         Pages health

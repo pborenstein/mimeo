@@ -1,18 +1,21 @@
 """Registrar commands for managing domain registrar settings."""
 
-import csv
-import json
 import sys
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from threading import Lock
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import click
 
-from ..exceptions import EXIT_CONFIG, EXIT_PARTIAL, ConfigurationError
+from ..exceptions import EXIT_CONFIG, ConfigurationError
 from ..providers.registrar.porkbun import PorkbunDNSProvider, PorkbunRegistrar
-from ._processing import _categorize_error, _emit
+from ._processing import (
+    _categorize_error,
+    _emit,
+    exit_on_errors,
+    map_items,
+    render_results,
+)
 
 
 @click.group()
@@ -65,48 +68,85 @@ def registrar_list(config: Path | None, output_format: str, with_dns: bool, work
         click.secho(f"[config] {e}", fg="red", err=True)
         sys.exit(EXIT_CONFIG)
 
+    csv_fields = ["domain", "tld", "expires", "auto_renew", "ns_ok", "nameservers"]
+    if with_dns:
+        csv_fields.append("dns_records")
+    csv_fields.append("error")
+
+    def _csv_rows(row: Dict[str, Any]) -> List[Dict[str, Any]]:
+        flat = dict(row)
+        flat["nameservers"] = "|".join(row.get("nameservers") or [])
+        if with_dns:
+            dns_parts = [
+                f"{r.get('type','')}:{r.get('name','')}={r.get('content','')}"
+                for r in row.get("dns_records") or []
+            ]
+            flat["dns_records"] = "|".join(dns_parts)
+        return [flat]
+
+    def _text(ordered: List[Dict[str, Any]]) -> None:
+        if not ordered:
+            click.echo("No domains found in Porkbun account.")
+            return
+
+        domain_w = max(len(r["domain"]) for r in ordered)
+        expires_w = max(len(r["expires"]) for r in ordered)
+        ns_w = 60
+
+        click.echo()
+        header = f"  {'DOMAIN':<{domain_w}}  {'EXPIRES':<{expires_w}}  {'NS_OK':<5}  {'NAMESERVERS':<{ns_w}}"
+        click.secho(header, bold=True)
+        click.secho("  " + "-" * (len(header) - 2), fg="white", dim=True)
+
+        for row in ordered:
+            line = f"  {row['domain']:<{domain_w}}  {row['expires']:<{expires_w}}  "
+            if row.get("error"):
+                click.echo(line, nl=False)
+                click.secho(f"{'error':<5}", fg="red", nl=False)
+                click.secho(f"  {row['error']}", fg="red")
+                continue
+            ns_ok = row["ns_ok"]
+            ns_label = "yes" if ns_ok else "no"
+            ns_color = "green" if ns_ok else "red"
+            ns_str = ", ".join(row.get("nameservers") or [])
+            if len(ns_str) > ns_w:
+                ns_str = ns_str[:ns_w - 3] + "..."
+            click.echo(line, nl=False)
+            click.secho(f"{ns_label:<5}", fg=ns_color, nl=False)
+            click.echo(f"  {ns_str}")
+
+        click.echo()
+
     try:
         with PorkbunRegistrar(cfg.porkbun_api_key, cfg.porkbun_secret) as reg:
             raw_domains = reg.list_domains()
 
         if not raw_domains:
-            if output_format == "json":
-                click.echo("[]")
-            elif output_format == "csv":
-                fieldnames = ["domain", "tld", "expires", "auto_renew", "ns_ok", "nameservers"]
-                if with_dns:
-                    fieldnames.append("dns_records")
-                fieldnames.append("error")
-                writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
-                writer.writeheader()
-            else:
-                click.echo("No domains found in Porkbun account.")
+            render_results([], output_format, csv_fields=csv_fields, text=_text)
             return
 
         total = len(raw_domains)
-        indexed = [(i, d) for i, d in enumerate(raw_domains, 1)]
-        enriched: Dict[int, Dict[str, Any]] = {}
-
         console_lock = Lock()
+
+        def _base_row(domain_info: Dict[str, Any]) -> Dict[str, Any]:
+            return {
+                "domain": domain_info.get("domain", ""),
+                "tld": domain_info.get("tld", ""),
+                "expires": domain_info.get("expireDate", ""),
+                "auto_renew": domain_info.get("autoRenew") in ("1", 1, True),
+                "nameservers": [],
+                "ns_ok": False,
+                "dns_records": [],
+                "error": None,
+            }
 
         with PorkbunRegistrar(cfg.porkbun_api_key, cfg.porkbun_secret) as reg2, \
                 PorkbunDNSProvider(cfg.porkbun_api_key, cfg.porkbun_secret) as dns_prov:
+            progress = {"done": 0}
 
-            def _enrich(idx: int, domain_info: Dict[str, Any]) -> Dict[str, Any]:
-                domain_name = domain_info.get("domain", "")
-                auto_renew_raw = domain_info.get("autoRenew")
-                auto_renew = auto_renew_raw in ("1", 1, True)
-
-                result: Dict[str, Any] = {
-                    "domain": domain_name,
-                    "tld": domain_info.get("tld", ""),
-                    "expires": domain_info.get("expireDate", ""),
-                    "auto_renew": auto_renew,
-                    "nameservers": [],
-                    "ns_ok": False,
-                    "dns_records": [],
-                    "error": None,
-                }
+            def _enrich(domain_info: Dict[str, Any]) -> Dict[str, Any]:
+                result = _base_row(domain_info)
+                domain_name = result["domain"]
 
                 try:
                     ns_result = reg2.check_nameservers(domain_name)
@@ -121,6 +161,8 @@ def registrar_list(config: Path | None, output_format: str, with_dns: bool, work
                     result["error_category"] = category
 
                 with console_lock:
+                    progress["done"] += 1
+                    idx = progress["done"]
                     if result["error"]:
                         _emit("error", f"failed {domain_name} [{idx}/{total}]: {result['error']}")
                     else:
@@ -128,102 +170,20 @@ def registrar_list(config: Path | None, output_format: str, with_dns: bool, work
 
                 return result
 
-            with ThreadPoolExecutor(max_workers=min(total, workers)) as executor:
-                futures = {
-                    executor.submit(_enrich, i, info): i
-                    for i, info in indexed
-                }
-                for future in as_completed(futures):
-                    i = futures[future]
-                    try:
-                        enriched[i] = future.result()
-                    except Exception as exc:
-                        _, category = _categorize_error(exc)
-                        info = indexed[i - 1][1]
-                        enriched[i] = {
-                            "domain": info.get("domain", ""),
-                            "tld": info.get("tld", ""),
-                            "expires": info.get("expireDate", ""),
-                            "auto_renew": info.get("autoRenew") in ("1", 1, True),
-                            "nameservers": [],
-                            "ns_ok": False,
-                            "dns_records": [],
-                            "error": str(exc),
-                            "error_category": category,
-                        }
+            def _on_error(domain_info: Dict[str, Any], exc: BaseException) -> Dict[str, Any]:
+                _, category = _categorize_error(exc)
+                result = _base_row(domain_info)
+                result["error"] = str(exc)
+                result["error_category"] = category
+                return result
 
-        ordered = sorted(enriched.values(), key=lambda r: r["domain"])
-        failed = [r for r in ordered if r.get("error")]
+            results = map_items(raw_domains, _enrich, workers=workers, on_error=_on_error)
 
-        if output_format == "json":
-            click.echo(json.dumps(ordered, indent=2))
-
-        elif output_format == "csv":
-            fieldnames = ["domain", "tld", "expires", "auto_renew", "ns_ok", "nameservers"]
-            if with_dns:
-                fieldnames.append("dns_records")
-            fieldnames.append("error")
-
-            writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames, extrasaction="ignore")
-            writer.writeheader()
-            for row in ordered:
-                flat = dict(row)
-                flat["nameservers"] = "|".join(row.get("nameservers") or [])
-                if with_dns:
-                    dns_parts = [
-                        f"{r.get('type','')}:{r.get('name','')}={r.get('content','')}"
-                        for r in row.get("dns_records") or []
-                    ]
-                    flat["dns_records"] = "|".join(dns_parts)
-                writer.writerow(flat)
-
-        else:
-            if not ordered:
-                click.echo("No domains found.")
-                return
-
-            domain_w = max(len(r["domain"]) for r in ordered)
-            expires_w = max(len(r["expires"]) for r in ordered)
-            ns_w = 60
-
-            click.echo()
-            header = f"  {'DOMAIN':<{domain_w}}  {'EXPIRES':<{expires_w}}  {'NS_OK':<5}  {'NAMESERVERS':<{ns_w}}"
-            click.secho(header, bold=True)
-            click.secho("  " + "-" * (len(header) - 2), fg="white", dim=True)
-
-            for row in ordered:
-                if row.get("error"):
-                    line = f"  {row['domain']:<{domain_w}}  {row['expires']:<{expires_w}}  "
-                    click.echo(line, nl=False)
-                    click.secho(f"{'error':<5}", fg="red", nl=False)
-                    click.secho(f"  {row['error']}", fg="red")
-                    continue
-                ns_ok = row["ns_ok"]
-                ns_label = "yes" if ns_ok else "no"
-                ns_color = "green" if ns_ok else "red"
-                ns_str = ", ".join(row.get("nameservers") or [])
-                if len(ns_str) > ns_w:
-                    ns_str = ns_str[:ns_w - 3] + "..."
-                line = f"  {row['domain']:<{domain_w}}  {row['expires']:<{expires_w}}  "
-                click.echo(line, nl=False)
-                click.secho(f"{ns_label:<5}", fg=ns_color, nl=False)
-                click.echo(f"  {ns_str}")
-
-            click.echo()
-
-        if failed:
-            for r in failed:
-                click.secho(
-                    f"[{r.get('error_category', 'provider')}] {r['domain']}: {r['error']}",
-                    fg="red",
-                    err=True,
-                )
-            click.secho(
-                f"warning: {len(failed)}/{total} domains failed to enrich; results are partial",
-                fg="yellow",
-                err=True,
-            )
-            sys.exit(EXIT_PARTIAL)
+        ordered = sorted(results, key=lambda r: r["domain"])
+        render_results(
+            ordered, output_format, csv_fields=csv_fields, csv_rows=_csv_rows, text=_text
+        )
+        exit_on_errors(ordered)
 
     except Exception as e:
         exit_code, category = _categorize_error(e)

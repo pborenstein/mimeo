@@ -1784,7 +1784,7 @@ class TestDnsCommands:
     ) -> None:
         """dns show keeps results for good domains when one fails."""
         from mimeo.cli.dns import show
-        from mimeo.exceptions import EXIT_TRANSIENT, RegistrarError
+        from mimeo.exceptions import EXIT_PARTIAL, RegistrarError
 
         mock_config_load.return_value = mock_config
         mock_dns_provider = self._mock_dns_provider(mock_dns_provider_class)
@@ -1795,7 +1795,7 @@ class TestDnsCommands:
 
         result = runner.invoke(show, ["good.com", "bad.com", "--format", "json"])
 
-        assert result.exit_code == EXIT_TRANSIENT
+        assert result.exit_code == EXIT_PARTIAL
         data = json.loads(result.stdout)
         assert len(data) == 2
         assert data[0]["domain"] == "good.com"

@@ -1,12 +1,13 @@
 """Shared concurrent domain processing and output helpers."""
 
+import csv
 import json
 import re
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from threading import Lock
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, Iterable, List, Sequence, TypeVar
 
 import click
 
@@ -253,23 +254,133 @@ def process_domains_concurrent(
     return results
 
 
+_CATEGORY_TO_CODE = {
+    "config": EXIT_CONFIG,
+    "auth": EXIT_AUTH,
+    "rate-limit": EXIT_RATE_LIMIT,
+    "transient": EXIT_TRANSIENT,
+    "provider": EXIT_TRANSIENT,
+    "partial": EXIT_PARTIAL,
+}
+
+
 def exit_on_failures(results: list[dict]) -> None:
     """Exit with appropriate code if any results failed."""
-    success_count = sum(1 for r in results if r["success"])
-    total_count = len(results)
-
-    if success_count < total_count:
-        _category_to_code = {
-            "config": EXIT_CONFIG,
-            "auth": EXIT_AUTH,
-            "rate-limit": EXIT_RATE_LIMIT,
-            "transient": EXIT_TRANSIENT,
-            "provider": EXIT_TRANSIENT,
-            "partial": EXIT_PARTIAL,
-        }
-        failed = [r for r in results if not r["success"]]
+    failed = [r for r in results if not r["success"]]
+    if failed:
         codes = [
-            _category_to_code.get(r.get("error_category") or "transient", EXIT_TRANSIENT)
+            _CATEGORY_TO_CODE.get(r.get("error_category") or "transient", EXIT_TRANSIENT)
             for r in failed
         ]
         sys.exit(min(codes))
+
+
+T = TypeVar("T")
+
+
+def map_items(
+    items: Sequence[T],
+    fn: Callable[[T], Dict[str, Any]],
+    *,
+    workers: int = 5,
+    sequential: bool = False,
+    on_error: Callable[[T, BaseException], Dict[str, Any]] | None = None,
+) -> List[Dict[str, Any]]:
+    """Run fn over items and return one result dict per item, in input order.
+
+    An exception escaping fn becomes an error row (via on_error) instead of
+    aborting the run, so one failure cannot discard the other results.
+
+    Args:
+        items: Items to process (domains, repo dicts, ...)
+        fn: Function producing a result dict for one item
+        workers: Maximum concurrent workers
+        sequential: Force sequential processing
+        on_error: Build the error row for an item whose fn call raised.
+                  Default: {"error": str(exc), "error_category": category}
+
+    Returns:
+        List of result dicts, one per item, in the order items were given
+    """
+
+    def _error_row(item: T, exc: BaseException) -> Dict[str, Any]:
+        if on_error is not None:
+            return on_error(item, exc)
+        _, category = _categorize_error(exc)
+        return {"error": str(exc), "error_category": category}
+
+    def _guarded(item: T) -> Dict[str, Any]:
+        try:
+            return fn(item)
+        except Exception as exc:
+            return _error_row(item, exc)
+
+    if sequential or len(items) <= 1:
+        return [_guarded(item) for item in items]
+
+    results: Dict[int, Dict[str, Any]] = {}
+    with ThreadPoolExecutor(max_workers=min(len(items), workers)) as executor:
+        futures = {executor.submit(_guarded, item): i for i, item in enumerate(items)}
+        for future in as_completed(futures):
+            results[futures[future]] = future.result()
+    return [results[i] for i in range(len(items))]
+
+
+def render_results(
+    results: List[Dict[str, Any]],
+    output_format: str,
+    *,
+    csv_fields: List[str],
+    csv_rows: Callable[[Dict[str, Any]], Iterable[Dict[str, Any]]] | None = None,
+    text: Callable[[List[Dict[str, Any]]], None],
+) -> None:
+    """Render results in the requested output format.
+
+    Args:
+        results: Result dicts from map_items (or built by the command)
+        output_format: "text", "json", or "csv"
+        csv_fields: CSV column names
+        csv_rows: Expand one result into CSV rows (flattening lists,
+                  emitting one row per sub-record). Default: the result
+                  itself as a single row; extra keys are ignored.
+        text: Command-specific text renderer
+    """
+    if output_format == "json":
+        click.echo(json.dumps(results, indent=2))
+    elif output_format == "csv":
+        writer = csv.DictWriter(sys.stdout, fieldnames=csv_fields, extrasaction="ignore")
+        writer.writeheader()
+        for result in results:
+            for row in csv_rows(result) if csv_rows is not None else [result]:
+                writer.writerow(row)
+    else:
+        text(results)
+
+
+def exit_on_errors(results: List[Dict[str, Any]]) -> None:
+    """Report error-carrying rows to stderr and exit by failure taxonomy.
+
+    For commands whose result rows use an "error" field (map_items style)
+    rather than a "success" flag. No-op when every row is clean. Exits
+    EXIT_PARTIAL when some rows succeeded, or by the failed rows' error
+    category when every row failed.
+    """
+    failed = [r for r in results if r.get("error")]
+    if not failed:
+        return
+    for r in failed:
+        label = r.get("domain") or r.get("name") or "?"
+        category = r.get("error_category") or "provider"
+        click.secho(f"[{category}] {label}: {r['error']}", fg="red", err=True)
+    if len(failed) < len(results):
+        click.secho(
+            f"warning: {len(failed)}/{len(results)} items failed; results are partial",
+            fg="yellow",
+            err=True,
+        )
+        sys.exit(EXIT_PARTIAL)
+    codes = [
+        _CATEGORY_TO_CODE.get(r.get("error_category") or "transient", EXIT_TRANSIENT)
+        for r in failed
+    ]
+    sys.exit(min(codes))

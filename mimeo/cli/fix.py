@@ -1,15 +1,14 @@
 """Fix commands for repairing site configuration."""
 
 import sys
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import click
 
 from ..exceptions import HostError
 from ..providers.host.github import GitHubHost, health_status
-from ._processing import _categorize_error, load_config
+from ._processing import _categorize_error, load_config, map_items
 
 
 @click.group()
@@ -67,18 +66,17 @@ def https(domains: tuple[str, ...], config: Path | None, workers: int, dry_run: 
                     click.echo("No mimeo-managed sites found.")
                     return
 
-                # Check health concurrently
-                health_map: Dict[str, Dict[str, Any]] = {}
-                with ThreadPoolExecutor(max_workers=10) as executor:
-                    future_to_name = {
-                        executor.submit(host.get_pages_health, f"{owner}/{r['name']}"): r["name"]
-                        for r in repos
-                    }
-                    for future in as_completed(future_to_name):
-                        name = future_to_name[future]
-                        health_map[name] = future.result()
-
-                targets = [name for name, h in health_map.items() if health_status(h) == "fixable"]
+                # Check health concurrently; a failed check means not fixable
+                health_rows = map_items(
+                    repos,
+                    lambda r: {
+                        "name": r["name"],
+                        "health": health_status(host.get_pages_health(f"{owner}/{r['name']}")),
+                    },
+                    workers=10,
+                    on_error=lambda r, exc: {"name": r["name"], "health": "pages_error"},
+                )
+                targets = [h["name"] for h in health_rows if h["health"] == "fixable"]
 
                 if not targets:
                     click.echo("No sites need HTTPS fixing.")
@@ -90,8 +88,6 @@ def https(domains: tuple[str, ...], config: Path | None, workers: int, dry_run: 
                 click.echo()
 
             # Apply fixes
-            results: list[dict[str, Any]] = []
-
             def _fix_one(domain: str) -> dict[str, Any]:
                 repo_full_name = f"{owner}/{domain}"
                 if dry_run:
@@ -103,16 +99,17 @@ def https(domains: tuple[str, ...], config: Path | None, workers: int, dry_run: 
                 except HostError as e:
                     return {"name": domain, "success": False, "error": str(e)}
 
-            if len(targets) == 1 or dry_run:
-                for domain in targets:
-                    results.append(_fix_one(domain))
-            else:
-                with ThreadPoolExecutor(max_workers=min(len(targets), workers)) as executor:
-                    future_to_name = {
-                        executor.submit(_fix_one, domain): domain for domain in targets
-                    }
-                    for future in as_completed(future_to_name):
-                        results.append(future.result())
+            results = map_items(
+                targets,
+                _fix_one,
+                workers=workers,
+                sequential=dry_run,
+                on_error=lambda domain, exc: {
+                    "name": domain,
+                    "success": False,
+                    "error": str(exc),
+                },
+            )
 
             # Summary
             click.echo()

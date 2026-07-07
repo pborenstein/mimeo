@@ -1,5 +1,29 @@
 # Phase 8: Consolidation Chronicles
 
+## Entry 33: Stage 1 — shared domain-operation engine (2026-07-06)
+
+**What**: Built `map_items` / `render_results` / `exit_on_errors` in
+`_processing.py` and migrated `registrar list`, `dns check`, `dns show`,
+`fix https`, and `list` onto them. Removed four hand-rolled thread pools.
+
+**Why**: Three of the four pools crashed the whole command on one bad
+`future.result()` (the zero-results bug class); every command duplicated the
+text/json/csv dispatch. DEC-021 Stage 1.
+
+**How**: `map_items` returns results in input order and converts escaped
+exceptions to error rows via an `on_error` callback. `render_results` keeps
+text rendering as a per-command callback (layouts genuinely differ) but owns
+json/csv. Exit codes unified: some-failed -> EXIT_PARTIAL, all-failed ->
+category code (dns show partial changed from transient to EXIT_PARTIAL).
+Command files shrank ~65 lines, engine added ~110 (net +51); the payoff is
+structural. Follow-up added: fold `process_domains_concurrent` into
+`map_items`. Live-verified against real Porkbun and GitHub APIs.
+
+**Decisions**: DEC-021 (Stage 1)
+
+**Files**: `mimeo/cli/_processing.py`, `mimeo/cli/{registrar,dns,fix,list_cmd}.py`,
+`tests/test_processing.py`
+
 ## Entry 32: Phase 8 planned — consolidation to status/sync (2026-07-06)
 
 **What**: Closed Phase 7 and planned Phase 8 after a whole-codebase design

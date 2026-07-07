@@ -1,8 +1,6 @@
 """DNS commands for checking and repairing DNS records."""
 
-import json
 import sys
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Dict, List, cast
 
@@ -13,10 +11,13 @@ from ..providers.registrar.porkbun import PorkbunDNSProvider, PorkbunRegistrar
 from ._processing import (
     _categorize_error,
     _emit,
+    exit_on_errors,
     exit_on_failures,
     get_log_format,
     load_config,
+    map_items,
     process_domains_concurrent,
+    render_results,
     validate_domains,
 )
 
@@ -54,92 +55,85 @@ def show(domains: tuple[str, ...], config: Path | None, output_format: str) -> N
         mimeo dns show site1.com site2.com --format csv
     """
     validate_domains(domains)
+
+    def _csv_rows(entry: Dict[str, Any]) -> List[Dict[str, Any]]:
+        return [
+            {
+                "domain": entry["domain"],
+                "type": rec.get("type", ""),
+                "name": rec.get("name", ""),
+                "ttl": rec.get("ttl", ""),
+                "prio": rec.get("prio", ""),
+                "content": rec.get("content", ""),
+            }
+            for rec in entry["records"]
+        ]
+
+    def _text(results: List[Dict[str, Any]]) -> None:
+        click.echo()
+        for entry in results:
+            click.secho(f"  {entry['domain']}", bold=True)
+            if entry["error"]:
+                click.secho(f"    error: {entry['error']}", fg="red")
+                click.echo()
+                continue
+            if not entry["records"]:
+                click.echo("    (no records)")
+                click.echo()
+                continue
+
+            rows = [
+                (
+                    rec.get("type", ""),
+                    rec.get("name", ""),
+                    str(rec.get("ttl", "")),
+                    rec.get("content", ""),
+                )
+                for rec in entry["records"]
+            ]
+            type_w = max(len("TYPE"), max(len(r[0]) for r in rows))
+            name_w = max(len("NAME"), max(len(r[1]) for r in rows))
+            ttl_w = max(len("TTL"), max(len(r[2]) for r in rows))
+
+            click.secho(
+                f"    {'TYPE':<{type_w}}  {'NAME':<{name_w}}  {'TTL':<{ttl_w}}  CONTENT",
+                dim=True,
+            )
+            for type_, name, ttl, content in rows:
+                click.echo(f"    {type_:<{type_w}}  {name:<{name_w}}  {ttl:<{ttl_w}}  {content}")
+            click.echo()
+
     try:
         cfg = load_config(config)
-        results: List[Dict[str, Any]] = []
 
         with PorkbunDNSProvider(cfg.porkbun_api_key, cfg.porkbun_secret) as dns_provider:
-            for domain in domains:
-                entry: Dict[str, Any] = {"domain": domain, "records": [], "error": None}
-                try:
-                    entry["records"] = dns_provider.get_domain_records(domain)
-                except Exception as exc:
-                    entry["error"] = str(exc)
-                    _, entry["error_category"] = _categorize_error(exc)
-                results.append(entry)
 
-        if output_format == "json":
-            click.echo(json.dumps(results, indent=2))
-        elif output_format == "csv":
-            import csv
+            def _fetch(domain: str) -> Dict[str, Any]:
+                return {
+                    "domain": domain,
+                    "records": dns_provider.get_domain_records(domain),
+                    "error": None,
+                }
 
-            fieldnames = ["domain", "type", "name", "ttl", "prio", "content"]
-            writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames, extrasaction="ignore")
-            writer.writeheader()
-            for entry in results:
-                for rec in entry["records"]:
-                    writer.writerow(
-                        {
-                            "domain": entry["domain"],
-                            "type": rec.get("type", ""),
-                            "name": rec.get("name", ""),
-                            "ttl": rec.get("ttl", ""),
-                            "prio": rec.get("prio", ""),
-                            "content": rec.get("content", ""),
-                        }
-                    )
-        else:
-            click.echo()
-            for entry in results:
-                click.secho(f"  {entry['domain']}", bold=True)
-                if entry["error"]:
-                    click.secho(f"    error: {entry['error']}", fg="red")
-                    click.echo()
-                    continue
-                if not entry["records"]:
-                    click.echo("    (no records)")
-                    click.echo()
-                    continue
+            def _on_error(domain: str, exc: BaseException) -> Dict[str, Any]:
+                _, category = _categorize_error(exc)
+                return {
+                    "domain": domain,
+                    "records": [],
+                    "error": str(exc),
+                    "error_category": category,
+                }
 
-                rows = [
-                    (
-                        rec.get("type", ""),
-                        rec.get("name", ""),
-                        str(rec.get("ttl", "")),
-                        rec.get("content", ""),
-                    )
-                    for rec in entry["records"]
-                ]
-                type_w = max(len("TYPE"), max(len(r[0]) for r in rows))
-                name_w = max(len("NAME"), max(len(r[1]) for r in rows))
-                ttl_w = max(len("TTL"), max(len(r[2]) for r in rows))
+            results = map_items(domains, _fetch, sequential=True, on_error=_on_error)
 
-                click.secho(
-                    f"    {'TYPE':<{type_w}}  {'NAME':<{name_w}}  {'TTL':<{ttl_w}}  CONTENT",
-                    dim=True,
-                )
-                for type_, name, ttl, content in rows:
-                    click.echo(f"    {type_:<{type_w}}  {name:<{name_w}}  {ttl:<{ttl_w}}  {content}")
-                click.echo()
-
-        if any(r["error"] for r in results):
-            for entry in results:
-                if entry["error"]:
-                    category = entry.get("error_category", "provider")
-                    click.secho(
-                        f"[{category}] {entry['domain']}: {entry['error']}", fg="red", err=True
-                    )
-            exit_on_failures(
-                [
-                    {
-                        "domain": r["domain"],
-                        "success": not r["error"],
-                        "error": r["error"],
-                        "error_category": r.get("error_category"),
-                    }
-                    for r in results
-                ]
-            )
+        render_results(
+            results,
+            output_format,
+            csv_fields=["domain", "type", "name", "ttl", "prio", "content"],
+            csv_rows=_csv_rows,
+            text=_text,
+        )
+        exit_on_errors(results)
 
     except Exception as e:
         exit_code, category = _categorize_error(e)
@@ -180,9 +174,47 @@ def check(domains: tuple[str, ...], config: Path | None, output_format: str, wor
         mimeo dns check site1.com site2.com --format json
     """
     validate_domains(domains)
+
+    def _csv_rows(row: Dict[str, Any]) -> List[Dict[str, Any]]:
+        flat = dict(row)
+        flat["nameservers"] = "|".join(row.get("nameservers") or [])
+        return [flat]
+
+    def _text(results: List[Dict[str, Any]]) -> None:
+        click.echo()
+        _dns_colors = {"ok": "green", "drift": "yellow", "missing": "red", "error": "red"}
+        _ns_colors = {True: "green", False: "red"}
+
+        for r in results:
+            click.secho(f"  {r['domain']}", bold=True)
+            ns_label = (
+                "ok (porkbun)"
+                if r["ns_ok"]
+                else ", ".join(r["nameservers"])
+                if r["nameservers"]
+                else "unknown"
+            )
+            click.echo("    NS: ", nl=False)
+            click.secho(ns_label, fg=_ns_colors.get(r["ns_ok"], "white"))
+
+            click.echo("    DNS: ", nl=False)
+            click.secho(r["dns_status"], fg=_dns_colors.get(r["dns_status"], "white"))
+
+            for rec in r.get("missing", []):
+                click.secho(
+                    f"      missing: {rec['type']} {rec['name']} -> {rec['content']}", fg="red"
+                )
+            for rec in r.get("extra", []):
+                click.secho(
+                    f"      extra:   {rec['type']} {rec['name']} -> {rec['content']}",
+                    fg="yellow",
+                )
+            if r.get("error"):
+                click.secho(f"      error: {r['error']}", fg="red")
+            click.echo()
+
     try:
         cfg = load_config(config)
-        results: List[Dict[str, Any]] = []
 
         with GitHubHost(default_org=cfg.github_username) as host:
             with PorkbunRegistrar(cfg.porkbun_api_key, cfg.porkbun_secret) as registrar:
@@ -211,64 +243,30 @@ def check(domains: tuple[str, ...], config: Path | None, output_format: str, wor
                             "error": drift.get("error"),
                         }
 
-                    if len(domains) == 1:
-                        results.append(_check_domain(domains[0]))
-                    else:
-                        with ThreadPoolExecutor(max_workers=min(len(domains), workers)) as executor:
-                            future_to_domain = {
-                                executor.submit(_check_domain, d): d for d in domains
-                            }
-                            for future in as_completed(future_to_domain):
-                                results.append(future.result())
+                    def _on_error(domain: str, exc: BaseException) -> Dict[str, Any]:
+                        _, category = _categorize_error(exc)
+                        return {
+                            "domain": domain,
+                            "ns_ok": False,
+                            "nameservers": [],
+                            "dns_status": "error",
+                            "missing": [],
+                            "extra": [],
+                            "error": str(exc),
+                            "error_category": category,
+                        }
 
-        # Sort by original domain order
-        domain_order = {d: i for i, d in enumerate(domains)}
-        results.sort(key=lambda r: domain_order.get(r["domain"], 999))
-
-        if output_format == "json":
-            click.echo(json.dumps(results, indent=2))
-        elif output_format == "csv":
-            import csv
-
-            fieldnames = ["domain", "ns_ok", "nameservers", "dns_status"]
-            writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames, extrasaction="ignore")
-            writer.writeheader()
-            for row in results:
-                flat = dict(row)
-                flat["nameservers"] = "|".join(row.get("nameservers") or [])
-                writer.writerow(flat)
-        else:
-            click.echo()
-            _dns_colors = {"ok": "green", "drift": "yellow", "missing": "red", "error": "red"}
-            _ns_colors = {True: "green", False: "red"}
-
-            for r in results:
-                click.secho(f"  {r['domain']}", bold=True)
-                ns_label = (
-                    "ok (porkbun)"
-                    if r["ns_ok"]
-                    else ", ".join(r["nameservers"])
-                    if r["nameservers"]
-                    else "unknown"
-                )
-                click.echo("    NS: ", nl=False)
-                click.secho(ns_label, fg=_ns_colors.get(r["ns_ok"], "white"))
-
-                click.echo("    DNS: ", nl=False)
-                click.secho(r["dns_status"], fg=_dns_colors.get(r["dns_status"], "white"))
-
-                for rec in r.get("missing", []):
-                    click.secho(
-                        f"      missing: {rec['type']} {rec['name']} -> {rec['content']}", fg="red"
+                    results = map_items(
+                        domains, _check_domain, workers=workers, on_error=_on_error
                     )
-                for rec in r.get("extra", []):
-                    click.secho(
-                        f"      extra:   {rec['type']} {rec['name']} -> {rec['content']}",
-                        fg="yellow",
-                    )
-                if r.get("error"):
-                    click.secho(f"      error: {r['error']}", fg="red")
-                click.echo()
+
+        render_results(
+            results,
+            output_format,
+            csv_fields=["domain", "ns_ok", "nameservers", "dns_status"],
+            csv_rows=_csv_rows,
+            text=_text,
+        )
 
     except Exception as e:
         exit_code, category = _categorize_error(e)

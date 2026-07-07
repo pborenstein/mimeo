@@ -2,7 +2,7 @@
 
 Living document tracking progress on the domain landing page provisioning tool.
 
-**Last updated**: 2026-03-28
+**Last updated**: 2026-07-06
 
 ---
 
@@ -17,53 +17,71 @@ Living document tracking progress on the domain landing page provisioning tool.
 | Phase 4: Content Generation | Complete | Simple HTML generator (no template engine) |
 | Phase 5: CLI Integration | Complete | Full CLI with create, list, health, fix commands |
 | Phase 6: Hardening | Complete | Operational robustness and documentation |
-| Phase 7: CLI Redesign | Current | Rethink command structure from first principles |
+| Phase 7: CLI Redesign | Complete | Rethink command structure from first principles |
+| Phase 8: Consolidation | Current | Collapse verb sprawl into status/sync, unify CLI plumbing |
 
 ---
 
 ## Current Phase
 
-### Phase 7: CLI Redesign (2026-03-19 - Present)
+### Phase 8: Consolidation (2026-07-06 - Present)
 
-**Goal**: Rethink `mimeo create` command structure. Current flag set (`--force`,
-`--force-dns-update`, `--template`) suggests `create` is doing too much —
-conflating provisioning with repair/maintenance.
+**Goal**: Reverse barnacleization. Mimeo is a fleet manager for
+domain-to-GitHub-Pages sites, not a "website generator." Collapse the
+per-incident verb sprawl (`dns repair`, `fix https`, `template apply`) into
+declarative `status`/`sync`, unify the duplicated CLI fan-out plumbing, and
+add E2E coverage. The tool should end this phase smaller, with fewer
+front-door verbs than it started with. See DEC-021.
 
 **Tasks**:
 
-- [x] `--force` flag on `create` to delete/recreate from template
-- [x] Set `is_template=true` on all 5 tepiton template repos
-- [x] Redesign command structure (provisioning vs repair)
-  - [x] Convert `mimeo/cli.py` to `mimeo/cli/` package
-  - [x] Extract shared processing utilities into `_processing.py`
-  - [x] Add `mimeo dns check` and `mimeo dns repair`
-  - [x] Add `mimeo template apply`
-  - [x] Add `mimeo fix https`
-  - [x] Clean up `create` (remove `--force`, `--force-dns-update`; add `--skip-dns`)
-  - [x] Clean up `list` (remove `--fix`, `--dns-check`)
-  - [x] Update tests for new module structure + new commands
-- [x] Code review with 25 findings addressed (see docs/CODE_REVIEW.md)
-  - [x] Fix wrong env var name in config.toml.example
-  - [x] Remove phantom --force-dns-update from README
-  - [x] Update README project structure to match actual files
-  - [x] Add domain validation at CLI entry points
-  - [x] Add ownership check via PorkbunRegistrar.domain_exists()
-  - [x] Make _health_status and _enable_https_enforcement public API
-  - [x] Move GITHUB_PAGES_IPS to github.py
-  - [x] Remove check_nameservers from DNSProvider ABC
-  - [x] Update Host ABC signature for deploy_site
-  - [x] Add DNS propagation progress indication
-  - [x] Remove "Loading configuration..." from stdout
-  - [x] Remove dead code (NSMismatchError, Domain model)
-  - [x] Fix --format shadowing Python builtin
-  - [x] Add --workers to fix https command
-  - [x] Add EXIT_GENERAL=1 exit code
-- [x] Add `mimeo dns show` (raw live records for specific domains)
-  - [x] Promote `PorkbunDNSProvider._get_domain_records` to public `get_domain_records`
-- [x] Partial results for `registrar list` (per-domain errors, EXIT_PARTIAL, shared clients)
-- [x] Fix 3 failing tests in tests/providers/host/test_github.py (broken by e9830da `_wait_for_repo` change)
-- [ ] E2E integration test lane (separate from unit tests, gated, hits real APIs)
-- [ ] Template parameterization (substitute domain into template files post-creation)
+- [ ] Stage 1: Shared domain-operation engine (debt paydown, no behavior change)
+  - [ ] Extend `_processing.py` into one fan-out engine: run an operation
+        across domains (thread pool or sequential), collect partial results
+        with `error`/`error_category` per domain, render text/json/csv,
+        exit by failure taxonomy
+  - [ ] Migrate `registrar list`, `dns check`, `dns show`, `fix https`,
+        and `list` onto it (each currently hand-rolls some or all of this)
+  - [ ] Measure: `cli/` is ~1,850 lines today; expect a meaningful shrink
+- [ ] Stage 2: `mimeo status [DOMAINS...]` — the cross-provider join
+  - [ ] One table joining Porkbun domains x GitHub repos x DNS drift x
+        Pages health
+  - [ ] Surface the diff: domains without sites, sites without domains,
+        expiry vs auto-renew risk
+  - [ ] Subsumes the `registrar list --with-dns` full-sweep use case
+- [ ] Stage 3: `mimeo sync [DOMAINS...]` — converge on desired state
+  - [ ] One pass that applies whatever `status` flags: DNS repair + HTTPS
+        enforcement (template apply stays manual — content is a choice,
+        not drift)
+  - [ ] `--dry-run` previews planned actions; partial-failure exit codes
+  - [ ] Decide fate of `dns repair` / `fix https`: keep as plumbing,
+        alias, or deprecate
+- [ ] Stage 4: E2E integration test lane (separate from unit tests, gated,
+      hits real APIs; `create`/`status`/`sync` are the flows worth covering)
+- [ ] Identity fix: replace "A tool to generate websites quickly" with
+      "Provision and manage custom-domain sites on GitHub Pages"
+      (CLI help, README, pyproject description)
+- [ ] Carried from Phase 7: template parameterization (substitute domain
+      into template files post-creation)
+
+---
+
+### Phase 7: CLI Redesign (2026-03-19 - 2026-07-06)
+
+**Delivered**:
+
+- `mimeo/cli/` package with task-oriented command groups (DEC-018)
+- `dns check` / `dns repair` / `dns show`, `template apply`, `fix https`,
+  `registrar list`
+- `create` and `list` stripped to single responsibilities
+  (removed `--force`, `--force-dns-update`, `--fix`, `--dns-check`)
+- Domain validation at CLI entry points (DEC-019); public provider methods
+  for CLI-facing operations (DEC-020)
+- 25 code-review findings fixed; full documentation realignment
+- Race condition fix: `_wait_for_repo()` after template generate
+- Partial results for `registrar list` (per-domain errors, EXIT_PARTIAL,
+  shared HTTP clients)
+- 243 tests passing; mypy and ruff clean
 
 ---
 

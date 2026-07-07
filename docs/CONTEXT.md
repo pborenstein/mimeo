@@ -1,20 +1,25 @@
 ---
-phase: 7
-phase_name: CLI Redesign
+phase: 8
+phase_name: Consolidation
 updated: 2026-07-06
-last_commit: e9830da
+last_commit: b53a591
 ---
 
 ## Current Focus
 
-Added `mimeo dns show` (raw live records for specific domains) and made
-`registrar list` return partial results instead of discarding everything
-when one domain's enrichment fails.
+Phase 8 planned: reverse barnacleization. Mimeo reframed as a fleet manager
+for domain-to-GitHub-Pages sites. Collapse per-incident verbs into
+declarative `status`/`sync`; unify CLI fan-out plumbing first. See DEC-021.
 
 ## Active Tasks
 
-- [ ] E2E integration test lane (separate from unit tests, gated, hits real APIs)
-- [ ] Template parameterization (substitute domain into template files)
+- [ ] Stage 1: shared domain-operation engine in `_processing.py`; migrate
+      registrar list, dns check/show, fix https, list onto it
+- [ ] Stage 2: `mimeo status` (cross-provider join: registrar x DNS x Pages)
+- [ ] Stage 3: `mimeo sync` (converge: DNS repair + HTTPS enforcement)
+- [ ] Stage 4: E2E test lane (gated, real APIs, covers create/status/sync)
+- [ ] Identity fix ("Provision and manage custom-domain sites on GitHub Pages")
+- [ ] Template parameterization (carried from Phase 7)
 
 ## Blockers
 
@@ -22,14 +27,13 @@ None.
 
 ## Context
 
-- `mimeo dns show DOMAIN...` fetches live Porkbun records; text/json/csv; sequential; per-domain errors
-- `registrar list` now shares one registrar + one DNS client across workers (was 2 fresh sessions per domain)
-- Enrichment failures carry `error`/`error_category` per row; command exits EXIT_PARTIAL (6) if any failed
-- `_get_domain_records` renamed to public `get_domain_records`
-- Verified live: 105 domains enriched with --with-dns, 0 failures
-- Fixed 3 test_github.py failures from e9830da (mocks lacked a response for the _wait_for_repo poll)
-- 243 tests passing; mypy and ruff clean
+- Phase 7 closed 2026-07-06; 243 tests passing, mypy and ruff clean
+- Stages are ordered: engine first (pure debt paydown), then status, then sync
+- Template apply stays manual — content is a choice, not drift (DEC-021)
+- Fate of dns repair / fix https (alias vs deprecate) decided during Stage 3
+- cli/ is ~1,850 lines; Stage 1 should shrink it measurably
 
 ## Next Session
 
-E2E integration tests or template parameterization.
+Start Stage 1: design the shared domain-operation engine API in
+`_processing.py`, then migrate `registrar list` onto it as the first consumer.

@@ -374,6 +374,29 @@ Also converted `mimeo/cli.py` (1084 lines) to a `mimeo/cli/` package with one fi
 
 ---
 
+### DEC-021: Consolidate to Declarative status/sync Verbs (2026-07-06)
+
+**Status**: Active (Phase 8)
+
+**Context**: The CLI grew by accretion — each operational incident spawned its own remediation verb (`dns repair`, `fix https`, `template apply`) and its own diagnostic (`dns check`, `list --health`, `doctor`, `dns show`, `registrar list`). The two inventories (`list` = GitHub repos, `registrar list` = Porkbun domains) never join, so the fleet-level questions (domains without sites, sites without domains, drift, expiry risk) have no command. Half the codebase (~1,850 lines in `cli/`) is per-command copies of the same fan-out/render/error plumbing, which is where the recent zero-results bug lived. The tool's stated identity ("generate websites quickly") no longer matches what it does: content generation was delegated to GitHub template repos in DEC-017.
+
+**Decision**: Reframe mimeo as a fleet manager for domain-to-GitHub-Pages sites and converge on two declarative front-door verbs:
+
+- `mimeo status [DOMAINS...]` — read-only cross-provider join (registrar x DNS drift x Pages health), reporting the diff between desired and actual state
+- `mimeo sync [DOMAINS...]` — apply whatever `status` flags (DNS records, HTTPS enforcement), with `--dry-run`
+
+Template application stays a manual command: content choice is intent, not drift. Existing imperative commands become plumbing beneath status/sync (fate — alias vs deprecate — decided during Stage 3). Prerequisite: a single shared domain-operation engine in `_processing.py` replacing the per-command fan-out/render implementations.
+
+**Alternatives considered**:
+
+- Split into separate tools (registrar tool, DNS tool, Pages tool): Worse — the cross-provider join is the entire value; splitting destroys it
+- Keep adding per-incident verbs: Unbounded command growth; every new failure mode demands a new subcommand forever
+- Full desired-state config file (terraform-style): Overkill — desired state is derivable (Porkbun NS + GitHub Pages records + HTTPS on); no user-authored spec needed yet
+
+**Consequences**: The CLI ends Phase 8 with fewer front-door verbs and less code than it started with. `registrar list --with-dns` full-account sweeps are subsumed by `status`. One-line identity changes to "Provision and manage custom-domain sites on GitHub Pages." Precedent: DEC-018 amputated `list --fix`/`list --dns-check` as misplaced — those were early gropes toward status/sync.
+
+---
+
 ## Superseded/Deprecated
 
 [No superseded decisions yet]

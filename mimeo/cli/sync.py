@@ -160,7 +160,21 @@ def sync(
             registered = {d.get("domain", "") for d in registrar.list_domains()}
             repo_names = {r.get("name", "") for r in host.list_mimeo_repositories()}
 
-            targets = list(domains) if domains else sorted(registered | repo_names)
+            if domains:
+                targets = list(domains)
+            else:
+                # Explicitly named domains are always synced; the config
+                # ignore list only trims fleet-wide runs.
+                ignored = (registered | repo_names) & set(cfg.ignore_domains)
+                targets = sorted((registered | repo_names) - ignored)
+                if ignored:
+                    click.secho(
+                        f"({len(ignored)} domain(s) ignored per config: "
+                        f"{', '.join(sorted(ignored))})",
+                        fg="white",
+                        dim=True,
+                        err=True,
+                    )
 
             def _sync_domain(domain: str) -> Dict[str, Any]:
                 row: Dict[str, Any] = {

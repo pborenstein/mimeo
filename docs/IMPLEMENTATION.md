@@ -84,6 +84,12 @@ front-door verbs than it started with. See DEC-021.
       "Provision and manage custom-domain sites on GitHub Pages"
       (CLI help, pyproject, package docstring, CLAUDE.md); README gained
       status/sync command sections
+- [x] Externally-managed domains handled honestly
+  - [x] `dns show` (and `status --with-dns` text) explain an empty Porkbun
+        zone when nameservers point elsewhere instead of "(no records)"
+  - [x] `defaults.ignore_domains` config list trims `status --all` and
+        `sync --all`; explicitly named domains always override
+  - [x] `lookup_nameservers` made public (doctor.py already used it)
 - [ ] Carried from Phase 7: template parameterization (substitute domain
       into template files post-creation)
 

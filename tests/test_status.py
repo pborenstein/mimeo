@@ -265,6 +265,42 @@ class TestStatusCommand:
     @patch(f"{_STATUS}.GitHubHost")
     @patch(f"{_STATUS}.PorkbunRegistrar")
     @patch(f"{_STATUS}.PorkbunDNSProvider")
+    def test_ignore_domains_trim_fleet_but_not_explicit(
+        self,
+        mock_dns_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+    ) -> None:
+        """Config ignore list trims --all sweeps; explicit names override."""
+        cfg = Config(
+            porkbun_api_key="pk1_test",
+            porkbun_secret="sk1_test",
+            github_username="testorg",
+            ignore_domains=["elsewhere.dev"],
+        )
+        mock_config_load.return_value = cfg
+        mock_registrar_class.return_value = _make_registrar(
+            [{"domain": "managed.com", "expireDate": "2027-01-01", "autoRenew": "1"},
+             {"domain": "elsewhere.dev", "expireDate": "2027-01-01", "autoRenew": "1"}]
+        )
+        mock_host_class.return_value = _make_host([{"name": "managed.com"}])
+        mock_dns_class.return_value = _make_dns_provider()
+
+        fleet = runner.invoke(status, ["--all", "--format", "json"])
+        assert fleet.exit_code == 0
+        assert [r["domain"] for r in json.loads(fleet.stdout)] == ["managed.com"]
+        assert "ignored per config" in fleet.output
+
+        explicit = runner.invoke(status, ["elsewhere.dev", "--format", "json"])
+        assert explicit.exit_code == 0
+        assert [r["domain"] for r in json.loads(explicit.stdout)] == ["elsewhere.dev"]
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_STATUS}.GitHubHost")
+    @patch(f"{_STATUS}.PorkbunRegistrar")
+    @patch(f"{_STATUS}.PorkbunDNSProvider")
     def test_with_dns_includes_records_and_fetches_once(
         self,
         mock_dns_class: Any,

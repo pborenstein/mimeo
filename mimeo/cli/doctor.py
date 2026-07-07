@@ -81,8 +81,8 @@ def _check_gh_workflow_scope() -> tuple[bool, str, str]:
 
 def _check_nameservers(domain: str) -> tuple[bool, str, str]:
     """Check that a domain's nameservers point to Porkbun."""
-    from ..providers.registrar.porkbun import PORKBUN_NAMESERVERS, _lookup_nameservers
-    ns = _lookup_nameservers(domain)
+    from ..providers.registrar.porkbun import PORKBUN_NAMESERVERS, lookup_nameservers
+    ns = lookup_nameservers(domain)
     expected = sorted(PORKBUN_NAMESERVERS)
     if not ns:
         return False, "no NS records found", "Check that the domain is registered and DNS is reachable."

@@ -60,6 +60,12 @@ host = "github"
 # Optional: Default template for new sites
 # template = "simple-landing"
 
+# Optional: Domains to exclude from fleet-wide sweeps (status --all,
+# sync --all). Use for domains that are registered here but deliberately
+# managed elsewhere (e.g. DNS at Netlify). Naming a domain explicitly on
+# the command line always overrides this list.
+# ignore_domains = ["example.dev", "elsewhere.net"]
+
 # =============================================================================
 # SECURITY NOTES
 # =============================================================================

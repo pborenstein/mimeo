@@ -21,7 +21,7 @@ PORKBUN_NAMESERVERS = [
 ]
 
 
-def _lookup_nameservers(domain: str) -> list[str]:
+def lookup_nameservers(domain: str) -> list[str]:
     """Look up the NS records for a domain via public DNS.
 
     Args:
@@ -103,7 +103,7 @@ class PorkbunRegistrar(_PorkbunClient, Registrar):
         Returns:
             NameserverCheckResult with ok flag and actual/expected nameservers
         """
-        actual = _lookup_nameservers(domain)
+        actual = lookup_nameservers(domain)
         expected = sorted(PORKBUN_NAMESERVERS)
         ok = actual == expected
         return NameserverCheckResult(ok=ok, actual=actual, expected=expected)

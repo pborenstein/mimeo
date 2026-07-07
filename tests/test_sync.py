@@ -299,6 +299,42 @@ class TestSyncActions:
     @patch(f"{_SYNC}.GitHubHost")
     @patch(f"{_SYNC}.PorkbunRegistrar")
     @patch(f"{_SYNC}.PorkbunDNSProvider")
+    def test_ignore_domains_trim_all_but_not_explicit(
+        self,
+        mock_dns_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+    ) -> None:
+        """Config ignore list trims --all runs; explicit names override."""
+        cfg = Config(
+            porkbun_api_key="pk1_test",
+            porkbun_secret="sk1_test",
+            github_username="testorg",
+            ignore_domains=["elsewhere.dev"],
+        )
+        mock_config_load.return_value = cfg
+        mock_registrar_class.return_value = _make_registrar(
+            ["managed.com", "elsewhere.dev"]
+        )
+        mock_host_class.return_value = _make_host([{"name": "managed.com"}])
+        mock_dns_class.return_value = _make_dns_provider()
+
+        fleet = runner.invoke(sync, ["--all", "--format", "json"])
+        assert fleet.exit_code == 0
+        assert [r["domain"] for r in json.loads(fleet.stdout)] == ["managed.com"]
+        assert "ignored per config" in fleet.output
+
+        explicit = runner.invoke(sync, ["elsewhere.dev", "--format", "json"])
+        assert explicit.exit_code == 0
+        data = json.loads(explicit.stdout)
+        assert data[0]["domain"] == "elsewhere.dev"
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_SYNC}.GitHubHost")
+    @patch(f"{_SYNC}.PorkbunRegistrar")
+    @patch(f"{_SYNC}.PorkbunDNSProvider")
     def test_partial_failure(
         self,
         mock_dns_class: Any,

@@ -118,7 +118,7 @@ class TestPorkbunRegistrar:
         with PorkbunRegistrar(api_key="pk1_test", secret_key="sk1_test") as registrar:
             assert registrar.api_key == "pk1_test"
 
-    @patch("mimeo.providers.registrar.porkbun._lookup_nameservers")
+    @patch("mimeo.providers.registrar.porkbun.lookup_nameservers")
     def test_check_nameservers_ok(self, mock_lookup: Mock, registrar: PorkbunRegistrar) -> None:
         """check_nameservers returns ok=True when NS matches Porkbun."""
         mock_lookup.return_value = sorted(PORKBUN_NAMESERVERS)
@@ -131,7 +131,7 @@ class TestPorkbunRegistrar:
         assert result.expected == sorted(PORKBUN_NAMESERVERS)
         mock_lookup.assert_called_once_with("example.com")
 
-    @patch("mimeo.providers.registrar.porkbun._lookup_nameservers")
+    @patch("mimeo.providers.registrar.porkbun.lookup_nameservers")
     def test_check_nameservers_mismatch(
         self, mock_lookup: Mock, registrar: PorkbunRegistrar
     ) -> None:
@@ -145,7 +145,7 @@ class TestPorkbunRegistrar:
         assert result.actual == cloudflare_ns
         assert result.expected == sorted(PORKBUN_NAMESERVERS)
 
-    @patch("mimeo.providers.registrar.porkbun._lookup_nameservers")
+    @patch("mimeo.providers.registrar.porkbun.lookup_nameservers")
     def test_check_nameservers_empty(self, mock_lookup: Mock, registrar: PorkbunRegistrar) -> None:
         """check_nameservers returns ok=False when DNS lookup returns nothing."""
         mock_lookup.return_value = []

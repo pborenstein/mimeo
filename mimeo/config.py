@@ -3,7 +3,7 @@
 import os
 import tomllib
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -21,6 +21,7 @@ class Config:
     github_username: str
     default_registrar: str = "porkbun"
     default_host: str = "github"
+    ignore_domains: list[str] = field(default_factory=list)
 
     @classmethod
     def load(cls, config_path: Optional[Path] = None) -> "Config":
@@ -105,10 +106,19 @@ class Config:
                 "Missing required configuration:\n" + "\n".join(f"  - {m}" for m in missing)
             )
 
+        ignore_domains = defaults_config.get("ignore_domains", [])
+        if not isinstance(ignore_domains, list) or not all(
+            isinstance(d, str) for d in ignore_domains
+        ):
+            raise ConfigurationError(
+                f"defaults.ignore_domains in {config_path} must be a list of domain names"
+            )
+
         return cls(
             porkbun_api_key=porkbun_api_key,
             porkbun_secret=porkbun_secret,
             github_username=github_username,
             default_registrar=defaults_config.get("registrar", "porkbun"),
             default_host=defaults_config.get("host", "github"),
+            ignore_domains=[d.lower() for d in ignore_domains],
         )

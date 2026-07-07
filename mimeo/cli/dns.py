@@ -7,7 +7,12 @@ from typing import Any, Dict, List, cast
 import click
 
 from ..providers.host.github import GitHubHost
-from ..providers.registrar.porkbun import PorkbunDNSProvider, PorkbunRegistrar
+from ..providers.registrar.porkbun import (
+    PORKBUN_NAMESERVERS,
+    PorkbunDNSProvider,
+    PorkbunRegistrar,
+    lookup_nameservers,
+)
 from ._processing import (
     _categorize_error,
     _emit,
@@ -78,7 +83,10 @@ def show(domains: tuple[str, ...], config: Path | None, output_format: str) -> N
                 click.echo()
                 continue
             if not entry["records"]:
-                click.echo("    (no records)")
+                if entry.get("note"):
+                    click.secho(f"    ({entry['note']})", fg="yellow")
+                else:
+                    click.echo("    (no records)")
                 click.echo()
                 continue
 
@@ -109,9 +117,19 @@ def show(domains: tuple[str, ...], config: Path | None, output_format: str) -> N
         with PorkbunDNSProvider(cfg.porkbun_api_key, cfg.porkbun_secret) as dns_provider:
 
             def _fetch(domain: str) -> Dict[str, Any]:
+                records = dns_provider.get_domain_records(domain)
+                note = None
+                if not records:
+                    ns = lookup_nameservers(domain)
+                    if ns and ns != sorted(PORKBUN_NAMESERVERS):
+                        note = (
+                            f"no records at Porkbun; nameservers point to "
+                            f"{', '.join(ns)} -- records are managed there"
+                        )
                 return {
                     "domain": domain,
-                    "records": dns_provider.get_domain_records(domain),
+                    "records": records,
+                    "note": note,
                     "error": None,
                 }
 
@@ -120,6 +138,7 @@ def show(domains: tuple[str, ...], config: Path | None, output_format: str) -> N
                 return {
                     "domain": domain,
                     "records": [],
+                    "note": None,
                     "error": str(exc),
                     "error_category": category,
                 }

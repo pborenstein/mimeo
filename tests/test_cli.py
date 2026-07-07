@@ -1103,7 +1103,7 @@ class TestDoctorHelpers:
         ok, detail, fix = _check_config(cfg_file)
         assert ok is False
 
-    @patch("mimeo.providers.registrar.porkbun._lookup_nameservers")
+    @patch("mimeo.providers.registrar.porkbun.lookup_nameservers")
     def test_check_nameservers_ok(self, mock_lookup: Any) -> None:
         """_check_nameservers passes when NS matches Porkbun."""
         from mimeo.providers.registrar.porkbun import PORKBUN_NAMESERVERS
@@ -1114,7 +1114,7 @@ class TestDoctorHelpers:
         assert detail == "porkbun"
         assert fix == ""
 
-    @patch("mimeo.providers.registrar.porkbun._lookup_nameservers")
+    @patch("mimeo.providers.registrar.porkbun.lookup_nameservers")
     def test_check_nameservers_mismatch(self, mock_lookup: Any) -> None:
         """_check_nameservers fails when NS points elsewhere."""
         mock_lookup.return_value = ["ns1.cloudflare.com", "ns2.cloudflare.com"]
@@ -1123,7 +1123,7 @@ class TestDoctorHelpers:
         assert "cloudflare" in detail
         assert "Porkbun" in fix
 
-    @patch("mimeo.providers.registrar.porkbun._lookup_nameservers")
+    @patch("mimeo.providers.registrar.porkbun.lookup_nameservers")
     def test_check_nameservers_empty(self, mock_lookup: Any) -> None:
         """_check_nameservers fails when no NS records are found."""
         mock_lookup.return_value = []
@@ -1752,12 +1752,14 @@ class TestDnsCommands:
         assert len(lines) == 3
         assert lines[1].startswith("example.com,A,")
 
+    @patch("mimeo.cli.dns.lookup_nameservers")
     @patch("mimeo.config.Config.load")
     @patch("mimeo.cli.dns.PorkbunDNSProvider")
     def test_dns_show_no_records(
         self,
         mock_dns_provider_class: Any,
         mock_config_load: Any,
+        mock_lookup: Any,
         runner: CliRunner,
         mock_config: Config,
     ) -> None:
@@ -1767,11 +1769,59 @@ class TestDnsCommands:
         mock_config_load.return_value = mock_config
         mock_dns_provider = self._mock_dns_provider(mock_dns_provider_class)
         mock_dns_provider.get_domain_records.return_value = []
+        mock_lookup.return_value = []
 
         result = runner.invoke(show, ["example.com"])
 
         assert result.exit_code == 0
         assert "no records" in result.output
+
+    @patch("mimeo.cli.dns.lookup_nameservers")
+    @patch("mimeo.config.Config.load")
+    @patch("mimeo.cli.dns.PorkbunDNSProvider")
+    def test_dns_show_empty_zone_external_ns_hint(
+        self,
+        mock_dns_provider_class: Any,
+        mock_config_load: Any,
+        mock_lookup: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """Empty Porkbun zone with external nameservers explains itself."""
+        from mimeo.cli.dns import show
+
+        mock_config_load.return_value = mock_config
+        mock_dns_provider = self._mock_dns_provider(mock_dns_provider_class)
+        mock_dns_provider.get_domain_records.return_value = []
+        mock_lookup.return_value = ["dns1.p02.nsone.net", "dns2.p02.nsone.net"]
+
+        result = runner.invoke(show, ["example.dev"])
+
+        assert result.exit_code == 0
+        assert "nsone.net" in result.output
+        assert "managed there" in result.output
+
+    @patch("mimeo.cli.dns.lookup_nameservers")
+    @patch("mimeo.config.Config.load")
+    @patch("mimeo.cli.dns.PorkbunDNSProvider")
+    def test_dns_show_with_records_skips_ns_lookup(
+        self,
+        mock_dns_provider_class: Any,
+        mock_config_load: Any,
+        mock_lookup: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """The NS lookup only happens when the zone is empty."""
+        from mimeo.cli.dns import show
+
+        mock_config_load.return_value = mock_config
+        self._mock_dns_provider(mock_dns_provider_class)
+
+        result = runner.invoke(show, ["example.com"])
+
+        assert result.exit_code == 0
+        mock_lookup.assert_not_called()
 
     @patch("mimeo.config.Config.load")
     @patch("mimeo.cli.dns.PorkbunDNSProvider")

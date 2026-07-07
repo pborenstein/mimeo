@@ -114,6 +114,19 @@ def _text(rows: List[Dict[str, Any]], with_dns: bool = False) -> None:
             click.secho(f"  [{row['error']}]", fg="red", nl=False)
         click.echo()
 
+        if (
+            with_dns
+            and row["registered"]
+            and not row.get("dns_records")
+            and row["ns_ok"] is False
+            and row["nameservers"]
+        ):
+            click.secho(
+                f"      (no records at Porkbun; nameservers point to "
+                f"{', '.join(row['nameservers'])})",
+                fg="yellow",
+            )
+
         if with_dns and row.get("dns_records"):
             recs = row["dns_records"]
             type_w = max(len(r.get("type", "")) for r in recs)
@@ -234,7 +247,18 @@ def status(
             if domains:
                 targets = list(domains)
             else:
-                targets = sorted(set(registered_map) | repo_names)
+                # Explicitly named domains are always checked; the config
+                # ignore list only trims fleet-wide sweeps.
+                ignored = (set(registered_map) | repo_names) & set(cfg.ignore_domains)
+                targets = sorted((set(registered_map) | repo_names) - ignored)
+                if ignored:
+                    click.secho(
+                        f"({len(ignored)} domain(s) ignored per config: "
+                        f"{', '.join(sorted(ignored))})",
+                        fg="white",
+                        dim=True,
+                        err=True,
+                    )
 
             def _status_row(domain: str) -> Dict[str, Any]:
                 info = registered_map.get(domain)

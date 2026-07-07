@@ -193,3 +193,52 @@ def test_invalid_schema_version_raises(tmp_path: Path) -> None:
         Config.load(config_file)
 
 
+
+
+def test_ignore_domains_default_empty(temp_config_file: Path) -> None:
+    """ignore_domains defaults to an empty list."""
+    config = Config.load(temp_config_file)
+    assert config.ignore_domains == []
+
+
+def test_ignore_domains_parsed_and_lowercased(tmp_path: Path) -> None:
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        """
+schema_version = 1
+
+[porkbun]
+api_key = "pk1_test"
+secret_key = "sk1_test"
+
+[github]
+default_org = "testuser"
+
+[defaults]
+ignore_domains = ["Example.DEV", "elsewhere.net"]
+"""
+    )
+    config = Config.load(config_file)
+    assert config.ignore_domains == ["example.dev", "elsewhere.net"]
+
+
+def test_ignore_domains_invalid_type(tmp_path: Path) -> None:
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        """
+schema_version = 1
+
+[porkbun]
+api_key = "pk1_test"
+secret_key = "sk1_test"
+
+[github]
+default_org = "testuser"
+
+[defaults]
+ignore_domains = "example.dev"
+"""
+    )
+    with pytest.raises(ConfigurationError) as exc_info:
+        Config.load(config_file)
+    assert "ignore_domains" in str(exc_info.value)

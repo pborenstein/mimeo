@@ -56,6 +56,8 @@ front-door verbs than it started with. See DEC-021.
         "-" on the registrar side; `--problems` filters to what needs
         attention
   - [x] Subsumes the `registrar list --with-dns` full-sweep use case
+  - [x] Fleet-wide requires explicit --all (sweep is slow: several API
+        calls per domain); bare `mimeo status` refuses with guidance
   - Note: DNS column is "-" when no repo exists (no desired state to
     compare); drift/unhealthy are findings (exit 0), API errors are
     failures (EXIT_PARTIAL)

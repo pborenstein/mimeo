@@ -27,7 +27,8 @@ None.
 - Engine: `map_items` (ordered, exceptions -> error rows), `render_results`
   (json/csv uniform, text via callback), `exit_on_errors` (partial ->
   EXIT_PARTIAL 6, total failure -> category code)
-- `status`: no-arg = union of Porkbun domains and mimeo repos; DNS column
+- `status` and `sync` both require --all for fleet-wide (union of Porkbun
+  domains and mimeo repos): sync for safety, status for cost; DNS column
   "-" when no repo (no desired state); drift/unhealthy exit 0, API errors
   EXIT_PARTIAL
 - Live drift finding on real domains: Porkbun wildcard parking CNAME

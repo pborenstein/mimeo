@@ -68,6 +68,23 @@ def _make_dns_provider(drift_status: str = "ok") -> MagicMock:
     return dns_provider
 
 
+class TestStatusGuards:
+    def test_no_args_refused(self, runner: CliRunner) -> None:
+        """status with no domains and no --all refuses to run."""
+        from mimeo.exceptions import EXIT_CONFIG
+
+        result = runner.invoke(status, [])
+        assert result.exit_code == EXIT_CONFIG
+        assert "--all" in result.output
+
+    def test_domains_and_all_refused(self, runner: CliRunner) -> None:
+        from mimeo.exceptions import EXIT_CONFIG
+
+        result = runner.invoke(status, ["example.com", "--all"])
+        assert result.exit_code == EXIT_CONFIG
+        assert "not both" in result.output
+
+
 class TestStatusCommand:
     @patch("mimeo.config.Config.load")
     @patch(f"{_STATUS}.GitHubHost")
@@ -93,7 +110,7 @@ class TestStatusCommand:
         )
         mock_dns_class.return_value = _make_dns_provider()
 
-        result = runner.invoke(status, ["--format", "json"])
+        result = runner.invoke(status, ["--all", "--format", "json"])
 
         assert result.exit_code == 0
         data = {r["domain"]: r for r in json.loads(result.stdout)}
@@ -162,7 +179,7 @@ class TestStatusCommand:
         mock_host_class.return_value = _make_host([{"name": "healthy.com"}])
         mock_dns_class.return_value = _make_dns_provider()
 
-        result = runner.invoke(status, ["--problems", "--format", "json"])
+        result = runner.invoke(status, ["--all", "--problems", "--format", "json"])
 
         assert result.exit_code == 0
         data = json.loads(result.stdout)
@@ -189,7 +206,7 @@ class TestStatusCommand:
         mock_host_class.return_value = _make_host([{"name": "site.com"}])
         mock_dns_class.return_value = _make_dns_provider()
 
-        result = runner.invoke(status, [])
+        result = runner.invoke(status, ["--all"])
 
         assert result.exit_code == 0
         assert "DOMAIN" in result.output
@@ -231,7 +248,7 @@ class TestStatusCommand:
         mock_host_class.return_value = _make_host([{"name": "good.com"}])
         mock_dns_class.return_value = _make_dns_provider()
 
-        result = runner.invoke(status, ["--format", "json", "--workers", "1"])
+        result = runner.invoke(status, ["--all", "--format", "json", "--workers", "1"])
 
         assert result.exit_code == EXIT_PARTIAL
         data = {r["domain"]: r for r in json.loads(result.stdout)}
@@ -274,7 +291,7 @@ class TestStatusCommand:
         )
         mock_dns_class.return_value = _make_dns_provider(drift_status="missing")
 
-        result = runner.invoke(status, ["--format", "json"])
+        result = runner.invoke(status, ["--all", "--format", "json"])
 
         assert result.exit_code == 0
         data = json.loads(result.stdout)

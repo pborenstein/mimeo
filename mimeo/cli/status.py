@@ -8,6 +8,7 @@ import click
 
 from ..providers.host.github import GitHubHost, health_status
 from ..providers.registrar.porkbun import PorkbunDNSProvider, PorkbunRegistrar
+from ..exceptions import EXIT_CONFIG
 from ._processing import (
     _categorize_error,
     exit_on_errors,
@@ -122,6 +123,12 @@ def _text(rows: List[Dict[str, Any]]) -> None:
 @click.command()
 @click.argument("domains", nargs=-1)
 @click.option(
+    "--all",
+    "status_all",
+    is_flag=True,
+    help="Report on every domain in the fleet (required when no domains are given)",
+)
+@click.option(
     "--config",
     type=click.Path(exists=True, path_type=Path),
     help="Path to config file (default: ~/.config/mimeo/config.toml)",
@@ -148,6 +155,7 @@ def _text(rows: List[Dict[str, Any]]) -> None:
 )
 def status(
     domains: tuple[str, ...],
+    status_all: bool,
     config: Path | None,
     output_format: str,
     workers: int,
@@ -156,9 +164,11 @@ def status(
     """Show fleet status: registrar, DNS, and site health in one view.
 
     Joins the Porkbun account against mimeo-managed GitHub repositories.
-    With no arguments, covers the union of both: registered domains with
-    no site show as "no repo"; sites whose domain is not in the account
-    show "-" on the registrar side.
+    With --all, covers the union of both: registered domains with no
+    site show as "no repo"; sites whose domain is not in the account
+    show "-" on the registrar side. A fleet sweep makes several API
+    calls per domain, so it takes a while on large accounts — name
+    domains for a quick check.
 
     \b
     Columns:
@@ -170,11 +180,22 @@ def status(
 
     \b
     Examples:
-        mimeo status                       # whole fleet
         mimeo status example.com           # one domain
-        mimeo status --problems            # only what needs attention
-        mimeo status --format json | jq '.[] | select(.dns_status == "drift")'
+        mimeo status --all                 # whole fleet (takes a while)
+        mimeo status --all --problems      # only what needs attention
+        mimeo status --all --format json | jq '.[] | select(.dns_status == "drift")'
     """
+    if domains and status_all:
+        click.secho("Give either domain names or --all, not both.", fg="red", err=True)
+        sys.exit(EXIT_CONFIG)
+    if not domains and not status_all:
+        click.secho(
+            "A whole-fleet sweep takes several API calls per domain. "
+            "Name the domains to check, or pass --all to do the full fleet.",
+            fg="red",
+            err=True,
+        )
+        sys.exit(EXIT_CONFIG)
     if domains:
         validate_domains(domains)
 

@@ -1,5 +1,26 @@
 # Phase 8: Consolidation Chronicles
 
+## Entry 34: Stage 2 — mimeo status, the cross-provider join (2026-07-06)
+
+**What**: Added `mimeo status [DOMAINS...]` — one view joining the Porkbun
+account against mimeo-managed GitHub repos: EXPIRES / NS / DNS drift / SITE
+health per domain, `--problems` filter, text/json/csv.
+
+**Why**: The two inventories (`list`, `registrar list`) never joined, so the
+fleet questions (domains without sites, sites without domains, drift) had no
+command. This is the diagnostic half of DEC-021's status/sync pair.
+
+**How**: Built on Stage 1's `map_items`; shares one registrar, DNS provider,
+and host across workers. No-arg mode targets the union of both inventories.
+DNS column is "-" when no repo exists (no desired state to compare). Drift
+and unhealthy sites are findings (exit 0); API errors are failures
+(EXIT_PARTIAL). Live-verified: correctly surfaced the Porkbun wildcard
+parking CNAME as drift, matching `dns check`.
+
+**Decisions**: DEC-021 (Stage 2)
+
+**Files**: `mimeo/cli/status.py`, `mimeo/cli/__init__.py`, `tests/test_status.py`
+
 ## Entry 33: Stage 1 — shared domain-operation engine (2026-07-06)
 
 **What**: Built `map_items` / `render_results` / `exit_on_errors` in

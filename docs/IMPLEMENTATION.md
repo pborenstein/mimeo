@@ -48,12 +48,17 @@ front-door verbs than it started with. See DEC-021.
         dispatch) and compounds when status/sync build on it
   - [ ] Follow-up: fold `process_domains_concurrent` (create, dns repair,
         template apply) into `map_items` — the remaining duplicate pool
-- [ ] Stage 2: `mimeo status [DOMAINS...]` — the cross-provider join
-  - [ ] One table joining Porkbun domains x GitHub repos x DNS drift x
-        Pages health
-  - [ ] Surface the diff: domains without sites, sites without domains,
-        expiry vs auto-renew risk
-  - [ ] Subsumes the `registrar list --with-dns` full-sweep use case
+- [x] Stage 2: `mimeo status [DOMAINS...]` — the cross-provider join
+  - [x] One table joining Porkbun domains x GitHub repos x DNS drift x
+        Pages health (DOMAIN / EXPIRES / NS / DNS / SITE + summary line)
+  - [x] Surface the diff: no-arg mode covers the union of both sides;
+        domains without sites show "no repo", sites without domains show
+        "-" on the registrar side; `--problems` filters to what needs
+        attention
+  - [x] Subsumes the `registrar list --with-dns` full-sweep use case
+  - Note: DNS column is "-" when no repo exists (no desired state to
+    compare); drift/unhealthy are findings (exit 0), API errors are
+    failures (EXIT_PARTIAL)
 - [ ] Stage 3: `mimeo sync [DOMAINS...]` — converge on desired state
   - [ ] One pass that applies whatever `status` flags: DNS repair + HTTPS
         enforcement (template apply stays manual — content is a choice,

@@ -1,5 +1,27 @@
 # Phase 8: Consolidation Chronicles
 
+## Entry 35: Stage 3 — mimeo sync, converge on desired state (2026-07-06)
+
+**What**: Added `mimeo sync [DOMAINS... | --all]`: applies missing DNS
+records and enables HTTPS enforcement when the certificate is ready, in one
+pass, with `--dry-run` and `--reset-nameservers`.
+
+**Why**: The remediation half of DEC-021's status/sync pair — replaces
+running `dns repair` and `fix https` separately across the fleet.
+
+**How**: Same union-of-inventories targeting as status, built on map_items.
+Safety decisions (user-confirmed): fleet-wide requires explicit `--all`
+(no-arg refuses, exit 2); acts on missing records only, never deletes
+extras (the Porkbun wildcard parking CNAME survives); nameservers touched
+only with `--reset-nameservers`; no propagation wait at fleet scale.
+`dns repair` / `fix https` kept as targeted scalpels. Live-verified:
+guard refuses correctly; `--dry-run` on two real domains reported both ok
+(wildcard drift correctly triggers no action).
+
+**Decisions**: DEC-021 (Stage 3 resolutions)
+
+**Files**: `mimeo/cli/sync.py`, `mimeo/cli/__init__.py`, `tests/test_sync.py`
+
 ## Entry 34: Stage 2 — mimeo status, the cross-provider join (2026-07-06)
 
 **What**: Added `mimeo status [DOMAINS...]` — one view joining the Porkbun

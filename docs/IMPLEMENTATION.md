@@ -59,13 +59,20 @@ front-door verbs than it started with. See DEC-021.
   - Note: DNS column is "-" when no repo exists (no desired state to
     compare); drift/unhealthy are findings (exit 0), API errors are
     failures (EXIT_PARTIAL)
-- [ ] Stage 3: `mimeo sync [DOMAINS...]` — converge on desired state
-  - [ ] One pass that applies whatever `status` flags: DNS repair + HTTPS
-        enforcement (template apply stays manual — content is a choice,
-        not drift)
-  - [ ] `--dry-run` previews planned actions; partial-failure exit codes
-  - [ ] Decide fate of `dns repair` / `fix https`: keep as plumbing,
-        alias, or deprecate
+- [x] Stage 3: `mimeo sync [DOMAINS... | --all]` — converge on desired state
+  - [x] One pass: applies missing DNS records + enables HTTPS when cert
+        ready; resets nameservers only with --reset-nameservers (template
+        apply stays manual — content is a choice, not drift)
+  - [x] `--dry-run` previews planned actions; partial-failure exit codes
+  - [x] Fleet-wide requires explicit --all; no-arg invocation refuses
+        with guidance (mutating command, 105-domain blast radius)
+  - [x] Acts on missing records only — extra records (e.g. Porkbun
+        wildcard parking CNAME) are reported by status but never deleted
+  - [x] Does not wait for DNS propagation (fleet-scale); `dns repair`
+        remains the single-domain verified fix
+  - [x] Fate of `dns repair` / `fix https`: kept as targeted scalpels
+        (repair verifies propagation; fix https does discovery); sync is
+        the batch front door
 - [ ] Stage 4: E2E integration test lane (separate from unit tests, gated,
       hits real APIs; `create`/`status`/`sync` are the flows worth covering)
 - [ ] Identity fix: replace "A tool to generate websites quickly" with

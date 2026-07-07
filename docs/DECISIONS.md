@@ -395,6 +395,8 @@ Template application stays a manual command: content choice is intent, not drift
 
 **Consequences**: The CLI ends Phase 8 with fewer front-door verbs and less code than it started with. `registrar list --with-dns` full-account sweeps are subsumed by `status`. One-line identity changes to "Provision and manage custom-domain sites on GitHub Pages." Precedent: DEC-018 amputated `list --fix`/`list --dns-check` as misplaced — those were early gropes toward status/sync.
 
+**Stage 3 resolutions (2026-07-06)**: Fleet-wide `sync` requires explicit `--all` (mutating command; implicit whole-fleet runs refused). `sync` acts on missing DNS records only — extra records such as Porkbun's wildcard parking CNAME are reported by `status` but never deleted. `sync` does not wait for DNS propagation. `dns repair` and `fix https` are kept as targeted scalpels rather than deprecated: repair verifies propagation for a single domain, fix https does its own discovery; sync is the batch front door.
+
 ---
 
 ## Superseded/Deprecated

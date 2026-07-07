@@ -19,6 +19,7 @@ from .fix import fix
 from .list_cmd import list_sites
 from .registrar import registrar, registrar_list
 from .status import status
+from .sync import sync
 from .template import template
 
 
@@ -37,6 +38,7 @@ def main(log_format: str) -> None:
 
 main.add_command(create)
 main.add_command(status)
+main.add_command(sync)
 main.add_command(list_sites)
 main.add_command(dns)
 main.add_command(template)
@@ -49,6 +51,7 @@ __all__ = [
     "main",
     "create",
     "status",
+    "sync",
     "list_sites",
     "dns",
     "template",

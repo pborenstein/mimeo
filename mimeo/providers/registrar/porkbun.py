@@ -347,12 +347,19 @@ class PorkbunDNSProvider(_PorkbunClient, DNSProvider):
 
         return False
 
-    def check_dns_drift(self, domain: str, expected: List[DNSRecord]) -> Dict[str, Any]:
+    def check_dns_drift(
+        self,
+        domain: str,
+        expected: List[DNSRecord],
+        live_records: List[Dict[str, Any]] | None = None,
+    ) -> Dict[str, Any]:
         """Compare expected DNS records against live Porkbun records.
 
         Args:
             domain: Domain name to check
             expected: Expected DNS records
+            live_records: Pre-fetched records from get_domain_records();
+                          fetched here when not provided
 
         Returns:
             Dict with keys:
@@ -360,7 +367,8 @@ class PorkbunDNSProvider(_PorkbunClient, DNSProvider):
               - missing: list of expected records not found in Porkbun
               - extra: list of Porkbun records not in expected set
         """
-        live_records = self.get_domain_records(domain)
+        if live_records is None:
+            live_records = self.get_domain_records(domain)
 
         live_set = {
             (

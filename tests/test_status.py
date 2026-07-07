@@ -265,6 +265,71 @@ class TestStatusCommand:
     @patch(f"{_STATUS}.GitHubHost")
     @patch(f"{_STATUS}.PorkbunRegistrar")
     @patch(f"{_STATUS}.PorkbunDNSProvider")
+    def test_with_dns_includes_records_and_fetches_once(
+        self,
+        mock_dns_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """--with-dns adds raw records without a second retrieve call."""
+        records = [
+            {"type": "A", "name": "site.com", "content": "185.199.108.153", "ttl": "600"},
+            {"type": "CNAME", "name": "www.site.com", "content": "user.github.io", "ttl": "600"},
+        ]
+        mock_config_load.return_value = mock_config
+        mock_registrar_class.return_value = _make_registrar(
+            [{"domain": "site.com", "expireDate": "2027-01-01", "autoRenew": "1"}]
+        )
+        mock_host_class.return_value = _make_host([{"name": "site.com"}])
+        dns_provider = _make_dns_provider()
+        dns_provider.get_domain_records.return_value = records
+        mock_dns_class.return_value = dns_provider
+
+        result = runner.invoke(status, ["site.com", "--with-dns", "--format", "json"])
+
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert data[0]["dns_records"] == records
+        dns_provider.get_domain_records.assert_called_once_with("site.com")
+        # drift check received the pre-fetched records instead of refetching
+        _, kwargs = dns_provider.check_dns_drift.call_args
+        assert kwargs["live_records"] == records
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_STATUS}.GitHubHost")
+    @patch(f"{_STATUS}.PorkbunRegistrar")
+    @patch(f"{_STATUS}.PorkbunDNSProvider")
+    def test_without_dns_no_records_no_extra_call(
+        self,
+        mock_dns_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        mock_config_load.return_value = mock_config
+        mock_registrar_class.return_value = _make_registrar(
+            [{"domain": "site.com", "expireDate": "2027-01-01", "autoRenew": "1"}]
+        )
+        mock_host_class.return_value = _make_host([{"name": "site.com"}])
+        dns_provider = _make_dns_provider()
+        mock_dns_class.return_value = dns_provider
+
+        result = runner.invoke(status, ["site.com", "--format", "json"])
+
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert data[0]["dns_records"] == []
+        dns_provider.get_domain_records.assert_not_called()
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_STATUS}.GitHubHost")
+    @patch(f"{_STATUS}.PorkbunRegistrar")
+    @patch(f"{_STATUS}.PorkbunDNSProvider")
     def test_drift_is_not_an_error_exit(
         self,
         mock_dns_class: Any,

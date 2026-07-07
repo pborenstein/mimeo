@@ -162,6 +162,10 @@ mimeo status --all --problems
 
 # Full detail for scripting
 mimeo status --all --format json | jq '.[] | select(.dns_status == "drift")'
+
+# Include the full live DNS records (one extra API call per domain)
+mimeo status example.com --with-dns
+mimeo status --all --with-dns --format json > fleet.json
 ```
 
 A bare `mimeo status` refuses to run: the fleet sweep is slow, so it requires the explicit `--all`. Registered domains with no site show `no repo`; sites whose domain is not in the Porkbun account show `-` on the registrar side. The DNS column is `-` when there is no repo (no desired state to compare against). Drift and unhealthy sites are findings (exit 0); API errors exit nonzero with partial results.

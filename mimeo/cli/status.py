@@ -64,7 +64,7 @@ def _has_problem(row: Dict[str, Any]) -> bool:
     return False
 
 
-def _text(rows: List[Dict[str, Any]]) -> None:
+def _text(rows: List[Dict[str, Any]], with_dns: bool = False) -> None:
     if not rows:
         click.echo("Nothing to report.")
         return
@@ -114,6 +114,18 @@ def _text(rows: List[Dict[str, Any]]) -> None:
             click.secho(f"  [{row['error']}]", fg="red", nl=False)
         click.echo()
 
+        if with_dns and row.get("dns_records"):
+            recs = row["dns_records"]
+            type_w = max(len(r.get("type", "")) for r in recs)
+            name_w = max(len(r.get("name", "")) for r in recs)
+            ttl_w = max(len(str(r.get("ttl", ""))) for r in recs)
+            for rec in recs:
+                click.secho(
+                    f"      {rec.get('type',''):<{type_w}}  {rec.get('name',''):<{name_w}}  "
+                    f"{str(rec.get('ttl','')):<{ttl_w}}  {rec.get('content','')}",
+                    dim=True,
+                )
+
     click.echo()
     color = "green" if problems == 0 else "yellow"
     click.secho(f"{len(rows)} domain(s), {problems} with issues", fg=color)
@@ -153,6 +165,11 @@ def _text(rows: List[Dict[str, Any]]) -> None:
     is_flag=True,
     help="Show only domains that need attention",
 )
+@click.option(
+    "--with-dns",
+    is_flag=True,
+    help="Include the full live DNS records for each registered domain",
+)
 def status(
     domains: tuple[str, ...],
     status_all: bool,
@@ -160,6 +177,7 @@ def status(
     output_format: str,
     workers: int,
     problems: bool,
+    with_dns: bool,
 ) -> None:
     """Show fleet status: registrar, DNS, and site health in one view.
 
@@ -184,6 +202,7 @@ def status(
         mimeo status --all                 # whole fleet (takes a while)
         mimeo status --all --problems      # only what needs attention
         mimeo status --all --format json | jq '.[] | select(.dns_status == "drift")'
+        mimeo status example.com --with-dns --format json | jq '.[0].dns_records'
     """
     if domains and status_all:
         click.secho("Give either domain names or --all, not both.", fg="red", err=True)
@@ -233,6 +252,7 @@ def status(
                     "site_health": None,
                     "https_enforced": None,
                     "cert_state": None,
+                    "dns_records": [],
                     "error": None,
                 }
 
@@ -242,6 +262,11 @@ def status(
                         row["ns_ok"] = ns_result.ok
                         row["nameservers"] = ns_result.actual
 
+                    live_records = None
+                    if with_dns and row["registered"]:
+                        live_records = dns_provider.get_domain_records(domain)
+                        row["dns_records"] = live_records
+
                     if row["repo"]:
                         health = host.get_pages_health(f"{owner}/{domain}")
                         row["site_health"] = health_status(health)
@@ -250,7 +275,9 @@ def status(
 
                         if row["registered"]:
                             expected = host.required_dns_records(domain)
-                            drift = dns_provider.check_dns_drift(domain, expected)
+                            drift = dns_provider.check_dns_drift(
+                                domain, expected, live_records=live_records
+                            )
                             row["dns_status"] = drift["status"]
                             row["missing"] = drift.get("missing", [])
                             row["extra"] = drift.get("extra", [])
@@ -277,6 +304,7 @@ def status(
                     "site_health": None,
                     "https_enforced": None,
                     "cert_state": None,
+                    "dns_records": [],
                     "error": str(exc),
                     "error_category": category,
                 }
@@ -286,7 +314,26 @@ def status(
         if problems:
             results = [r for r in results if _has_problem(r)]
 
-        render_results(results, output_format, csv_fields=_CSV_FIELDS, text=_text)
+        csv_fields = list(_CSV_FIELDS)
+        csv_rows = None
+        if with_dns:
+            csv_fields.insert(-1, "dns_records")
+
+            def csv_rows(row: Dict[str, Any]) -> List[Dict[str, Any]]:
+                flat = dict(row)
+                flat["dns_records"] = "|".join(
+                    f"{r.get('type','')}:{r.get('name','')}={r.get('content','')}"
+                    for r in row.get("dns_records") or []
+                )
+                return [flat]
+
+        render_results(
+            results,
+            output_format,
+            csv_fields=csv_fields,
+            csv_rows=csv_rows,
+            text=lambda rows: _text(rows, with_dns=with_dns),
+        )
         exit_on_errors(results)
 
     except Exception as e:

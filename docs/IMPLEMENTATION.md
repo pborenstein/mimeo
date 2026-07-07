@@ -56,6 +56,9 @@ front-door verbs than it started with. See DEC-021.
         "-" on the registrar side; `--problems` filters to what needs
         attention
   - [x] Subsumes the `registrar list --with-dns` full-sweep use case
+  - [x] `--with-dns` includes full live records (json/csv, and indented
+        under each row in text); records fetched once and reused for the
+        drift check via check_dns_drift(live_records=...)
   - [x] Fleet-wide requires explicit --all (sweep is slow: several API
         calls per domain); bare `mimeo status` refuses with guidance
   - Note: DNS column is "-" when no repo exists (no desired state to

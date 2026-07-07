@@ -10,7 +10,7 @@ from typing import Any, Dict
 
 import click
 
-from ..exceptions import EXIT_CONFIG, ConfigurationError
+from ..exceptions import EXIT_CONFIG, EXIT_PARTIAL, ConfigurationError
 from ..providers.registrar.porkbun import PorkbunDNSProvider, PorkbunRegistrar
 from ._processing import _categorize_error, _emit
 
@@ -76,6 +76,7 @@ def registrar_list(config: Path | None, output_format: str, with_dns: bool, work
                 fieldnames = ["domain", "tld", "expires", "auto_renew", "ns_ok", "nameservers"]
                 if with_dns:
                     fieldnames.append("dns_records")
+                fieldnames.append("error")
                 writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
                 writer.writeheader()
             else:
@@ -88,44 +89,71 @@ def registrar_list(config: Path | None, output_format: str, with_dns: bool, work
 
         console_lock = Lock()
 
-        def _enrich(idx: int, domain_info: Dict[str, Any]) -> Dict[str, Any]:
-            domain_name = domain_info.get("domain", "")
-            auto_renew_raw = domain_info.get("autoRenew")
-            auto_renew = auto_renew_raw in ("1", 1, True)
+        with PorkbunRegistrar(cfg.porkbun_api_key, cfg.porkbun_secret) as reg2, \
+                PorkbunDNSProvider(cfg.porkbun_api_key, cfg.porkbun_secret) as dns_prov:
 
-            result: Dict[str, Any] = {
-                "domain": domain_name,
-                "tld": domain_info.get("tld", ""),
-                "expires": domain_info.get("expireDate", ""),
-                "auto_renew": auto_renew,
-            }
+            def _enrich(idx: int, domain_info: Dict[str, Any]) -> Dict[str, Any]:
+                domain_name = domain_info.get("domain", "")
+                auto_renew_raw = domain_info.get("autoRenew")
+                auto_renew = auto_renew_raw in ("1", 1, True)
 
-            with PorkbunRegistrar(cfg.porkbun_api_key, cfg.porkbun_secret) as r:
-                ns_result = r.check_nameservers(domain_name)
-            result["nameservers"] = ns_result.actual
-            result["ns_ok"] = ns_result.ok
+                result: Dict[str, Any] = {
+                    "domain": domain_name,
+                    "tld": domain_info.get("tld", ""),
+                    "expires": domain_info.get("expireDate", ""),
+                    "auto_renew": auto_renew,
+                    "nameservers": [],
+                    "ns_ok": False,
+                    "dns_records": [],
+                    "error": None,
+                }
 
-            if with_dns:
-                with PorkbunDNSProvider(cfg.porkbun_api_key, cfg.porkbun_secret) as dns_prov:
-                    result["dns_records"] = dns_prov._get_domain_records(domain_name)
-            else:
-                result["dns_records"] = []
+                try:
+                    ns_result = reg2.check_nameservers(domain_name)
+                    result["nameservers"] = ns_result.actual
+                    result["ns_ok"] = ns_result.ok
 
-            with console_lock:
-                _emit("info", f"enriched {domain_name} [{idx}/{total}]")
+                    if with_dns:
+                        result["dns_records"] = dns_prov.get_domain_records(domain_name)
+                except Exception as exc:
+                    _, category = _categorize_error(exc)
+                    result["error"] = str(exc)
+                    result["error_category"] = category
 
-            return result
+                with console_lock:
+                    if result["error"]:
+                        _emit("error", f"failed {domain_name} [{idx}/{total}]: {result['error']}")
+                    else:
+                        _emit("info", f"enriched {domain_name} [{idx}/{total}]")
 
-        with ThreadPoolExecutor(max_workers=min(total, workers)) as executor:
-            futures = {
-                executor.submit(_enrich, i, info): i
-                for i, info in indexed
-            }
-            for future in as_completed(futures):
-                i = futures[future]
-                enriched[i] = future.result()
+                return result
+
+            with ThreadPoolExecutor(max_workers=min(total, workers)) as executor:
+                futures = {
+                    executor.submit(_enrich, i, info): i
+                    for i, info in indexed
+                }
+                for future in as_completed(futures):
+                    i = futures[future]
+                    try:
+                        enriched[i] = future.result()
+                    except Exception as exc:
+                        _, category = _categorize_error(exc)
+                        info = indexed[i - 1][1]
+                        enriched[i] = {
+                            "domain": info.get("domain", ""),
+                            "tld": info.get("tld", ""),
+                            "expires": info.get("expireDate", ""),
+                            "auto_renew": info.get("autoRenew") in ("1", 1, True),
+                            "nameservers": [],
+                            "ns_ok": False,
+                            "dns_records": [],
+                            "error": str(exc),
+                            "error_category": category,
+                        }
 
         ordered = sorted(enriched.values(), key=lambda r: r["domain"])
+        failed = [r for r in ordered if r.get("error")]
 
         if output_format == "json":
             click.echo(json.dumps(ordered, indent=2))
@@ -134,6 +162,7 @@ def registrar_list(config: Path | None, output_format: str, with_dns: bool, work
             fieldnames = ["domain", "tld", "expires", "auto_renew", "ns_ok", "nameservers"]
             if with_dns:
                 fieldnames.append("dns_records")
+            fieldnames.append("error")
 
             writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames, extrasaction="ignore")
             writer.writeheader()
@@ -163,6 +192,12 @@ def registrar_list(config: Path | None, output_format: str, with_dns: bool, work
             click.secho("  " + "-" * (len(header) - 2), fg="white", dim=True)
 
             for row in ordered:
+                if row.get("error"):
+                    line = f"  {row['domain']:<{domain_w}}  {row['expires']:<{expires_w}}  "
+                    click.echo(line, nl=False)
+                    click.secho(f"{'error':<5}", fg="red", nl=False)
+                    click.secho(f"  {row['error']}", fg="red")
+                    continue
                 ns_ok = row["ns_ok"]
                 ns_label = "yes" if ns_ok else "no"
                 ns_color = "green" if ns_ok else "red"
@@ -175,6 +210,20 @@ def registrar_list(config: Path | None, output_format: str, with_dns: bool, work
                 click.echo(f"  {ns_str}")
 
             click.echo()
+
+        if failed:
+            for r in failed:
+                click.secho(
+                    f"[{r.get('error_category', 'provider')}] {r['domain']}: {r['error']}",
+                    fg="red",
+                    err=True,
+                )
+            click.secho(
+                f"warning: {len(failed)}/{total} domains failed to enrich; results are partial",
+                fg="yellow",
+                err=True,
+            )
+            sys.exit(EXIT_PARTIAL)
 
     except Exception as e:
         exit_code, category = _categorize_error(e)

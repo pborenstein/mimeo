@@ -1,5 +1,6 @@
 """Tests for CLI module."""
 
+import json
 from pathlib import Path
 from typing import Any, List
 from unittest.mock import MagicMock, patch
@@ -1654,6 +1655,163 @@ class TestDnsCommands:
         mock_registrar.update_nameservers.assert_called_once_with("example.com")
         mock_dns_provider.configure_dns.assert_called_once()
 
+    SAMPLE_RECORDS = [
+        {
+            "id": "1",
+            "type": "A",
+            "name": "example.com",
+            "content": "185.199.108.153",
+            "ttl": "600",
+            "prio": "0",
+        },
+        {
+            "id": "2",
+            "type": "CNAME",
+            "name": "www.example.com",
+            "content": "user.github.io",
+            "ttl": "600",
+            "prio": "0",
+        },
+    ]
+
+    def _mock_dns_provider(self, mock_dns_provider_class: Any) -> MagicMock:
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.get_domain_records.return_value = self.SAMPLE_RECORDS
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
+        return mock_dns_provider
+
+    @patch("mimeo.config.Config.load")
+    @patch("mimeo.cli.dns.PorkbunDNSProvider")
+    def test_dns_show_text(
+        self,
+        mock_dns_provider_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """dns show prints a record table for the domain."""
+        from mimeo.cli.dns import show
+
+        mock_config_load.return_value = mock_config
+        mock_dns_provider = self._mock_dns_provider(mock_dns_provider_class)
+
+        result = runner.invoke(show, ["example.com"])
+
+        assert result.exit_code == 0
+        mock_dns_provider.get_domain_records.assert_called_once_with("example.com")
+        assert "example.com" in result.output
+        assert "185.199.108.153" in result.output
+        assert "CNAME" in result.output
+
+    @patch("mimeo.config.Config.load")
+    @patch("mimeo.cli.dns.PorkbunDNSProvider")
+    def test_dns_show_json(
+        self,
+        mock_dns_provider_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """dns show --format json emits a list of per-domain objects."""
+        from mimeo.cli.dns import show
+
+        mock_config_load.return_value = mock_config
+        self._mock_dns_provider(mock_dns_provider_class)
+
+        result = runner.invoke(show, ["example.com", "--format", "json"])
+
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert len(data) == 1
+        assert data[0]["domain"] == "example.com"
+        assert data[0]["error"] is None
+        assert len(data[0]["records"]) == 2
+        assert data[0]["records"][0]["content"] == "185.199.108.153"
+
+    @patch("mimeo.config.Config.load")
+    @patch("mimeo.cli.dns.PorkbunDNSProvider")
+    def test_dns_show_csv(
+        self,
+        mock_dns_provider_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """dns show --format csv emits one row per record."""
+        from mimeo.cli.dns import show
+
+        mock_config_load.return_value = mock_config
+        self._mock_dns_provider(mock_dns_provider_class)
+
+        result = runner.invoke(show, ["example.com", "--format", "csv"])
+
+        assert result.exit_code == 0
+        lines = result.output.strip().split("\n")
+        assert lines[0] == "domain,type,name,ttl,prio,content"
+        assert len(lines) == 3
+        assert lines[1].startswith("example.com,A,")
+
+    @patch("mimeo.config.Config.load")
+    @patch("mimeo.cli.dns.PorkbunDNSProvider")
+    def test_dns_show_no_records(
+        self,
+        mock_dns_provider_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """dns show handles a domain with no records."""
+        from mimeo.cli.dns import show
+
+        mock_config_load.return_value = mock_config
+        mock_dns_provider = self._mock_dns_provider(mock_dns_provider_class)
+        mock_dns_provider.get_domain_records.return_value = []
+
+        result = runner.invoke(show, ["example.com"])
+
+        assert result.exit_code == 0
+        assert "no records" in result.output
+
+    @patch("mimeo.config.Config.load")
+    @patch("mimeo.cli.dns.PorkbunDNSProvider")
+    def test_dns_show_partial_failure(
+        self,
+        mock_dns_provider_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """dns show keeps results for good domains when one fails."""
+        from mimeo.cli.dns import show
+        from mimeo.exceptions import EXIT_TRANSIENT, RegistrarError
+
+        mock_config_load.return_value = mock_config
+        mock_dns_provider = self._mock_dns_provider(mock_dns_provider_class)
+        mock_dns_provider.get_domain_records.side_effect = [
+            self.SAMPLE_RECORDS,
+            RegistrarError("Failed to communicate with Porkbun API: HTTP 503"),
+        ]
+
+        result = runner.invoke(show, ["good.com", "bad.com", "--format", "json"])
+
+        assert result.exit_code == EXIT_TRANSIENT
+        data = json.loads(result.stdout)
+        assert len(data) == 2
+        assert data[0]["domain"] == "good.com"
+        assert len(data[0]["records"]) == 2
+        assert data[1]["domain"] == "bad.com"
+        assert "503" in data[1]["error"]
+
+    def test_dns_show_invalid_domain(self, runner: CliRunner) -> None:
+        """dns show rejects invalid domain names."""
+        from mimeo.cli.dns import show
+
+        result = runner.invoke(show, ["not_a_domain"])
+
+        assert result.exit_code != 0
+        assert "Invalid domain name" in result.output
+
 
 class TestTemplateApplyCommand:
     """Tests for template apply command."""
@@ -1828,7 +1986,7 @@ class TestRegistrarListCommand:
 
         assert result.exit_code == 0
         lines = result.output.strip().split("\n")
-        assert lines[0] == "domain,tld,expires,auto_renew,ns_ok,nameservers"
+        assert lines[0] == "domain,tld,expires,auto_renew,ns_ok,nameservers,error"
         assert len(lines) == 3
 
     @patch("mimeo.config.Config.load")
@@ -1854,7 +2012,7 @@ class TestRegistrarListCommand:
 
         with patch(f"{_REGISTRAR}.PorkbunDNSProvider") as mock_dns_class:
             mock_dns = MagicMock()
-            mock_dns._get_domain_records.return_value = []
+            mock_dns.get_domain_records.return_value = []
             mock_dns.__enter__.return_value = mock_dns
             mock_dns.__exit__ = MagicMock(return_value=False)
             mock_dns_class.return_value = mock_dns
@@ -1954,3 +2112,95 @@ class TestRegistrarListCommand:
         data = json_mod.loads(result.output)
         assert data[0]["ns_ok"] is False
         assert "ns1.cloudflare.com" in data[0]["nameservers"]
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_REGISTRAR}.PorkbunRegistrar")
+    def test_registrar_list_partial_failure(
+        self,
+        mock_registrar_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """registrar list keeps good domains when enrichment fails for one."""
+        from mimeo.exceptions import EXIT_PARTIAL
+
+        mock_config_load.return_value = mock_config
+
+        mock_registrar = MagicMock()
+        mock_registrar.list_domains.return_value = self.SAMPLE_DOMAINS
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar.__exit__ = MagicMock(return_value=False)
+        mock_registrar_class.return_value = mock_registrar
+
+        ok_result = NameserverCheckResult(
+            ok=True,
+            actual=["curitiba.ns.porkbun.com"],
+            expected=["curitiba.ns.porkbun.com"],
+        )
+
+        def check_ns(domain: str) -> NameserverCheckResult:
+            if domain == "example.net":
+                raise RegistrarError("Failed to communicate with Porkbun API: HTTP 503")
+            return ok_result
+
+        mock_registrar.check_nameservers.side_effect = check_ns
+
+        result = runner.invoke(registrar_list, ["--format", "json", "--workers", "1"])
+
+        assert result.exit_code == EXIT_PARTIAL
+        data = json.loads(result.stdout)
+        assert len(data) == len(self.SAMPLE_DOMAINS)
+        by_domain = {d["domain"]: d for d in data}
+        assert by_domain["example.com"]["error"] is None
+        assert by_domain["example.com"]["ns_ok"] is True
+        assert "503" in by_domain["example.net"]["error"]
+        assert "partial" in result.output
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_REGISTRAR}.PorkbunRegistrar")
+    def test_registrar_list_partial_failure_dns(
+        self,
+        mock_registrar_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """registrar list --with-dns keeps good domains when a DNS fetch fails."""
+        from mimeo.exceptions import EXIT_PARTIAL
+
+        mock_config_load.return_value = mock_config
+
+        mock_registrar = MagicMock()
+        mock_registrar.list_domains.return_value = self.SAMPLE_DOMAINS
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=True,
+            actual=["curitiba.ns.porkbun.com"],
+            expected=["curitiba.ns.porkbun.com"],
+        )
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar.__exit__ = MagicMock(return_value=False)
+        mock_registrar_class.return_value = mock_registrar
+
+        def get_records(domain: str) -> List[dict]:
+            if domain == "example.net":
+                raise RegistrarError("Failed to communicate with Porkbun API: HTTP 503")
+            return [{"type": "A", "name": domain, "content": "1.2.3.4", "ttl": "600"}]
+
+        with patch(f"{_REGISTRAR}.PorkbunDNSProvider") as mock_dns_class:
+            mock_dns = MagicMock()
+            mock_dns.get_domain_records.side_effect = get_records
+            mock_dns.__enter__.return_value = mock_dns
+            mock_dns.__exit__ = MagicMock(return_value=False)
+            mock_dns_class.return_value = mock_dns
+
+            result = runner.invoke(
+                registrar_list, ["--format", "json", "--with-dns", "--workers", "1"]
+            )
+
+        assert result.exit_code == EXIT_PARTIAL
+        data = json.loads(result.stdout)
+        by_domain = {d["domain"]: d for d in data}
+        assert len(by_domain["example.com"]["dns_records"]) == 1
+        assert by_domain["example.net"]["dns_records"] == []
+        assert "503" in by_domain["example.net"]["error"]

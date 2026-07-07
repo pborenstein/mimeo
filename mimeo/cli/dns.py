@@ -13,6 +13,7 @@ from ..providers.registrar.porkbun import PorkbunDNSProvider, PorkbunRegistrar
 from ._processing import (
     _categorize_error,
     _emit,
+    exit_on_failures,
     get_log_format,
     load_config,
     process_domains_concurrent,
@@ -24,6 +25,126 @@ from ._processing import (
 def dns() -> None:
     """Check and repair DNS records."""
     pass
+
+
+@dns.command()
+@click.argument("domains", nargs=-1, required=True)
+@click.option(
+    "--config",
+    type=click.Path(exists=True, path_type=Path),
+    help="Path to config file (default: ~/.config/mimeo/config.toml)",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["text", "json", "csv"], case_sensitive=False),
+    default="text",
+    show_default=True,
+    help="Output format",
+)
+def show(domains: tuple[str, ...], config: Path | None, output_format: str) -> None:
+    """Show live DNS records for one or more domains.
+
+    Fetches the current DNS records from Porkbun without comparing them
+    against any expected configuration.
+
+    Examples:
+        mimeo dns show example.com
+        mimeo dns show example.com --format json
+        mimeo dns show site1.com site2.com --format csv
+    """
+    validate_domains(domains)
+    try:
+        cfg = load_config(config)
+        results: List[Dict[str, Any]] = []
+
+        with PorkbunDNSProvider(cfg.porkbun_api_key, cfg.porkbun_secret) as dns_provider:
+            for domain in domains:
+                entry: Dict[str, Any] = {"domain": domain, "records": [], "error": None}
+                try:
+                    entry["records"] = dns_provider.get_domain_records(domain)
+                except Exception as exc:
+                    entry["error"] = str(exc)
+                    _, entry["error_category"] = _categorize_error(exc)
+                results.append(entry)
+
+        if output_format == "json":
+            click.echo(json.dumps(results, indent=2))
+        elif output_format == "csv":
+            import csv
+
+            fieldnames = ["domain", "type", "name", "ttl", "prio", "content"]
+            writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames, extrasaction="ignore")
+            writer.writeheader()
+            for entry in results:
+                for rec in entry["records"]:
+                    writer.writerow(
+                        {
+                            "domain": entry["domain"],
+                            "type": rec.get("type", ""),
+                            "name": rec.get("name", ""),
+                            "ttl": rec.get("ttl", ""),
+                            "prio": rec.get("prio", ""),
+                            "content": rec.get("content", ""),
+                        }
+                    )
+        else:
+            click.echo()
+            for entry in results:
+                click.secho(f"  {entry['domain']}", bold=True)
+                if entry["error"]:
+                    click.secho(f"    error: {entry['error']}", fg="red")
+                    click.echo()
+                    continue
+                if not entry["records"]:
+                    click.echo("    (no records)")
+                    click.echo()
+                    continue
+
+                rows = [
+                    (
+                        rec.get("type", ""),
+                        rec.get("name", ""),
+                        str(rec.get("ttl", "")),
+                        rec.get("content", ""),
+                    )
+                    for rec in entry["records"]
+                ]
+                type_w = max(len("TYPE"), max(len(r[0]) for r in rows))
+                name_w = max(len("NAME"), max(len(r[1]) for r in rows))
+                ttl_w = max(len("TTL"), max(len(r[2]) for r in rows))
+
+                click.secho(
+                    f"    {'TYPE':<{type_w}}  {'NAME':<{name_w}}  {'TTL':<{ttl_w}}  CONTENT",
+                    dim=True,
+                )
+                for type_, name, ttl, content in rows:
+                    click.echo(f"    {type_:<{type_w}}  {name:<{name_w}}  {ttl:<{ttl_w}}  {content}")
+                click.echo()
+
+        if any(r["error"] for r in results):
+            for entry in results:
+                if entry["error"]:
+                    category = entry.get("error_category", "provider")
+                    click.secho(
+                        f"[{category}] {entry['domain']}: {entry['error']}", fg="red", err=True
+                    )
+            exit_on_failures(
+                [
+                    {
+                        "domain": r["domain"],
+                        "success": not r["error"],
+                        "error": r["error"],
+                        "error_category": r.get("error_category"),
+                    }
+                    for r in results
+                ]
+            )
+
+    except Exception as e:
+        exit_code, category = _categorize_error(e)
+        click.secho(f"[{category}] {e}", fg="red", err=True)
+        sys.exit(exit_code)
 
 
 @dns.command()
@@ -321,7 +442,5 @@ def repair(
             color = "green" if success_count == total_count else "yellow"
             click.secho(f"DNS repair: {success_count}/{total_count} succeeded", fg=color)
         click.echo()
-
-    from ._processing import exit_on_failures
 
     exit_on_failures(results)

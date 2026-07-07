@@ -1,5 +1,30 @@
 # Phase 7: CLI Redesign Chronicles
 
+## Entry 31: dns show command and partial results for registrar list (2026-07-06)
+
+**What**: Added `mimeo dns show DOMAIN...` (raw live Porkbun records, text/json/csv)
+and made `registrar list` survive per-domain enrichment failures instead of
+discarding all results.
+
+**Why**: A real `registrar list --format json --with-dns` run over 105 domains hit
+a Porkbun 503 mid-sweep and produced zero output — one transient failure aborted
+the whole command via `future.result()`. There was also no way to get DNS records
+for a single domain without sweeping the entire account.
+
+**How**: New `show` command in `mimeo/cli/dns.py` (sequential, per-domain error
+entries, nonzero exit on failure). In `registrar list`, enrichment errors are
+caught per domain and carried as `error`/`error_category` fields (JSON field, CSV
+column, red text row); stderr summary and EXIT_PARTIAL (6) when any failed. One
+shared `PorkbunRegistrar` + `PorkbunDNSProvider` across workers replaces two
+fresh sessions per domain. `_get_domain_records` promoted to public
+`get_domain_records`. Verified live: full 105-domain sweep enriched cleanly.
+
+**Files**: `mimeo/cli/dns.py`, `mimeo/cli/registrar.py`,
+`mimeo/providers/registrar/porkbun.py`, `tests/test_cli.py`,
+`tests/providers/registrar/test_porkbun.py`
+
+---
+
 ## Entry 30: Race condition fix — wait for repo after generate (2026-04-03)
 
 **What**: Fixed a race condition where `mimeo create` failed with 404 on topics,

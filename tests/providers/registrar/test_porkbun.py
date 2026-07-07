@@ -313,7 +313,7 @@ class TestPorkbunDNSProvider:
             },
             status=200,
         )
-        records = provider._get_domain_records("example.com")
+        records = provider.get_domain_records("example.com")
         assert len(records) == 1
         assert records[0]["type"] == "A"
 

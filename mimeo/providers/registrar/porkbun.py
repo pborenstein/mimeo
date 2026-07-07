@@ -176,8 +176,18 @@ class PorkbunDNSProvider(_PorkbunClient, DNSProvider):
         """
         _PorkbunClient.__init__(self, api_key, secret_key)
 
-    def _get_domain_records(self, domain: str) -> List[Dict[str, Any]]:
-        """Retrieve all DNS records for a domain."""
+    def get_domain_records(self, domain: str) -> List[Dict[str, Any]]:
+        """Retrieve all DNS records for a domain.
+
+        Args:
+            domain: Domain name to query
+
+        Returns:
+            List of record dicts from the Porkbun API.
+
+        Raises:
+            RegistrarError: If the API call fails
+        """
         response = self._make_request(f"/dns/retrieve/{domain}", {})
         records: List[Dict[str, Any]] = response.get("records", [])
         return records
@@ -235,7 +245,7 @@ class PorkbunDNSProvider(_PorkbunClient, DNSProvider):
             RegistrarError: If DNS configuration fails
         """
         try:
-            existing_records = self._get_domain_records(domain)
+            existing_records = self.get_domain_records(domain)
 
             managed_records = {
                 (r.type, self._normalize_record_name(r.name, domain)) for r in records
@@ -350,7 +360,7 @@ class PorkbunDNSProvider(_PorkbunClient, DNSProvider):
               - missing: list of expected records not found in Porkbun
               - extra: list of Porkbun records not in expected set
         """
-        live_records = self._get_domain_records(domain)
+        live_records = self.get_domain_records(domain)
 
         live_set = {
             (

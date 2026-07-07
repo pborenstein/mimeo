@@ -61,7 +61,7 @@ conflating provisioning with repair/maintenance.
 - [x] Add `mimeo dns show` (raw live records for specific domains)
   - [x] Promote `PorkbunDNSProvider._get_domain_records` to public `get_domain_records`
 - [x] Partial results for `registrar list` (per-domain errors, EXIT_PARTIAL, shared clients)
-- [ ] Fix 3 failing tests in tests/providers/host/test_github.py (broken by e9830da `_wait_for_repo` change)
+- [x] Fix 3 failing tests in tests/providers/host/test_github.py (broken by e9830da `_wait_for_repo` change)
 - [ ] E2E integration test lane (separate from unit tests, gated, hits real APIs)
 - [ ] Template parameterization (substitute domain into template files post-creation)
 

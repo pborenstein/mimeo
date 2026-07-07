@@ -138,6 +138,7 @@ class TestGitHubHost:
                 mock_api.side_effect = [
                     HostError("Not Found"),  # repo existence check
                     {"full_name": "testorg/example.com"},  # template generate
+                    {"full_name": "testorg/example.com"},  # _wait_for_repo poll
                 ]
 
                 full_name, created, existed = host._create_from_template("example.com", "testorg")
@@ -171,8 +172,9 @@ class TestGitHubHost:
         with patch.object(host, "_gh_api") as mock_api:
             with patch.object(host, "_set_repository_topics"):
                 mock_api.side_effect = [
-                    HostError("Not Found"),
-                    {"full_name": "testorg/example.com"},
+                    HostError("Not Found"),  # repo existence check
+                    {"full_name": "testorg/example.com"},  # template generate
+                    {"full_name": "testorg/example.com"},  # _wait_for_repo poll
                 ]
 
                 host._create_from_template("example.com", "testorg", template_repo="pandoc-simple")
@@ -192,6 +194,31 @@ class TestGitHubHost:
                 host._create_from_template("example.com", "testorg")
 
             assert "template" in str(exc_info.value).lower()
+
+    def test_wait_for_repo_retries_until_accessible(self, host: GitHubHost) -> None:
+        """Test that _wait_for_repo polls until the repo responds."""
+        with patch.object(host, "_gh_api") as mock_api:
+            with patch("mimeo.providers.host.github.time.sleep") as mock_sleep:
+                mock_api.side_effect = [
+                    HostError("Not Found"),
+                    HostError("Not Found"),
+                    {"full_name": "testorg/example.com"},
+                ]
+
+                host._wait_for_repo("testorg/example.com")
+
+                assert mock_api.call_count == 3
+                assert mock_sleep.call_count == 2
+
+    def test_wait_for_repo_timeout(self, host: GitHubHost) -> None:
+        """Test that _wait_for_repo raises HostError when the deadline passes."""
+        with patch.object(host, "_gh_api") as mock_api:
+            mock_api.side_effect = HostError("Not Found")
+
+            with pytest.raises(HostError) as exc_info:
+                host._wait_for_repo("testorg/example.com", timeout=0)
+
+            assert "not accessible" in str(exc_info.value)
 
     def test_enable_github_pages_new(self, host: GitHubHost) -> None:
         """Test enabling GitHub Pages for a repository."""
@@ -347,8 +374,9 @@ class TestGitHubHost:
         with patch.object(host, "_gh_api") as mock_api:
             with patch.object(host, "_set_repository_topics") as mock_topics:
                 mock_api.side_effect = [
-                    HostError("Not found"),
-                    {"full_name": "testorg/test-repo"},
+                    HostError("Not found"),  # repo existence check
+                    {"full_name": "testorg/test-repo"},  # template generate
+                    {"full_name": "testorg/test-repo"},  # _wait_for_repo poll
                 ]
 
                 full_name, created, existed = host._create_from_template("test-repo", "testorg")

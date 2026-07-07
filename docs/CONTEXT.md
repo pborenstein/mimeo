@@ -13,7 +13,6 @@ when one domain's enrichment fails.
 
 ## Active Tasks
 
-- [ ] Fix 3 failing tests in tests/providers/host/test_github.py (broken by e9830da, pre-existing)
 - [ ] E2E integration test lane (separate from unit tests, gated, hits real APIs)
 - [ ] Template parameterization (substitute domain into template files)
 
@@ -28,9 +27,9 @@ None.
 - Enrichment failures carry `error`/`error_category` per row; command exits EXIT_PARTIAL (6) if any failed
 - `_get_domain_records` renamed to public `get_domain_records`
 - Verified live: 105 domains enriched with --with-dns, 0 failures
-- 238 tests passing (3 pre-existing github template test failures remain); mypy and ruff clean
+- Fixed 3 test_github.py failures from e9830da (mocks lacked a response for the _wait_for_repo poll)
+- 243 tests passing; mypy and ruff clean
 
 ## Next Session
 
-Fix the 3 broken test_github.py tests, then E2E integration tests or
-template parameterization.
+E2E integration tests or template parameterization.

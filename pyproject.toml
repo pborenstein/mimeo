@@ -1,7 +1,7 @@
 [project]
 name = "mimeo"
 version = "0.1.0"
-description = "A tool to generate websites quickly"
+description = "Provision and manage custom-domain sites on GitHub Pages"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

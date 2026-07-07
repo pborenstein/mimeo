@@ -4,7 +4,7 @@ Development guide for AI-assisted sessions on this project.
 
 ## Project Overview
 
-A tool to generate websites quickly
+Provision and manage custom-domain sites on GitHub Pages
 
 ### Key Principles
 

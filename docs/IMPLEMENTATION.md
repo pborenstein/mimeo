@@ -75,9 +75,10 @@ front-door verbs than it started with. See DEC-021.
         the batch front door
 - [ ] Stage 4: E2E integration test lane (separate from unit tests, gated,
       hits real APIs; `create`/`status`/`sync` are the flows worth covering)
-- [ ] Identity fix: replace "A tool to generate websites quickly" with
+- [x] Identity fix: replace "A tool to generate websites quickly" with
       "Provision and manage custom-domain sites on GitHub Pages"
-      (CLI help, README, pyproject description)
+      (CLI help, pyproject, package docstring, CLAUDE.md); README gained
+      status/sync command sections
 - [ ] Carried from Phase 7: template parameterization (substitute domain
       into template files post-creation)
 

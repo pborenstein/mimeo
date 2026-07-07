@@ -32,7 +32,7 @@ from .template import template
     help="Log output format (default: text)",
 )
 def main(log_format: str) -> None:
-    """A tool to generate websites quickly"""
+    """Provision and manage custom-domain sites on GitHub Pages."""
     set_log_format(log_format)
 
 

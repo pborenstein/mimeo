@@ -70,7 +70,7 @@ class TestMainCommand:
         """Test main command shows help."""
         result = runner.invoke(main, ["--help"])
         assert result.exit_code == 0
-        assert "A tool to generate websites quickly" in result.output
+        assert "Provision and manage custom-domain sites on GitHub Pages" in result.output
 
     def test_main_version(self, runner: CliRunner) -> None:
         """Test version flag."""

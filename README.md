@@ -145,6 +145,46 @@ mimeo create example.com another.lol --sequential
 
 Multiple domains are processed concurrently (up to 5 workers). Use `--sequential` for verbose per-step output or when debugging.
 
+### `mimeo status [<domain> ...]`
+
+One view of the whole fleet: registration expiry, nameservers, DNS drift, and Pages health per domain, joining the Porkbun account against mimeo-managed repos.
+
+```bash
+# Whole fleet (union of registered domains and mimeo repos)
+mimeo status
+
+# Specific domains
+mimeo status example.com another.lol
+
+# Only domains that need attention
+mimeo status --problems
+
+# Full detail for scripting
+mimeo status --format json | jq '.[] | select(.dns_status == "drift")'
+```
+
+Registered domains with no site show `no repo`; sites whose domain is not in the Porkbun account show `-` on the registrar side. The DNS column is `-` when there is no repo (no desired state to compare against). Drift and unhealthy sites are findings (exit 0); API errors exit nonzero with partial results.
+
+### `mimeo sync <domain> [<domain> ...] | --all`
+
+Converge domains on their desired state: apply missing DNS records and enable HTTPS enforcement when the certificate is ready.
+
+```bash
+# Preview fleet-wide changes first
+mimeo sync --all --dry-run
+
+# Converge the whole fleet (explicit --all required)
+mimeo sync --all
+
+# Specific domains
+mimeo sync example.com another.lol
+
+# Also reset nameservers that point elsewhere
+mimeo sync example.com --reset-nameservers
+```
+
+Sync will not create repositories (`mimeo create`), change content (`mimeo template apply`), delete DNS records it does not manage, touch nameservers without `--reset-nameservers`, or wait for DNS propagation (use `mimeo dns repair` for a single verified fix). A bare `mimeo sync` refuses to run: fleet-wide convergence requires the explicit `--all`.
+
 ### `mimeo list`
 
 Show all mimeo-managed sites (repos tagged with the `mimeo` topic):

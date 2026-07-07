@@ -1,5 +1,16 @@
 # Phase 8: Consolidation Chronicles
 
+## Entry 36: status also requires --all for fleet-wide (2026-07-06)
+
+**What**: A bare `mimeo status` now refuses to run; fleet-wide sweeps
+require explicit `--all`, matching sync.
+
+**Why**: User ran the fleet sweep and gave up waiting — several API calls
+per domain across 105 domains takes minutes. Unlike sync's guard (safety),
+this one is about cost; recorded as such in DEC-021 Stage 3 resolutions.
+
+**Files**: `mimeo/cli/status.py`, `tests/test_status.py`, commit d5b7723
+
 ## Entry 35: Stage 3 — mimeo sync, converge on desired state (2026-07-06)
 
 **What**: Added `mimeo sync [DOMAINS... | --all]`: applies missing DNS

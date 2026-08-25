@@ -192,6 +192,38 @@ class GitHubHost(Host):
         """
         self._run_gh_command(["repo", "delete", repo_full_name, "--yes"])
 
+    def _rename_repository(self, repo_full_name: str, new_name: str) -> None:
+        """Rename a repository in place.
+
+        Args:
+            repo_full_name: Full repository name (owner/repo)
+            new_name: New repository name (name only, not owner/name)
+
+        Raises:
+            HostError: If rename fails
+        """
+        self._gh_api(f"repos/{repo_full_name}", method="PATCH", data={"name": new_name})
+
+    def _ensure_is_template(self, repo_full_name: str) -> None:
+        """Ensure a repository is flagged as a GitHub template repo.
+
+        GitHub's generate-from-template API 404s if the source repo doesn't
+        have is_template set, even though the repo otherwise exists and is
+        readable. Rather than surface that as a confusing "Not Found" error,
+        check the flag up front and set it if needed.
+
+        Args:
+            repo_full_name: Full repository name (owner/repo)
+
+        Raises:
+            HostError: If the repo can't be read or the flag can't be set
+        """
+        repo = self._gh_api(f"repos/{repo_full_name}")
+        if not repo.get("is_template"):
+            self._gh_api(
+                f"repos/{repo_full_name}", method="PATCH", data={"is_template": True}
+            )
+
     def _create_from_template(
         self,
         repo_name: str,
@@ -230,7 +262,14 @@ class GitHubHost(Host):
         if repo_existed:
             if not force:
                 return f"{owner}/{repo_name}", False, True
-            self._delete_repository(f"{owner}/{repo_name}")
+
+            # Rename the existing repo out of the way instead of deleting it
+            # up front. If generate-from-template then fails (wrong template
+            # flag, API hiccup, rate limit, ...), we rename it back rather
+            # than leaving the repo permanently destroyed with nothing to
+            # replace it.
+            displaced_name = f"{repo_name}-mimeo-replaced-{int(time.time())}"
+            self._rename_repository(f"{owner}/{repo_name}", displaced_name)
 
         data: Dict[str, Any] = {
             "owner": owner,
@@ -238,16 +277,25 @@ class GitHubHost(Host):
             "private": private,
         }
 
-        response = self._gh_api(
-            f"repos/{TEMPLATE_ORG}/{template_repo}/generate",
-            method="POST",
-            data=data,
-        )
-        full_name = response.get("full_name")
-        if not full_name:
-            raise HostError(
-                f"Failed to create repository from template {TEMPLATE_ORG}/{template_repo}"
+        try:
+            self._ensure_is_template(f"{TEMPLATE_ORG}/{template_repo}")
+            response = self._gh_api(
+                f"repos/{TEMPLATE_ORG}/{template_repo}/generate",
+                method="POST",
+                data=data,
             )
+            full_name = response.get("full_name")
+            if not full_name:
+                raise HostError(
+                    f"Failed to create repository from template {TEMPLATE_ORG}/{template_repo}"
+                )
+        except HostError:
+            if repo_existed:
+                self._rename_repository(f"{owner}/{displaced_name}", repo_name)
+            raise
+
+        if repo_existed:
+            self._delete_repository(f"{owner}/{displaced_name}")
 
         self._wait_for_repo(str(full_name))
         self._set_repository_topics(str(full_name), ["mimeo", "landing-page", "github-pages"])

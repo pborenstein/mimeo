@@ -2,7 +2,7 @@
 
 Living document tracking progress on the domain landing page provisioning tool.
 
-**Last updated**: 2026-07-06
+**Last updated**: 2026-08-25
 
 ---
 
@@ -103,6 +103,17 @@ front-door verbs than it started with. See DEC-021.
         (5x/2s) rather than swallowed.
   - [ ] Scoped to `mimeo.lol` only; `eleventy-*` templates (full site
         generators with their own config) are a separate, harder problem
+- [x] `template apply --force` safety fix: rename-then-generate-then-delete
+      instead of delete-then-generate (DEC-022)
+  - [x] Live incident: a generate failure (source repo missing
+        `is_template`) after the old delete-first ordering destroyed
+        `tepiton/laptopistan.com` with no rollback; recovered via GitHub
+        org deleted-repo restore
+  - [x] `_ensure_is_template` checks/auto-sets `is_template` on the source
+        repo before every `generate` call (was a bare, misleading 404)
+  - [x] Force-replace renames the target out of the way instead of
+        deleting it; only deletes the renamed-old repo after `generate`
+        succeeds; renames back on any failure
 
 ---
 

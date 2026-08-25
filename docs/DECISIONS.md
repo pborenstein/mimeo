@@ -399,6 +399,31 @@ Template application stays a manual command: content choice is intent, not drift
 
 ---
 
+### DEC-022: Template Replace Is Rename-Then-Generate-Then-Delete, Not Delete-Then-Generate (2026-08-25)
+
+**Status**: Active (Phase 8)
+
+**Context**: `template apply --force` (via `_create_from_template`) deleted the target repo before attempting the template-generate call. A live run (`mimeo template apply --template mellowtimesphere.com laptopistan.com`) deleted `tepiton/laptopistan.com` and then failed the generate call with a 404, because the source repo `mellowtimesphere.com` was never flagged `is_template` on GitHub. Delete-then-generate has no rollback: any failure after the delete — wrong template flag, API hiccup, rate limit — destroys the target repo with nothing to replace it. Recovered only because `tepiton` is a GitHub Organization, which offers a ~90-day deleted-repo restore in Settings; a personal-owned repo would not have had that safety net.
+
+**Decision**: Reorder repository replacement to be reversible:
+
+1. Rename the existing target repo out of the way (`{name}-mimeo-replaced-{timestamp}`), not delete it
+2. Verify (and auto-set) `is_template` on the source repo via new `_ensure_is_template` — GitHub's `generate` API 404s on a non-template source with no distinguishing error, so check the flag proactively instead of parsing a bare "Not Found"
+3. Call `generate`
+4. On any failure in steps 2-3, rename the displaced repo back to its original name and re-raise
+5. Only on success, delete the renamed-old repo
+
+Both `_ensure_is_template` and the `generate` call live inside the same try/except as the rollback, so a failure at either step restores the original name.
+
+**Alternatives considered**:
+
+- Leave delete-first, just fix the immediate `is_template` gap: Fixes today's incident, not the class — any other future generate failure (rate limit, network blip, wrong template name) would still destroy the target with no recovery
+- Require manual `is_template` registration (a `template register` command): More explicit, but adds a command and a step users can still forget; auto-setting is strictly safer with no real downside since `is_template` has no cost to a repo already meant to be used this way
+
+**Consequences**: `template apply --force` is now safe to fail: a 404, rate limit, or any other `HostError` during generate leaves the original repo intact under its original name. Costs one extra API call per apply (the `is_template` read) and, on force-replace, a temporary rename that's invisible unless the generate step fails. `_delete_repository` now only ever runs after a confirmed-successful generate.
+
+---
+
 ## Superseded/Deprecated
 
 [No superseded decisions yet]

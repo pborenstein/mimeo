@@ -2,15 +2,15 @@
 phase: 8
 phase_name: Consolidation
 updated: 2026-08-25
-last_commit: 3663e8f
+last_commit: 767d281
 ---
 
 ## Current Focus
 
 Phase 8 Stages 1-3 done (engine, status, sync, identity fix; see DEC-021).
-Since then: `status --with-dns`, `defaults.ignore_domains`, and (this
-session) default-template customization -- `mimeo.lol`'s hardcoded name is
-now rewritten to the target domain after `create`/`template apply`.
+This session: fixed a live incident where `template apply --force` deleted
+`tepiton/laptopistan.com` with no rollback after a generate failure. See
+DEC-022.
 
 ## Active Tasks
 
@@ -26,20 +26,21 @@ None.
 
 ## Context
 
-- Engine: `map_items` (ordered, exceptions -> error rows), `render_results`
-  (json/csv uniform, text via callback), `exit_on_errors` (partial ->
-  EXIT_PARTIAL 6, total failure -> category code)
+- `_create_from_template` (`github.py`) now: renames target repo out of the
+  way (not delete) on force-replace, calls `_ensure_is_template` (auto-sets
+  `is_template` on the source repo if unset -- generate 404s silently
+  otherwise) then `generate`, deletes the renamed-old repo only on success,
+  renames it back on any failure. DEC-022.
+- `laptopistan.com` was destroyed live, then restored via GitHub org
+  deleted-repo restore (works because `tepiton` is an Org, ~90-day window;
+  would NOT have worked for a personal-owned repo)
+- `mellowtimesphere.com` template repo had `is_template: false` -- fixed
+  both by hand (`gh api PATCH`) and now automatically by the code above
 - `status` and `sync` both require --all for fleet-wide; DNS column "-" when
   no repo; `sync` acts on missing records only, never deletes extras
-- Template-generate race, 2nd instance: `generate`-from-template returns
-  before GitHub populates the file tree, so an immediate contents-API read
-  can 404 "repository is empty" (same class as Entry 30's `_wait_for_repo`,
-  different endpoint). `_customize_default_template` retries 5x/2s; a first
-  attempt that swallowed the error instead shipped silently broken
-- 293 tests passing; mypy and ruff clean; template apply live-verified
-  against tepiton/tantamount.rodeo
+- 297 tests passing (was 293); mypy and ruff clean
 
 ## Next Session
 
 Stage 4: E2E test lane, or eleventy-* template parameterization if that's
-the priority instead.
+the priority instead. Both changes from this session are uncommitted.

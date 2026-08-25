@@ -1,5 +1,29 @@
 # Phase 8: Consolidation Chronicles
 
+## Entry 38: template apply --force deleted a live repo -- rename-not-delete fix (2026-08-25)
+
+**What**: Live `template apply --template mellowtimesphere.com laptopistan.com` deleted
+`tepiton/laptopistan.com` and then failed with a 404 on the template-generate call, because
+`mellowtimesphere.com` wasn't flagged `is_template` on GitHub. `_create_from_template` deleted
+the target repo *before* attempting generate, with no rollback on failure. Restored via GitHub
+org deleted-repo restore (works because `tepiton` is an Organization; would not have worked for
+a personal-owned repo). See DEC-022.
+
+**Why**: `is_template: false` on the source repo makes GitHub's `generate` endpoint return a
+bare 404 indistinguishable from "repo doesn't exist" -- no error message pointed at the real
+cause. Root cause confirmed via `gh api repos/tepiton/mellowtimesphere.com --jq .is_template`.
+Separately, delete-before-generate meant *any* generate failure -- not just this one -- would
+have destroyed the target repo permanently.
+
+**How**: Added `_ensure_is_template` (reads `is_template`, PATCHes to `true` if unset) called
+right before `generate`. Changed force-replace to rename the target repo out of the way
+(`{name}-mimeo-replaced-{timestamp}`) instead of deleting it; only deletes the renamed-old repo
+after `generate` succeeds; renames it back on any `HostError` from `_ensure_is_template` or
+`generate`. Also set `is_template: true` on `tepiton/mellowtimesphere.com` directly via `gh api`.
+293 -> 297 tests (rename/rollback paths + `_ensure_is_template` unit tests); mypy and ruff clean.
+
+**Files**: `mimeo/providers/host/github.py`, `tests/providers/host/test_github.py`, DEC-022
+
 ## Entry 37: Default template customization -- fix hardcoded "mimeo.lol" (2026-08-25)
 
 **What**: `mimeo.lol` (the default template) is itself a live site, so its

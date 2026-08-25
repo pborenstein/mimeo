@@ -1,22 +1,24 @@
 ---
 phase: 8
 phase_name: Consolidation
-updated: 2026-07-06
-last_commit: d5b7723
+updated: 2026-08-25
+last_commit: PENDING
 ---
 
 ## Current Focus
 
-Phase 8 Stages 1-3 done: shared domain-operation engine, `mimeo status`
-(cross-provider join), `mimeo sync` (converge, --all required for fleet),
-identity fix. See DEC-021 incl. Stage 3 resolutions.
+Phase 8 Stages 1-3 done (engine, status, sync, identity fix; see DEC-021).
+Since then: `status --with-dns`, `defaults.ignore_domains`, and (this
+session) default-template customization -- `mimeo.lol`'s hardcoded name is
+now rewritten to the target domain after `create`/`template apply`.
 
 ## Active Tasks
 
 - [ ] Stage 4: E2E test lane (gated, real APIs, covers create/status/sync)
 - [ ] Fold `process_domains_concurrent` (create, dns repair, template apply)
       into `map_items` (Stage 1 follow-up)
-- [ ] Template parameterization (carried from Phase 7)
+- [ ] Template parameterization for `eleventy-*` templates (mimeo.lol done;
+      full site generators need a different, template-aware approach)
 
 ## Blockers
 
@@ -27,19 +29,17 @@ None.
 - Engine: `map_items` (ordered, exceptions -> error rows), `render_results`
   (json/csv uniform, text via callback), `exit_on_errors` (partial ->
   EXIT_PARTIAL 6, total failure -> category code)
-- `status` and `sync` both require --all for fleet-wide (union of Porkbun
-  domains and mimeo repos): sync for safety, status for cost; DNS column
-  "-" when no repo (no desired state); drift/unhealthy exit 0, API errors
-  EXIT_PARTIAL
-- Live drift finding on real domains: Porkbun wildcard parking CNAME
-  (`* -> pixie.porkbun.com`) reported as extra — consistent with dns check
-- `sync` acts on missing records only; never deletes extras; NS only with
-  --reset-nameservers; no propagation wait; dns repair / fix https kept
-  as targeted scalpels
-- 275 tests passing; mypy and ruff clean; status and sync --dry-run
-  live-verified
+- `status` and `sync` both require --all for fleet-wide; DNS column "-" when
+  no repo; `sync` acts on missing records only, never deletes extras
+- Template-generate race, 2nd instance: `generate`-from-template returns
+  before GitHub populates the file tree, so an immediate contents-API read
+  can 404 "repository is empty" (same class as Entry 30's `_wait_for_repo`,
+  different endpoint). `_customize_default_template` retries 5x/2s; a first
+  attempt that swallowed the error instead shipped silently broken
+- 293 tests passing; mypy and ruff clean; template apply live-verified
+  against tepiton/tantamount.rodeo
 
 ## Next Session
 
-Stage 4: E2E test lane. Decide gating (env var vs pytest marker), which
-flows to cover (create/status/sync --dry-run), and teardown strategy.
+Stage 4: E2E test lane, or eleventy-* template parameterization if that's
+the priority instead.

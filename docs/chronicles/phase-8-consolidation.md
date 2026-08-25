@@ -1,5 +1,36 @@
 # Phase 8: Consolidation Chronicles
 
+## Entry 37: Default template customization -- fix hardcoded "mimeo.lol" (2026-08-25)
+
+**What**: `mimeo.lol` (the default template) is itself a live site, so its
+`index.html` hardcodes "mimeo.lol" in `<title>` and letter-spaced
+("m i m e o . l o l") in `<h1>`. Every site generated from it -- via `create`
+or `template apply` -- shipped that literal text instead of its own domain.
+Added `_customize_default_template` to rewrite both forms post-generation.
+
+**Why**: Reported live: `template apply --template mimeo.lol
+tantamount.rodeo` produced a page still reading "m i m e o . l o l". First
+fix attempt swallowed a real error (`except HostError: pass`) and shipped
+untested against the actual template content, so it silently did nothing.
+Second attempt traced the live call path end-to-end and found the real
+cause: `generate`-from-template returns before GitHub populates the file
+tree, so the immediate `index.html` read 404s with "repository is empty" --
+the same failure class as Entry 30's `_wait_for_repo` fix, but on the
+contents API rather than repo metadata, and previously undetected because
+nothing polled it.
+
+**How**: `_customize_default_template` reads `index.html` (retrying up to
+5x/2s on the empty-repo 404), substitutes `DEFAULT_TEMPLATE` and its
+letter-spaced form for the real domain in memory, writes back only if
+something changed. Raises on persistent failure instead of swallowing.
+Scoped to `mimeo.lol` only -- `eleventy-*` templates are full site
+generators where a blind string-replace would be unsafe; that's the
+remaining open part of the carried-over "template parameterization" task.
+Live-verified: ran `template apply` against `tepiton/tantamount.rodeo` for
+real and confirmed the deployed `index.html` and commit history.
+
+**Files**: `mimeo/providers/host/github.py`, `tests/providers/host/test_github.py`
+
 ## Entry 36: status also requires --all for fleet-wide (2026-07-06)
 
 **What**: A bare `mimeo status` now refuses to run; fleet-wide sweeps

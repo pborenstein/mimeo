@@ -1,5 +1,6 @@
 """GitHub Pages host provider implementation."""
 
+import base64
 import json
 import subprocess
 import time
@@ -251,7 +252,60 @@ class GitHubHost(Host):
         self._wait_for_repo(str(full_name))
         self._set_repository_topics(str(full_name), ["mimeo", "landing-page", "github-pages"])
 
+        if template_repo == DEFAULT_TEMPLATE and repo_name != DEFAULT_TEMPLATE:
+            self._customize_default_template(str(full_name), repo_name)
+
         return str(full_name), True, repo_existed
+
+    def _customize_default_template(self, repo_full_name: str, domain: str) -> None:
+        """Rewrite the default template's hardcoded domain name to the target domain.
+
+        mimeo.lol is itself a live site, so its index.html hardcodes
+        "mimeo.lol" in <title> and as letter-spaced text ("m i m e o . l o l")
+        in <h1>. Read the generated file, substitute both forms in memory,
+        and write it back so the deployed page reflects the actual domain.
+
+        generate-from-template can return before GitHub finishes populating
+        the new repo's file tree, so the first read may 404 with "repository
+        is empty" -- retry the read a few times before giving up.
+
+        Args:
+            repo_full_name: Full repository name (owner/repo)
+            domain: Domain name to substitute in for the template name
+
+        Raises:
+            HostError: If index.html can't be read or written
+        """
+        file_data = None
+        last_error: HostError | None = None
+        for attempt in range(5):
+            try:
+                file_data = self._gh_api(f"repos/{repo_full_name}/contents/index.html")
+                break
+            except HostError as e:
+                last_error = e
+                if attempt < 4:
+                    time.sleep(2)
+        if file_data is None:
+            raise HostError(f"Could not read index.html from {repo_full_name}: {last_error}")
+
+        content = base64.b64decode(file_data["content"]).decode("utf-8")
+        updated = content.replace(" ".join(DEFAULT_TEMPLATE), " ".join(domain)).replace(
+            DEFAULT_TEMPLATE, domain
+        )
+
+        if updated == content:
+            return
+
+        self._gh_api(
+            f"repos/{repo_full_name}/contents/index.html",
+            method="PUT",
+            data={
+                "message": f"Customize template for {domain}",
+                "content": base64.b64encode(updated.encode("utf-8")).decode("ascii"),
+                "sha": file_data["sha"],
+            },
+        )
 
     def _set_repository_topics(self, repo_full_name: str, topics: list[str]) -> None:
         """Set topics (tags) for a repository.

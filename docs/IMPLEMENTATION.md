@@ -90,8 +90,19 @@ front-door verbs than it started with. See DEC-021.
   - [x] `defaults.ignore_domains` config list trims `status --all` and
         `sync --all`; explicitly named domains always override
   - [x] `lookup_nameservers` made public (doctor.py already used it)
-- [ ] Carried from Phase 7: template parameterization (substitute domain
+- [x] Carried from Phase 7: template parameterization (substitute domain
       into template files post-creation)
+  - [x] `mimeo.lol` (the default template) hardcodes its own domain name in
+        `<title>` and as letter-spaced text in `<h1>` — it's a live site
+        being reused as a template. `_customize_default_template` now
+        rewrites both forms to the target domain after generation.
+  - [x] Fixed a second race: `generate`-from-template can return before
+        GitHub populates the file tree, so the first `index.html` read can
+        404 with "repository is empty" — same class of bug as Entry 30,
+        different endpoint (contents API, not repo metadata). Retried
+        (5x/2s) rather than swallowed.
+  - [ ] Scoped to `mimeo.lol` only; `eleventy-*` templates (full site
+        generators with their own config) are a separate, harder problem
 
 ---
 

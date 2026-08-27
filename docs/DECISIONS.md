@@ -424,6 +424,35 @@ Both `_ensure_is_template` and the `generate` call live inside the same try/exce
 
 ---
 
+### DEC-023: Rename Repository by Numeric ID, Not by Name (2026-08-27)
+
+**Status**: Active (Phase 8)
+
+**Context**: `_rename_repository` used `PATCH repos/<owner>/<name>` to rename a
+repo. When a repo had been previously renamed, GitHub returns a 307 redirect on
+the old name. `gh api` does not follow redirects on PATCH requests, so the rename
+fails with "HTTP 307". This surfaced during `template apply --force`, where the
+displaced-name repo (created by DEC-022's rename-out step) is later renamed back
+on failure — the very scenario where a prior failed run left a redirect in place.
+A second issue: GitHub serializes rename operations internally, so two renames in
+quick succession can get a 422 "conflicting repository operation is still in
+progress."
+
+**Decision**: `_rename_repository` now:
+
+1. Fetches the repo first via `GET repos/<owner>/<name>` to obtain its numeric `id`
+2. PATCHes `repositories/<id>` instead of `repos/<owner>/<name>` — IDs are stable across renames, so no redirect is ever involved
+3. Retries once on 422 after a 3-second sleep
+
+**Alternatives considered**:
+
+- Follow redirects at the `_gh_api` level: Would require detecting 3xx responses in the `gh` CLI output (not straightforward) and could mask other unintentional redirects
+- Add `--follow-redirects` to the `gh api` call: `gh api` does not support this flag for non-GET methods
+
+**Consequences**: `_rename_repository` now makes two API calls (GET + PATCH) instead of one. The GET is cheap and always needed to validate the repo exists before renaming. Rollback renames (the DEC-022 recovery path) are now reliable even when a prior failed run left GitHub's redirect table in a messy state.
+
+---
+
 ## Superseded/Deprecated
 
 [No superseded decisions yet]

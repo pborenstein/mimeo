@@ -105,6 +105,14 @@ front-door verbs than it started with. See DEC-021.
         generators with their own config) are a separate, harder problem
 - [x] `template apply --force` safety fix: rename-then-generate-then-delete
       instead of delete-then-generate (DEC-022)
+- [x] `_rename_repository` uses numeric repo ID (`repositories/<id>`) to avoid
+      GitHub 307 redirects on previously-renamed repos; retries once on 422
+      (GitHub serializes rapid renames) (DEC-023)
+- [x] `mimeo list --show-template`: optional flag fetches `template_repository`
+      per repo via parallelized `gh api` calls; adds TEMPLATE column to text
+      output and `template` field to json/csv
+- [x] `template apply` validates template name before confirmation prompt via
+      `validate_template()` — fails fast with clear message on typo
   - [x] Live incident: a generate failure (source repo missing
         `is_template`) after the old delete-first ordering destroyed
         `tepiton/laptopistan.com` with no rollback; recovered via GitHub

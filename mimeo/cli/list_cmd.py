@@ -25,7 +25,8 @@ from ._processing import _categorize_error, map_items, render_results
     help="Output format (default: text)",
 )
 @click.option("--health", is_flag=True, help="Check Pages configuration health for each site")
-def list_sites(config: Path | None, output_format: str, health: bool) -> None:
+@click.option("--show-template", is_flag=True, help="Show the template each site was created from")
+def list_sites(config: Path | None, output_format: str, health: bool, show_template: bool) -> None:
     """List all mimeo-managed sites.
 
     Shows repositories tagged with the 'mimeo' topic. This is a read-only
@@ -68,6 +69,8 @@ def list_sites(config: Path | None, output_format: str, health: bool) -> None:
         mimeo list --format csv | tail -n +2 | cut -d, -f1 > domains.txt
     """
     csv_fields = ["name", "repository", "site", "updated"]
+    if show_template:
+        csv_fields += ["template"]
     if health:
         csv_fields += ["health", "https_enforced", "cert_state"]
 
@@ -95,10 +98,13 @@ def list_sites(config: Path | None, output_format: str, health: bool) -> None:
 
         name_w = max(len(r["name"]) for r in rows)
         site_w = max(len(r["site"]) for r in rows)
+        tmpl_w = max(len(r.get("template") or "-") for r in rows) if show_template else 0
 
         click.echo()
 
         header_parts = f"  {'NAME':<{name_w}}  {'SITE':<{site_w}}  {'UPDATED':<10}"
+        if show_template:
+            header_parts += f"  {'TEMPLATE':<{tmpl_w}}"
         if health:
             header_parts += "  HEALTH"
         click.secho(header_parts, bold=True)
@@ -111,6 +117,9 @@ def list_sites(config: Path | None, output_format: str, health: bool) -> None:
                 f"  {repo_data['updated']:<10}"
             )
             click.echo(row, nl=False)
+            if show_template:
+                tmpl = repo_data.get("template") or "-"
+                click.echo(f"  {tmpl:<{tmpl_w}}", nl=False)
             if health:
                 status = repo_data.get("health", "pages_error")
                 color = _health_colors.get(status, "white")
@@ -167,6 +176,21 @@ def list_sites(config: Path | None, output_format: str, health: bool) -> None:
 
                 normalized_repos = map_items(
                     normalized_repos, _with_health, workers=10, on_error=_on_error
+                )
+
+            if show_template:
+
+                def _with_template(repo_data: Dict[str, Any]) -> Dict[str, Any]:
+                    tmpl = host.get_template_repository(f"{owner}/{repo_data['name']}")
+                    return {**repo_data, "template": tmpl}
+
+                def _on_template_error(
+                    repo_data: Dict[str, Any], exc: BaseException
+                ) -> Dict[str, Any]:
+                    return {**repo_data, "template": None}
+
+                normalized_repos = map_items(
+                    normalized_repos, _with_template, workers=10, on_error=_on_template_error
                 )
 
         # Sort: problems first when health is shown, else by name

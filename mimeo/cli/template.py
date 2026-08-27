@@ -76,6 +76,13 @@ def apply(
     cfg = load_config(config)
     log_format = get_log_format()
 
+    with GitHubHost(default_org=cfg.github_username) as host:
+        try:
+            host.validate_template(template_repo)
+        except Exception as e:
+            click.secho(str(e), fg="red", err=True)
+            raise SystemExit(1)
+
     if not dry_run and not yes:
         click.secho(
             "WARNING: This will delete and recreate the following repositories:",

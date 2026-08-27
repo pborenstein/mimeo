@@ -1,5 +1,32 @@
 # Phase 8: Consolidation Chronicles
 
+## Entry 39: list --show-template; validate template name; rename-by-ID fix (2026-08-27)
+
+**What**: Three improvements in one session.
+
+**list --show-template**: New flag on `mimeo list` fetches `template_repository`
+per repo via parallelized `gh api repos/<owner>/<repo>` calls and adds a TEMPLATE
+column. GitHub's search API doesn't expose this field, so a per-repo call is
+unavoidable; the flag makes it opt-in so the default list stays fast.
+
+**template apply early validation**: `validate_template()` on `GitHubHost`
+checks that `TEMPLATE_ORG/<name>` exists before the confirmation prompt runs.
+A typo now fails immediately with "Template 'x' not found in tepiton. Check the
+spelling and try again." instead of renaming repos and then 422ing mid-flow.
+
+**rename-by-ID fix**: `_rename_repository` was using `PATCH repos/<owner>/<name>`,
+which GitHub 307-redirects when the repo was previously renamed. Switched to
+fetching the repo ID first, then PATCHing `repositories/<id>` (stable across
+renames). Added one 422 retry with 3s sleep for rapid successive renames. See
+DEC-023.
+
+**Decisions**: DEC-023
+
+**Files**: `mimeo/providers/host/github.py`, `mimeo/cli/list_cmd.py`,
+`mimeo/cli/template.py`
+
+---
+
 ## Entry 38: template apply --force deleted a live repo -- rename-not-delete fix (2026-08-25)
 
 **What**: Live `template apply --template mellowtimesphere.com laptopistan.com` deleted

@@ -195,6 +195,12 @@ class GitHubHost(Host):
     def _rename_repository(self, repo_full_name: str, new_name: str) -> None:
         """Rename a repository in place.
 
+        Uses the numeric repository ID endpoint (repositories/<id>) rather
+        than the name-based one (repos/<owner>/<name>) so that GitHub's
+        redirect for previously-renamed repos is never an obstacle. Also
+        retries once on 422 "conflicting operation in progress", which GitHub
+        can return when two renames happen in quick succession.
+
         Args:
             repo_full_name: Full repository name (owner/repo)
             new_name: New repository name (name only, not owner/name)
@@ -202,7 +208,20 @@ class GitHubHost(Host):
         Raises:
             HostError: If rename fails
         """
-        self._gh_api(f"repos/{repo_full_name}", method="PATCH", data={"name": new_name})
+        repo = self._gh_api(f"repos/{repo_full_name}")
+        repo_id = repo.get("id")
+        if not repo_id:
+            raise HostError(f"Could not determine ID for repository {repo_full_name}")
+
+        for attempt in range(2):
+            try:
+                self._gh_api(f"repositories/{repo_id}", method="PATCH", data={"name": new_name})
+                return
+            except HostError as e:
+                if attempt == 0 and "422" in str(e):
+                    time.sleep(3)
+                    continue
+                raise
 
     def _ensure_is_template(self, repo_full_name: str) -> None:
         """Ensure a repository is flagged as a GitHub template repo.
@@ -560,6 +579,36 @@ class GitHubHost(Host):
                 "cert_state": None,
                 "pages_status": None,
             }
+
+    def validate_template(self, template_repo: str) -> None:
+        """Verify a template repository exists in TEMPLATE_ORG.
+
+        Args:
+            template_repo: Template repository name (without org prefix)
+
+        Raises:
+            HostError: With a clear message if the template is not found
+        """
+        try:
+            self._gh_api(f"repos/{TEMPLATE_ORG}/{template_repo}")
+        except HostError:
+            raise HostError(
+                f"Template '{template_repo}' not found in {TEMPLATE_ORG}. "
+                f"Check the spelling and try again."
+            )
+
+    def get_template_repository(self, repo_full_name: str) -> str | None:
+        """Return the name of the template repository used to create a repo.
+
+        Args:
+            repo_full_name: Full repository name (owner/repo)
+
+        Returns:
+            Template repository name, or None if not created from a template
+        """
+        data = self._gh_api(f"repos/{repo_full_name}")
+        tmpl = data.get("template_repository")
+        return tmpl.get("name") if tmpl else None
 
     def list_mimeo_repositories(self) -> list[Dict[str, Any]]:
         """List all repositories tagged with the 'mimeo' topic.

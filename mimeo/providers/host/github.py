@@ -317,6 +317,8 @@ class GitHubHost(Host):
             self._delete_repository(f"{owner}/{displaced_name}")
 
         self._wait_for_repo(str(full_name))
+        if repo_existed:
+            self._delete_stale_pages_artifacts(str(full_name))
         self._set_repository_topics(str(full_name), ["mimeo", "landing-page", "github-pages"])
 
         if template_repo == DEFAULT_TEMPLATE and repo_name != DEFAULT_TEMPLATE:
@@ -373,6 +375,36 @@ class GitHubHost(Host):
                 "sha": file_data["sha"],
             },
         )
+
+    def _delete_stale_pages_artifacts(self, repo_full_name: str) -> None:
+        """Delete all but the newest 'github-pages' artifact from a repository.
+
+        When a repo is recreated from a template the old artifacts carry over.
+        GitHub's Pages deploy action fails if it finds more than one artifact
+        named 'github-pages' in the same workflow run. Keeping only the newest
+        one unblocks the deployment.
+
+        Args:
+            repo_full_name: Full repository name (owner/repo)
+        """
+        try:
+            data = self._gh_api(f"repos/{repo_full_name}/actions/artifacts")
+        except HostError:
+            return  # Best-effort; don't fail the whole operation
+
+        artifacts = [
+            a for a in data.get("artifacts", []) if a.get("name") == "github-pages"
+        ]
+        # Sort newest first; delete everything after the first entry
+        artifacts.sort(key=lambda a: a.get("created_at", ""), reverse=True)
+        for artifact in artifacts[1:]:
+            try:
+                self._gh_api(
+                    f"repos/{repo_full_name}/actions/artifacts/{artifact['id']}",
+                    method="DELETE",
+                )
+            except HostError:
+                pass  # Best-effort
 
     def _set_repository_topics(self, repo_full_name: str, topics: list[str]) -> None:
         """Set topics (tags) for a repository.

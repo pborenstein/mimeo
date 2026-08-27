@@ -181,28 +181,29 @@ class TestGitHubHost:
                 with patch.object(host, "_customize_default_template"):
                     with patch.object(host, "_rename_repository") as mock_rename:
                         with patch.object(host, "_delete_repository") as mock_delete:
-                            with patch("time.time", return_value=1000):
-                                mock_api.side_effect = [
-                                    {"full_name": "testorg/example.com"},  # existence check
-                                    {"is_template": True},  # is_template check
-                                    {"full_name": "testorg/example.com"},  # generate
-                                    {"full_name": "testorg/example.com"},  # _wait_for_repo
-                                ]
+                            with patch.object(host, "_delete_stale_pages_artifacts"):
+                                with patch("time.time", return_value=1000):
+                                    mock_api.side_effect = [
+                                        {"full_name": "testorg/example.com"},  # existence check
+                                        {"is_template": True},  # is_template check
+                                        {"full_name": "testorg/example.com"},  # generate
+                                        {"full_name": "testorg/example.com"},  # _wait_for_repo
+                                    ]
 
-                                full_name, created, existed = host._create_from_template(
-                                    "example.com", "testorg", force=True
+                                    full_name, created, existed = host._create_from_template(
+                                        "example.com", "testorg", force=True
+                                    )
+
+                                assert full_name == "testorg/example.com"
+                                assert created is True
+                                assert existed is True
+
+                                # Old repo renamed out of the way before generate was attempted.
+                                mock_rename.assert_called_once_with(
+                                    "testorg/example.com", "example.com-mimeo-replaced-1000"
                                 )
-
-                assert full_name == "testorg/example.com"
-                assert created is True
-                assert existed is True
-
-                # Old repo renamed out of the way before generate was attempted.
-                mock_rename.assert_called_once_with(
-                    "testorg/example.com", "example.com-mimeo-replaced-1000"
-                )
-                # Old (renamed) repo deleted only after generate succeeded.
-                mock_delete.assert_called_once_with("testorg/example.com-mimeo-replaced-1000")
+                                # Old (renamed) repo deleted only after generate succeeded.
+                                mock_delete.assert_called_once_with("testorg/example.com-mimeo-replaced-1000")
 
     def test_create_from_template_force_rolls_back_on_generate_failure(
         self, host: GitHubHost

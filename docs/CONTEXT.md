@@ -2,16 +2,14 @@
 phase: 8
 phase_name: Consolidation
 updated: 2026-08-27
-last_commit: c3b1923
+last_commit: 65e7be7
 ---
 
 ## Current Focus
 
-Phase 8 Stages 1-3 done. This session: added `mimeo list --show-template` to
-show which template each site was created from; improved `template apply` to
-validate template name before touching anything; fixed `_rename_repository` to
-use the repo's numeric ID (avoids GitHub's 307 redirect on previously-renamed
-repos) with a 422 retry (GitHub serializes rapid renames).
+Phase 8 Stages 1-3 done. This session: `list --show-template`, early template
+validation, rename-by-ID fix, and stale Pages artifact cleanup after
+force-replace.
 
 ## Active Tasks
 
@@ -27,14 +25,13 @@ None.
 
 ## Context
 
-- `mimeo list --show-template` fetches `template_repository` via per-repo
-  `gh api repos/<owner>/<repo>` calls (parallelized via `map_items`); GitHub
-  search API doesn't expose this field
-- `validate_template()` on `GitHubHost` checks `TEMPLATE_ORG/<name>` exists
-  before `template apply` does any rename; gives a clear "not found" error
-- `_rename_repository` now fetches repo ID first, PATCHes `repositories/<id>`
-  to avoid 307 redirects from prior renames; retries once on 422 with 3s sleep
-- DEC-023 covers the rename-by-ID decision
+- `mimeo list --show-template`: per-repo `gh api` calls parallelized via
+  `map_items`; GitHub search API doesn't expose `template_repository`
+- `validate_template()` checks template exists before confirmation prompt
+- `_rename_repository` uses `repositories/<id>` (avoids 307 redirects);
+  retries once on 422 with 3s sleep (DEC-023)
+- `_delete_stale_pages_artifacts` runs after force-replace; GitHub's
+  deploy-pages action fails with >1 artifact named `github-pages`
 - 297 tests passing; mypy and ruff clean
 
 ## Next Session

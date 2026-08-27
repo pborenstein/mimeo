@@ -113,6 +113,9 @@ front-door verbs than it started with. See DEC-021.
       output and `template` field to json/csv
 - [x] `template apply` validates template name before confirmation prompt via
       `validate_template()` — fails fast with clear message on typo
+- [x] `_delete_stale_pages_artifacts` cleans up old `github-pages` artifacts
+      after force-replace; GitHub's deploy-pages action fails if more than one
+      artifact with that name exists in the same workflow run
   - [x] Live incident: a generate failure (source repo missing
         `is_template`) after the old delete-first ordering destroyed
         `tepiton/laptopistan.com` with no rollback; recovered via GitHub

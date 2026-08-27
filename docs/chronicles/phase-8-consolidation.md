@@ -20,10 +20,16 @@ fetching the repo ID first, then PATCHing `repositories/<id>` (stable across
 renames). Added one 422 retry with 3s sleep for rapid successive renames. See
 DEC-023.
 
+**Stale artifacts fix**: `template apply --force` left old `github-pages`
+artifacts on the repo after recreate; GitHub's deploy-pages action fails with
+"Multiple artifacts named 'github-pages' were unexpectedly found." Added
+`_delete_stale_pages_artifacts` — called after a successful force-replace —
+which keeps only the newest artifact and deletes the rest.
+
 **Decisions**: DEC-023
 
 **Files**: `mimeo/providers/host/github.py`, `mimeo/cli/list_cmd.py`,
-`mimeo/cli/template.py`
+`mimeo/cli/template.py`; commits `c3b1923`, `65e7be7`
 
 ---
 

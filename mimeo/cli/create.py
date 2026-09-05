@@ -258,6 +258,13 @@ def create(
     cfg = load_config(config)
     log_format = get_log_format()
 
+    with GitHubHost(default_org=cfg.github_username) as host:
+        try:
+            host.validate_template(template)
+        except Exception as e:
+            click.secho(str(e), fg="red", err=True)
+            raise SystemExit(1)
+
     if dry_run:
         click.secho("DRY RUN MODE - No changes will be made", fg="cyan", bold=True)
         click.echo()

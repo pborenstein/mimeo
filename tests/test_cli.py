@@ -141,7 +141,7 @@ class TestCreateCommand:
         assert "https://example.com" in result.output
 
         mock_config_load.assert_called_once()
-        mock_host_class.assert_called_once_with(default_org="testuser")
+        mock_host_class.assert_called_with(default_org="testuser")
         mock_host.deploy_site.assert_called_once()
         mock_host.required_dns_records.assert_called_once_with("example.com")
         mock_registrar.check_nameservers.assert_called_once_with("example.com")
@@ -481,7 +481,7 @@ class TestCreateCommand:
         result = runner.invoke(create, ["example.com"])
 
         assert result.exit_code == 0
-        mock_host_class.assert_called_once_with(default_org="testuser")
+        mock_host_class.assert_called_with(default_org="testuser")
 
     @patch("mimeo.config.Config.load")
     @patch(f"{_CREATE}.GitHubHost")

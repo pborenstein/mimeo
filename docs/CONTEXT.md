@@ -2,49 +2,52 @@
 phase: 8
 phase_name: Consolidation
 updated: 2026-09-05
-last_commit: f02ca53
+last_commit: 6c72003
 ---
 
 ## Current Focus
 
-Phase 8 Stages 1-3 done. Track A (fold `process_domains_concurrent` into
-`map_items`) complete. Also fixed a latent inconsistency: `create` now
-validates the template name upfront, matching `template apply`.
+Surveyed the template parameterization backlog item (Entry 42). Investigation
+only, no code changes. The design shape is an open decision.
 
 ## Active Tasks
 
-- [x] **Track A: Fold `process_domains_concurrent` into `map_items`**
-      Done. Migrated dns repair, template apply, create. Deleted
-      process_domains_concurrent, exit_on_failures, Lock from _processing.py.
+- [ ] **Template parameterization: pick a design shape**
+      Three candidates: (1) manifest in each template repo declaring
+      substitutable files/tokens, (2) token convention (`{{MIMEO_SITE_URL}}`)
+      with a repo-wide walk, (3) mimeo-side per-template registry. Leaning (1)
+      — it's the only one where a non-eleventy template costs nothing.
+      Tradeoffs in Entry 42.
+
+- [ ] **Prerequisite: scrub leaked identity from two templates**
+      `eleventy-tech-blog` and `eleventy-prose-blog` ship `pborenstein.dev`/
+      `.com`, real email, and a `pborenstein.2025` git URL. Lives in
+      mimeo-sites, not this repo.
 
 - [ ] **Track B: Stage 4 E2E test lane**
-      Gated (real APIs), covers `create`/`status`/`sync` flows. Blocked on
-      having a test account/org to hit.
-
-- [ ] **Backlog: `eleventy-*` template parameterization**
-      `_customize_default_template` special-cases `mimeo.lol` by name. Not
-      urgent — no eleventy templates in tepiton yet.
+      Gated (real APIs). Blocked on having a test account/org.
 
 - [ ] **Backlog: Dead params in `HTTPClient`**
-      `max_retries` and `backoff_factor` in `http.py` unused. Safe to remove.
+      `max_retries`/`backoff_factor` in `http.py` never read. Only
+      `tests/utils/test_http.py:27-28` passes them.
 
 ## Blockers
 
-None.
+None. Template parameterization needs a design decision, not unblocking.
 
 ## Context
 
-- All commands now use `map_items` + `render_results` + `exit_on_errors`;
-  `_processing.py` has one fan-out system
-- `create` and `template apply` both call `validate_template()` before the
-  per-domain loop (was inconsistent; create had no upfront check)
-- Two providers: `PorkbunRegistrar`/`PorkbunDNSProvider` and `GitHubHost`
-- `_customize_default_template` special-cased by name (only `mimeo.lol`)
-- `_rename_repository` uses numeric ID endpoint to avoid 307 redirects
+- Site identity lives in a different file/format per template family:
+  `content/_data/metadata.js` + `package.json`, inline object in
+  `eleventy.config.js`, YAML frontmatter in `index.md`, hardcoded HTML
+- `_customize_default_template` (`github.py:329-377`) handles only `mimeo.lol`;
+  gated at `github.py:324-325`. Preserve its 5x/2s retry and `updated ==
+  content` no-op guard in any redesign
+- Templates are discovered live from the `tepiton` org — no local list, so
+  `validate_template` is a GitHub API existence check
 - 297 tests passing; mypy and ruff clean
 
 ## Next Session
 
-Choose from backlog items or start Stage 4 E2E tests when a test account
-is available. Easiest backlog pick: remove dead `max_retries`/`backoff_factor`
-params from `HTTPClient` in `http.py`.
+Decide the parameterization design shape, then plan against it. Unrelated
+easy pick if you'd rather: remove the dead `HTTPClient` params.

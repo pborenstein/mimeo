@@ -104,6 +104,18 @@ front-door verbs than it started with. See DEC-021.
         (5x/2s) rather than swallowed.
   - [ ] Scoped to `mimeo.lol` only; `eleventy-*` templates (full site
         generators with their own config) are a separate, harder problem
+  - [ ] Surveyed all 7 tepiton templates (Entry 42). Site identity lives in a
+        different file/format per family: `content/_data/metadata.js` +
+        `package.json` (tech-blog, prose-blog, chapbook, folio), inline object
+        in `eleventy.config.js` (pamphlet), YAML frontmatter in `index.md`
+        (pandoc-simple), hardcoded HTML (mimeo.lol). Design shape still
+        undecided: per-template manifest vs. token convention vs. mimeo-side
+        registry — see Entry 42 for the tradeoffs
+  - [ ] Prerequisite: `eleventy-tech-blog` and `eleventy-prose-blog` ship real
+        live-site identity, not placeholders (`pborenstein.dev`/`.com`, real
+        email, a `pborenstein.2025` git URL in `package.json`). The other three
+        eleventy templates already use `example.com`. Scrub before or as part
+        of parameterization — lives in mimeo-sites, not this repo
 - [x] `template apply --force` safety fix: rename-then-generate-then-delete
       instead of delete-then-generate (DEC-022)
 - [x] `_rename_repository` uses numeric repo ID (`repositories/<id>`) to avoid

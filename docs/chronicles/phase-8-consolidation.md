@@ -1,5 +1,46 @@
 # Phase 8: Consolidation Chronicles
 
+## Entry 42: Template parameterization survey — no code changes (2026-09-05)
+
+**What**: Investigation only. Surveyed all seven tepiton templates in
+`~/projects/mimeo-sites/TEMPLATES` and traced mimeo's template path to scope
+the carried-over parameterization item. No code written; design shape is a
+decision still owed.
+
+**Why**: `_customize_default_template` (`github.py:329-377`) only knows how to
+un-brand `mimeo.lol` — two literal `str.replace` calls on `index.html`, gated
+at `github.py:324-325` on `template_repo == DEFAULT_TEMPLATE`. Every other
+template ships its own branding into the generated site. Generalizing needs to
+stay platform-agnostic: not every site is an eleventy site.
+
+**How**: Site identity turns out to live in a different file and format per
+family — `content/_data/metadata.js` plus `package.json` (tech-blog,
+prose-blog, chapbook, folio), an inline object in `eleventy.config.js:45-48`
+(pamphlet), YAML frontmatter in `index.md:1-7` (pandoc-simple), hardcoded
+`<title>`/`<h1>` (mimeo.lol). So a single hardcoded file path cannot generalize.
+Three candidate shapes: (1) a manifest in each template repo declaring its
+substitutable files/tokens — self-describing, no mimeo release per new
+template, costs a one-time edit to seven repos plus a 404-tolerant fetch;
+(2) a token convention (`{{MIMEO_SITE_URL}}`) with a repo-wide walk — simplest
+mimeo-side, no declared intent; (3) a mimeo-side registry — no template repo
+changes, but every new template needs a code change, cutting against
+platform-agnosticism. Leaning (1).
+
+Also found: `eleventy-tech-blog` and `eleventy-prose-blog` contain real
+live-site identity rather than placeholders — `pborenstein.dev`/`.com`, real
+email, and a `pborenstein.2025` git URL in `package.json`. Anyone generating
+from those inherits it. The other three eleventy templates already use
+`example.com`, so the convention exists; those two diverge. Fix lives in
+mimeo-sites.
+
+Two properties of the current implementation worth preserving in any redesign:
+the 5x/2s empty-repo read retry, and the `updated == content` no-op guard that
+makes re-runs safe.
+
+**Decisions**: none yet — design shape open
+
+**Files**: none (investigation); `docs/IMPLEMENTATION.md` backlog expanded
+
 ## Entry 41: Fold process_domains_concurrent into map_items; template validation fix (2026-09-05)
 
 **What**: Completed Track A from Entry 40's plan. Migrated `dns repair`,

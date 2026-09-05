@@ -1,5 +1,37 @@
 # Phase 8: Consolidation Chronicles
 
+## Entry 43: Scrub leaked identity from eleventy-tech-blog / eleventy-prose-blog (2026-09-05)
+
+**What**: Removed real personal identity from both templates in mimeo-sites
+(not this repo) — the Entry 42 prerequisite. `content/_data/metadata.js`,
+`package.json`, `CLAUDE.md`, `base.njk` (tech-blog's hardcoded `@pborenstein`
+twitter tag), and `docs/*.md`/chronicles now use placeholder identity
+(`Author Name`, `example.com`) matching chapbook/folio/pamphlet. Also
+replaced all personal demo content — 10 posts (tech-blog) and 26 posts plus
+a stray page (prose-blog), all real personal essays/bio with no generic
+equivalent — with one purpose-built `welcome.md` per template exercising the
+template's actual features (footnotes, code blocks, mermaid for tech-blog;
+intentional linebreaks for prose-blog). Kept 4 already-generic git/eleventy
+tutorial posts in tech-blog.
+
+**Why**: Both templates were forks of the user's real personal blogs
+(`pborenstein.dev`, `pborenstein.com`) shipping real name/email/domain/social
+handles in config that ends up in every generated site, plus dozens of real
+personal essays as "demo content" — confusing for anyone forking the
+template and not something to keep re-publishing per site.
+
+**How**: Decided against scrubbing-in-place for the essays (many are book
+reviews/personal reflections with no generic version) in favor of full
+replacement with small purpose-built posts. `package-lock.json` regenerated
+via `npm install --package-lock-only` rather than hand-edited. Both
+templates verified building clean (`npm run build`) after the pass. Peer
+Claude sessions on eleventy-tech-blog and eleventy-prose-blog notified
+directly since the changes touch files they may have open; nothing
+committed there yet.
+
+**Files**: mimeo-sites/TEMPLATES/eleventy-tech-blog/*, mimeo-sites/TEMPLATES/eleventy-prose-blog/*
+(outside this repo)
+
 ## Entry 42: Template parameterization survey — no code changes (2026-09-05)
 
 **What**: Investigation only. Surveyed all seven tepiton templates in

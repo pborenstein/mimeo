@@ -111,11 +111,12 @@ front-door verbs than it started with. See DEC-021.
         (pandoc-simple), hardcoded HTML (mimeo.lol). Design shape still
         undecided: per-template manifest vs. token convention vs. mimeo-side
         registry — see Entry 42 for the tradeoffs
-  - [ ] Prerequisite: `eleventy-tech-blog` and `eleventy-prose-blog` ship real
-        live-site identity, not placeholders (`pborenstein.dev`/`.com`, real
-        email, a `pborenstein.2025` git URL in `package.json`). The other three
-        eleventy templates already use `example.com`. Scrub before or as part
-        of parameterization — lives in mimeo-sites, not this repo
+  - [x] Prerequisite: `eleventy-tech-blog` and `eleventy-prose-blog` shipped
+        real live-site identity (`pborenstein.dev`/`.com`, real email, a
+        `pborenstein.2025` git URL). Scrubbed (Entry 43) — both now use
+        `example.com`/placeholder author info like the other three eleventy
+        templates. Personal demo posts/pages replaced with generic ones.
+        Lives in mimeo-sites, not this repo
 - [x] `template apply --force` safety fix: rename-then-generate-then-delete
       instead of delete-then-generate (DEC-022)
 - [x] `_rename_repository` uses numeric repo ID (`repositories/<id>`) to avoid

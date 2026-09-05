@@ -1,5 +1,31 @@
 # Phase 8: Consolidation Chronicles
 
+## Entry 40: Code review deep-dive; plan for process_domains_concurrent removal (2026-09-05)
+
+**What**: Full read-through of all source files. No code changes.
+
+**Why**: Repo was organically grown across 8 phases. Wanted a clear mental
+model before the next round of cleanup, and to assess whether it could go public.
+
+**Findings**:
+- Privacy: clean for public release. Two `*.nogit.json` files (full domain
+  inventory) are blocked by global gitignore `*.nogit*`, not committed.
+  Only personal identifiers in git are two README clone URLs and one
+  IMPLEMENTATION.md reference link.
+- Two parallel fan-out systems in `_processing.py`: `process_domains_concurrent`
+  (older, used by `create`/`dns repair`/`template apply`) and `map_items` +
+  `render_results` + `exit_on_errors` (newer, used by everything else).
+  Within the `dns` group, `check`/`show` use the new path, `repair` uses the old.
+- `HTTPClient` has two dead constructor params noted as "kept for API compat".
+- `_customize_default_template` is special-cased by template name; `eleventy-*`
+  parameterization is a separate, harder problem.
+
+**Plan for next session**: Migrate `dns repair`, `template apply`, `create`
+(in that order) from `process_domains_concurrent` to `map_items`. Then delete
+`process_domains_concurrent`. See CONTEXT.md Next Session section.
+
+**Files**: docs/CONTEXT.md (updated with plan)
+
 ## Entry 39: list --show-template; validate template name; rename-by-ID fix (2026-08-27)
 
 **What**: Three improvements in one session.

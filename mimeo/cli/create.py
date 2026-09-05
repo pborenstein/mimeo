@@ -1,7 +1,7 @@
 """Create command for provisioning new sites."""
 
 from pathlib import Path
-from typing import Any, Dict, List, cast
+from typing import Any, Dict, List
 
 import click
 
@@ -14,10 +14,11 @@ from ..providers.registrar.porkbun import PorkbunDNSProvider, PorkbunRegistrar
 from ._processing import (
     _categorize_error,
     _emit,
-    exit_on_failures,
+    exit_on_errors,
     get_log_format,
     load_config,
-    process_domains_concurrent,
+    map_items,
+    render_results,
     validate_domains,
 )
 
@@ -29,7 +30,7 @@ def _process_single_domain(
     verbose: bool = True,
     skip_dns: bool = False,
     template: str = DEFAULT_TEMPLATE,
-) -> dict:
+) -> Dict[str, Any]:
     """Process a single domain creation.
 
     Args:
@@ -40,25 +41,23 @@ def _process_single_domain(
         template: Template repository to use
 
     Returns:
-        Dictionary with result information
+        Dictionary with result information. Raises on hard failure so
+        map_items can route it through on_error.
     """
     result: Dict[str, Any] = {
         "domain": domain,
-        "success": False,
         "error": None,
         "error_category": None,
         "url": None,
         "repo_url": None,
         "https_pending": False,
         "dns_pending": False,
-        "log": [],
     }
 
     log_format = get_log_format()
 
     def log(message: str, level: str = "info") -> None:
-        """Add to result log and optionally print to console."""
-        cast(List, result["log"]).append({"message": message, "level": level})
+        """Print to console in verbose/text mode and emit structured log."""
         _emit(level, message, domain=domain)
 
         if verbose and log_format == "text":
@@ -71,131 +70,119 @@ def _process_single_domain(
             else:
                 click.echo(f"  {message}")
 
+    if dry_run:
+        log(f"Would generate site for {domain}")
+        log(f"Would create repository: {cfg.github_username}/{domain}")
+        log("Would deploy to GitHub Pages")
+        if not skip_dns:
+            log("Would check nameservers before configuring DNS")
+            log("Would configure DNS records (if NS points to Porkbun):")
+            from mimeo.providers.host.github import GITHUB_PAGES_IPS
+            from mimeo.models import DNSRecord as _DNSRecord
+
+            dry_records = [
+                _DNSRecord(type="A", name="", content=ip, ttl=600) for ip in GITHUB_PAGES_IPS
+            ] + [
+                _DNSRecord(
+                    type="CNAME",
+                    name="www",
+                    content=f"{cfg.github_username}.github.io",
+                    ttl=600,
+                )
+            ]
+            for record in dry_records:
+                log(f"  - {record.type} {record.name or '@'} -> {record.content}")
+        else:
+            log("Would skip DNS configuration (--skip-dns)")
+        result["url"] = f"https://{domain}"
+        result["repo_url"] = f"https://github.com/{cfg.github_username}/{domain}"
+        return result
+
+    # Deploy to GitHub Pages
+    log("Configuring GitHub repository")
+    dns_records = None
     try:
-        if dry_run:
-            log(f"Would generate site for {domain}")
-            log(f"Would create repository: {cfg.github_username}/{domain}")
-            log("Would deploy to GitHub Pages")
-            if not skip_dns:
-                log("Would check nameservers before configuring DNS")
-                log("Would configure DNS records (if NS points to Porkbun):")
-                from mimeo.providers.host.github import GITHUB_PAGES_IPS
-                from mimeo.models import DNSRecord as _DNSRecord
-
-                dry_records = [
-                    _DNSRecord(type="A", name="", content=ip, ttl=600) for ip in GITHUB_PAGES_IPS
-                ] + [
-                    _DNSRecord(
-                        type="CNAME",
-                        name="www",
-                        content=f"{cfg.github_username}.github.io",
-                        ttl=600,
-                    )
-                ]
-                for record in dry_records:
-                    log(f"  - {record.type} {record.name or '@'} -> {record.content}")
-            else:
-                log("Would skip DNS configuration (--skip-dns)")
-            result["success"] = True
-            result["url"] = f"https://{domain}"
+        with GitHubHost(default_org=cfg.github_username) as host:
+            deploy = host.deploy_site(domain, template=template)
+            dns_records = host.required_dns_records(domain)
+            result["url"] = deploy.url
             result["repo_url"] = f"https://github.com/{cfg.github_username}/{domain}"
-            return result
 
-        # Deploy to GitHub Pages
-        log("Configuring GitHub repository")
-        dns_records = None
-        try:
-            with GitHubHost(default_org=cfg.github_username) as host:
-                deploy = host.deploy_site(domain, template=template)
-                dns_records = host.required_dns_records(domain)
-                result["url"] = deploy.url
-                result["repo_url"] = f"https://github.com/{cfg.github_username}/{domain}"
+            if deploy.repo_created:
+                log(
+                    f"Repository created from template '{template}': {cfg.github_username}/{domain}",
+                    "success",
+                )
+            else:
+                log(f"Repository already exists: {cfg.github_username}/{domain}", "warning")
+                log(
+                    "Use 'mimeo template apply' to replace with a different template", "warning"
+                )
 
-                if deploy.repo_created:
-                    log(
-                        f"Repository created from template '{template}': {cfg.github_username}/{domain}",
-                        "success",
+            log("GitHub Pages enabled", "success")
+            log(f"Custom domain configured: {domain}", "success")
+
+            if not deploy.https_enabled:
+                log("HTTPS enforcement pending SSL certificate", "warning")
+                result["https_pending"] = True
+            else:
+                log("HTTPS enforcement enabled", "success")
+    except HostError as e:
+        log(f"GitHub deployment failed: {e}", "error")
+        raise
+
+    if skip_dns:
+        log("Skipping DNS configuration (--skip-dns)", "info")
+        result["dns_pending"] = True
+        return result
+
+    # Configure DNS
+    log("Configuring DNS records")
+    try:
+        with PorkbunRegistrar(cfg.porkbun_api_key, cfg.porkbun_secret) as registrar:
+            ns_result = registrar.check_nameservers(domain)
+            if not ns_result.ok:
+                actual_ns = ", ".join(ns_result.actual) if ns_result.actual else "unknown"
+                log(
+                    f"NS records point to {actual_ns}, not Porkbun -- skipping DNS config",
+                    "warning",
+                )
+                log("Use 'mimeo dns repair' to fix DNS records", "warning")
+                result["dns_pending"] = True
+                result["ns_mismatch"] = ns_result.actual
+            else:
+                with PorkbunDNSProvider(cfg.porkbun_api_key, cfg.porkbun_secret) as dns:
+                    for record in dns_records or []:
+                        record_name = record.name or "@"
+                        log(f"Creating {record.type} record: {record_name} -> {record.content}")
+
+                    dns.configure_dns(domain, dns_records or [])
+                    log("DNS records created", "success")
+
+                    log("Verifying DNS propagation")
+                    verified = dns.verify_dns(
+                        domain,
+                        dns_records or [],
+                        max_attempts=10,
+                        delay=5,
+                        progress_callback=lambda attempt, max_att: click.echo(
+                            f"  DNS check {attempt}/{max_att} -- retrying..."
+                        ),
                     )
-                else:
-                    log(f"Repository already exists: {cfg.github_username}/{domain}", "warning")
-                    log(
-                        "Use 'mimeo template apply' to replace with a different template", "warning"
-                    )
-                    # Still configure Pages and domain for existing repos
-
-                log("GitHub Pages enabled", "success")
-                log(f"Custom domain configured: {domain}", "success")
-
-                if not deploy.https_enabled:
-                    log("HTTPS enforcement pending SSL certificate", "warning")
-                    result["https_pending"] = True
-                else:
-                    log("HTTPS enforcement enabled", "success")
-        except HostError as e:
-            log(f"GitHub deployment failed: {e}", "error")
-            raise
-
-        if skip_dns:
-            log("Skipping DNS configuration (--skip-dns)", "info")
-            result["dns_pending"] = True
-            result["success"] = True
-            return result
-
-        # Configure DNS
-        log("Configuring DNS records")
-        try:
-            with PorkbunRegistrar(cfg.porkbun_api_key, cfg.porkbun_secret) as registrar:
-                ns_result = registrar.check_nameservers(domain)
-                if not ns_result.ok:
-                    actual_ns = ", ".join(ns_result.actual) if ns_result.actual else "unknown"
-                    log(
-                        f"NS records point to {actual_ns}, not Porkbun -- skipping DNS config",
-                        "warning",
-                    )
-                    log("Use 'mimeo dns repair' to fix DNS records", "warning")
-                    result["dns_pending"] = True
-                    result["ns_mismatch"] = ns_result.actual
-                else:
-                    with PorkbunDNSProvider(cfg.porkbun_api_key, cfg.porkbun_secret) as dns:
-                        for record in dns_records or []:
-                            record_name = record.name or "@"
-                            log(f"Creating {record.type} record: {record_name} -> {record.content}")
-
-                        dns.configure_dns(domain, dns_records or [])
-                        log("DNS records created", "success")
-
-                        log("Verifying DNS propagation")
-                        verified = dns.verify_dns(
-                            domain,
-                            dns_records or [],
-                            max_attempts=10,
-                            delay=5,
-                            progress_callback=lambda attempt, max_att: click.echo(
-                                f"  DNS check {attempt}/{max_att} -- retrying..."
-                            ),
+                    if verified:
+                        log("DNS records verified", "success")
+                    else:
+                        log(
+                            "DNS records created but not yet propagated (may take up to 24 hours)",
+                            "warning",
                         )
-                        if verified:
-                            log("DNS records verified", "success")
-                        else:
-                            log(
-                                "DNS records created but not yet propagated (may take up to 24 hours)",
-                                "warning",
-                            )
-                            result["dns_pending"] = True
+                        result["dns_pending"] = True
 
-        except RegistrarError as e:
-            log(f"DNS configuration failed: {e}", "error")
-            log("Site deployed but DNS not configured", "warning")
-            result["dns_pending"] = True
-            result["error_category"] = "partial"
-
-        result["success"] = True
-
-    except Exception as e:
-        exit_code, category = _categorize_error(e)
-        result["error"] = f"[{category}] {e}"
-        result["error_category"] = category
-        log(str(result["error"]), "error")
+    except RegistrarError as e:
+        log(f"DNS configuration failed: {e}", "error")
+        log("Site deployed but DNS not configured", "warning")
+        result["dns_pending"] = True
+        result["error_category"] = "partial"
 
     return result
 
@@ -275,45 +262,33 @@ def create(
         click.secho("DRY RUN MODE - No changes will be made", fg="cyan", bold=True)
         click.echo()
 
-    def process_fn(domain: str) -> dict:
-        use_verbose = dry_run or sequential or len(domains) == 1
+    verbose = dry_run or sequential or len(domains) == 1
+
+    def _create_domain(domain: str) -> Dict[str, Any]:
         return _process_single_domain(
             domain,
             cfg,
             dry_run,
-            verbose=use_verbose,
+            verbose=verbose,
             skip_dns=skip_dns,
             template=template,
         )
 
-    results = process_domains_concurrent(
-        domains,
-        process_fn,
-        workers,
-        sequential,
-        stop_on_error,
-        dry_run,
-    )
+    def _on_error(domain: str, exc: BaseException) -> Dict[str, Any]:
+        _, category = _categorize_error(exc)
+        return {
+            "domain": domain,
+            "error": str(exc),
+            "error_category": category,
+            "url": None,
+            "repo_url": None,
+            "https_pending": False,
+            "dns_pending": False,
+        }
 
-    # Print summary
-    success_count = sum(1 for r in results if r["success"])
-    total_count = len(results)
-
-    if log_format == "json":
-        summary_msg = (
-            f"DRY RUN: Would process {total_count} domain(s)"
-            if dry_run
-            else f"Completed: {success_count}/{total_count} succeeded"
-        )
-        _emit("info", summary_msg)
-        for result in results:
-            level = "info" if result["success"] else "error"
-            _emit(
-                level,
-                "success" if result["success"] else result.get("error", "unknown error"),
-                domain=result["domain"],
-            )
-    else:
+    def _text(results: List[Dict[str, Any]]) -> None:
+        success_count = sum(1 for r in results if not r.get("error"))
+        total_count = len(results)
         click.echo()
         click.secho("=" * 60, fg="white", bold=True)
         click.secho("SUMMARY", fg="white", bold=True)
@@ -332,7 +307,7 @@ def create(
 
         for result in results:
             domain = result["domain"]
-            if result["success"]:
+            if not result.get("error"):
                 click.secho(f"ok {domain}", fg="green", bold=True)
                 if not dry_run:
                     click.echo(f"  URL: {result.get('url', 'N/A')}")
@@ -346,4 +321,38 @@ def create(
                 click.secho(f"  Error: {result.get('error', 'Unknown error')}", fg="red")
             click.echo()
 
-    exit_on_failures(results)
+    def _json_summary(results: List[Dict[str, Any]]) -> None:
+        success_count = sum(1 for r in results if not r.get("error"))
+        total_count = len(results)
+        summary_msg = (
+            f"DRY RUN: Would process {total_count} domain(s)"
+            if dry_run
+            else f"Completed: {success_count}/{total_count} succeeded"
+        )
+        _emit("info", summary_msg)
+        for result in results:
+            level = "info" if not result.get("error") else "error"
+            _emit(
+                level,
+                "success" if not result.get("error") else result.get("error", "unknown error"),
+                domain=result["domain"],
+            )
+
+    results = map_items(
+        domains,
+        _create_domain,
+        workers=workers,
+        sequential=(dry_run or sequential or len(domains) == 1),
+        on_error=_on_error,
+    )
+
+    if log_format == "json":
+        _json_summary(results)
+    else:
+        render_results(
+            results,
+            "text",
+            csv_fields=["domain", "url", "repo_url", "https_pending", "dns_pending", "error"],
+            text=_text,
+        )
+    exit_on_errors(results)

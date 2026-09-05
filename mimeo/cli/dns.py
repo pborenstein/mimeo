@@ -2,7 +2,7 @@
 
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, cast
+from typing import Any, Dict, List
 
 import click
 
@@ -17,11 +17,9 @@ from ._processing import (
     _categorize_error,
     _emit,
     exit_on_errors,
-    exit_on_failures,
     get_log_format,
     load_config,
     map_items,
-    process_domains_concurrent,
     render_results,
     validate_domains,
 )
@@ -342,19 +340,12 @@ def repair(
         click.secho("DRY RUN MODE - No changes will be made", fg="cyan", bold=True)
         click.echo()
 
-    def _repair_domain(domain: str) -> dict:
-        result: Dict[str, Any] = {
-            "domain": domain,
-            "success": False,
-            "error": None,
-            "error_category": None,
-            "log": [],
-        }
+    verbose = dry_run or len(domains) == 1
 
-        verbose = dry_run or len(domains) == 1
+    def _repair_domain(domain: str) -> Dict[str, Any]:
+        result: Dict[str, Any] = {"domain": domain, "error": None, "error_category": None}
 
         def log(message: str, level: str = "info") -> None:
-            cast(List, result["log"]).append({"message": message, "level": level})
             _emit(level, message, domain=domain)
             if verbose and log_format == "text":
                 if level == "error":
@@ -366,92 +357,75 @@ def repair(
                 else:
                     click.echo(f"  {message}")
 
-        try:
-            with GitHubHost(default_org=cfg.github_username) as host:
-                dns_records = host.required_dns_records(domain)
+        with GitHubHost(default_org=cfg.github_username) as host:
+            dns_records = host.required_dns_records(domain)
 
-            with PorkbunRegistrar(cfg.porkbun_api_key, cfg.porkbun_secret) as registrar:
-                ns_result = registrar.check_nameservers(domain)
+        with PorkbunRegistrar(cfg.porkbun_api_key, cfg.porkbun_secret) as registrar:
+            ns_result = registrar.check_nameservers(domain)
 
-                if not ns_result.ok:
-                    actual_ns = ", ".join(ns_result.actual) if ns_result.actual else "unknown"
-                    if reset_nameservers:
-                        if dry_run:
-                            log(f"Would reset nameservers from {actual_ns} to Porkbun", "warning")
-                        else:
-                            log(
-                                f"NS records point to {actual_ns} -- resetting to Porkbun",
-                                "warning",
-                            )
-                            registrar.update_nameservers(domain)
-                            log("Nameservers updated to Porkbun", "success")
+            if not ns_result.ok:
+                actual_ns = ", ".join(ns_result.actual) if ns_result.actual else "unknown"
+                if reset_nameservers:
+                    if dry_run:
+                        log(f"Would reset nameservers from {actual_ns} to Porkbun", "warning")
                     else:
                         log(
-                            f"NS records point to {actual_ns}, not Porkbun -- use --reset-nameservers to fix",
-                            "error",
+                            f"NS records point to {actual_ns} -- resetting to Porkbun",
+                            "warning",
                         )
-                        result["error"] = f"NS mismatch: {actual_ns}"
-                        result["error_category"] = "provider"
-                        return result
-
-            if dry_run:
-                for record in dns_records:
-                    record_name = record.name or "@"
-                    log(f"Would create {record.type} record: {record_name} -> {record.content}")
-                log("Would verify DNS propagation")
-                result["success"] = True
-                return result
-
-            with PorkbunDNSProvider(cfg.porkbun_api_key, cfg.porkbun_secret) as dns_prov:
-                for record in dns_records:
-                    record_name = record.name or "@"
-                    log(f"Creating {record.type} record: {record_name} -> {record.content}")
-
-                dns_prov.configure_dns(domain, dns_records)
-                log("DNS records created", "success")
-
-                log("Verifying DNS propagation")
-                verified = dns_prov.verify_dns(
-                    domain,
-                    dns_records,
-                    max_attempts=10,
-                    delay=5,
-                    progress_callback=lambda attempt, max_att: click.echo(
-                        f"  DNS check {attempt}/{max_att} -- retrying..."
-                    ),
-                )
-                if verified:
-                    log("DNS records verified", "success")
+                        registrar.update_nameservers(domain)
+                        log("Nameservers updated to Porkbun", "success")
                 else:
                     log(
-                        "DNS records created but not yet propagated (may take up to 24 hours)",
-                        "warning",
+                        f"NS records point to {actual_ns}, not Porkbun -- use --reset-nameservers to fix",
+                        "error",
                     )
+                    result["error"] = f"NS mismatch: {actual_ns}"
+                    result["error_category"] = "provider"
+                    return result
 
-            result["success"] = True
+        if dry_run:
+            for record in dns_records:
+                record_name = record.name or "@"
+                log(f"Would create {record.type} record: {record_name} -> {record.content}")
+            log("Would verify DNS propagation")
+            return result
 
-        except Exception as e:
-            exit_code, category = _categorize_error(e)
-            result["error"] = f"[{category}] {e}"
-            result["error_category"] = category
-            log(str(result["error"]), "error")
+        with PorkbunDNSProvider(cfg.porkbun_api_key, cfg.porkbun_secret) as dns_prov:
+            for record in dns_records:
+                record_name = record.name or "@"
+                log(f"Creating {record.type} record: {record_name} -> {record.content}")
+
+            dns_prov.configure_dns(domain, dns_records)
+            log("DNS records created", "success")
+
+            log("Verifying DNS propagation")
+            verified = dns_prov.verify_dns(
+                domain,
+                dns_records,
+                max_attempts=10,
+                delay=5,
+                progress_callback=lambda attempt, max_att: click.echo(
+                    f"  DNS check {attempt}/{max_att} -- retrying..."
+                ),
+            )
+            if verified:
+                log("DNS records verified", "success")
+            else:
+                log(
+                    "DNS records created but not yet propagated (may take up to 24 hours)",
+                    "warning",
+                )
 
         return result
 
-    results = process_domains_concurrent(
-        domains,
-        _repair_domain,
-        workers,
-        sequential=(len(domains) == 1),
-        stop_on_error=False,
-        dry_run=dry_run,
-    )
+    def _on_error(domain: str, exc: BaseException) -> Dict[str, Any]:
+        _, category = _categorize_error(exc)
+        return {"domain": domain, "error": str(exc), "error_category": category}
 
-    # Summary
-    success_count = sum(1 for r in results if r["success"])
-    total_count = len(results)
-
-    if log_format != "json":
+    def _text(results: List[Dict[str, Any]]) -> None:
+        success_count = sum(1 for r in results if not r.get("error"))
+        total_count = len(results)
         click.echo()
         if dry_run:
             click.secho(f"DRY RUN: Would repair DNS for {total_count} domain(s)", fg="cyan")
@@ -460,4 +434,18 @@ def repair(
             click.secho(f"DNS repair: {success_count}/{total_count} succeeded", fg=color)
         click.echo()
 
-    exit_on_failures(results)
+    results = map_items(
+        domains,
+        _repair_domain,
+        workers=workers,
+        sequential=(dry_run or len(domains) == 1),
+        on_error=_on_error,
+    )
+
+    render_results(
+        results,
+        "json" if log_format == "json" else "text",
+        csv_fields=["domain", "error", "error_category"],
+        text=_text,
+    )
+    exit_on_errors(results)

@@ -6,7 +6,6 @@ import re
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
-from threading import Lock
 from typing import Any, Callable, Dict, Iterable, List, Sequence, TypeVar
 
 import click
@@ -24,9 +23,6 @@ from ..exceptions import (
     NetworkError,
     RegistrarError,
 )
-
-# Lock for thread-safe console output
-_console_lock = Lock()
 
 # Set by main() group before subcommands run
 _log_format: str = "text"
@@ -154,106 +150,6 @@ def load_config(config_path: Any) -> Any:
         sys.exit(EXIT_GENERAL)
 
 
-def process_domains_concurrent(
-    domains: tuple[str, ...],
-    process_fn: Callable[[str], dict],
-    workers: int,
-    sequential: bool,
-    stop_on_error: bool,
-    dry_run: bool = False,
-) -> list[dict]:
-    """Process multiple domains either sequentially or concurrently.
-
-    Args:
-        domains: Tuple of domain names
-        process_fn: Function that takes a domain and returns a result dict
-                   with at least 'domain', 'success', 'error' keys
-        workers: Max concurrent workers
-        sequential: Force sequential processing
-        stop_on_error: Stop on first error
-        dry_run: Whether this is a dry run (forces sequential)
-
-    Returns:
-        List of result dicts in original domain order
-    """
-    results: List[dict] = []
-
-    if dry_run or sequential or len(domains) == 1:
-        for idx, domain in enumerate(domains, 1):
-            if len(domains) > 1 and _log_format == "text":
-                click.echo()
-                click.secho(f"[{idx}/{len(domains)}] Processing {domain}", fg="cyan", bold=True)
-                click.secho("=" * 60, fg="cyan")
-
-            result = process_fn(domain)
-            results.append(result)
-
-            if stop_on_error and not result["success"]:
-                if _log_format == "text":
-                    click.echo()
-                    click.secho(f"Stopping due to error with {domain}", fg="red")
-                else:
-                    _emit("error", f"Stopping due to error with {domain}")
-                break
-    else:
-        if _log_format == "text":
-            click.echo()
-
-        with ThreadPoolExecutor(max_workers=min(len(domains), workers)) as executor:
-            future_to_domain = {}
-            for domain in domains:
-                future = executor.submit(process_fn, domain)
-                future_to_domain[future] = domain
-                if _log_format == "text":
-                    click.secho(f"-> {domain} started", fg="cyan")
-                else:
-                    _emit("info", f"{domain} started", domain=domain)
-
-            if _log_format == "text":
-                click.echo()
-
-            for future in as_completed(future_to_domain):
-                domain = future_to_domain[future]
-                try:
-                    result = future.result()
-                    results.append(result)
-
-                    if _log_format == "text":
-                        if result["success"]:
-                            click.secho(f"ok {domain} completed", fg="green")
-                        else:
-                            click.secho(
-                                f"xx {domain} failed: {result.get('error', 'Unknown error')}",
-                                fg="red",
-                            )
-                    else:
-                        level = "info" if result["success"] else "error"
-                        msg = (
-                            f"{domain} completed"
-                            if result["success"]
-                            else f"{domain} failed: {result.get('error', 'Unknown error')}"
-                        )
-                        _emit(level, msg, domain=domain)
-
-                except Exception as e:
-                    if _log_format == "text":
-                        click.secho(f"xx {domain} failed unexpectedly: {e}", fg="red")
-                    else:
-                        _emit("error", f"{domain} failed unexpectedly: {e}", domain=domain)
-                    results.append(
-                        {
-                            "domain": domain,
-                            "success": False,
-                            "error": str(e),
-                        }
-                    )
-
-        domain_order = {domain: idx for idx, domain in enumerate(domains)}
-        results.sort(key=lambda r: domain_order.get(r["domain"], 999))
-
-    return results
-
-
 _CATEGORY_TO_CODE = {
     "config": EXIT_CONFIG,
     "auth": EXIT_AUTH,
@@ -262,17 +158,6 @@ _CATEGORY_TO_CODE = {
     "provider": EXIT_TRANSIENT,
     "partial": EXIT_PARTIAL,
 }
-
-
-def exit_on_failures(results: list[dict]) -> None:
-    """Exit with appropriate code if any results failed."""
-    failed = [r for r in results if not r["success"]]
-    if failed:
-        codes = [
-            _CATEGORY_TO_CODE.get(r.get("error_category") or "transient", EXIT_TRANSIENT)
-            for r in failed
-        ]
-        sys.exit(min(codes))
 
 
 T = TypeVar("T")

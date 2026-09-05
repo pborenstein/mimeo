@@ -566,12 +566,9 @@ class TestCreateCommand:
         result = runner.invoke(create, ["site1.com", "site2.com", "site3.com"])
 
         assert result.exit_code == 0
-        assert "site1.com started" in result.output
-        assert "site2.com started" in result.output
-        assert "site3.com started" in result.output
-        assert "site1.com completed" in result.output
-        assert "site2.com completed" in result.output
-        assert "site3.com completed" in result.output
+        assert "site1.com" in result.output
+        assert "site2.com" in result.output
+        assert "site3.com" in result.output
         assert "Successfully created: 3/3 domain(s)" in result.output
 
         assert mock_host.deploy_site.call_count == 3
@@ -617,8 +614,8 @@ class TestCreateCommand:
         result = runner.invoke(create, ["site1.com", "site2.com", "--sequential"])
 
         assert result.exit_code == 0
-        assert "Processing site1.com" in result.output
-        assert "Processing site2.com" in result.output
+        assert "site1.com" in result.output
+        assert "site2.com" in result.output
         assert "Successfully created: 2/2 domain(s)" in result.output
 
 

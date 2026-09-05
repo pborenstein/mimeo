@@ -1,7 +1,7 @@
 """Template commands for managing site templates."""
 
 from pathlib import Path
-from typing import Any, Dict, List, cast
+from typing import Any, Dict, List
 
 import click
 
@@ -9,10 +9,11 @@ from ..providers.host.github import GitHubHost
 from ._processing import (
     _categorize_error,
     _emit,
-    exit_on_failures,
+    exit_on_errors,
     get_log_format,
     load_config,
-    process_domains_concurrent,
+    map_items,
+    render_results,
     validate_domains,
 )
 
@@ -102,19 +103,12 @@ def apply(
         click.secho("DRY RUN MODE - No changes will be made", fg="cyan", bold=True)
         click.echo()
 
-    def _apply_template(domain: str) -> dict:
-        result: Dict[str, Any] = {
-            "domain": domain,
-            "success": False,
-            "error": None,
-            "error_category": None,
-            "log": [],
-        }
+    verbose = dry_run or len(domains) == 1
 
-        verbose = dry_run or len(domains) == 1
+    def _apply_template(domain: str) -> Dict[str, Any]:
+        result: Dict[str, Any] = {"domain": domain, "error": None, "error_category": None}
 
         def log(message: str, level: str = "info") -> None:
-            cast(List, result["log"]).append({"message": message, "level": level})
             _emit(level, message, domain=domain)
             if verbose and log_format == "text":
                 if level == "error":
@@ -126,59 +120,42 @@ def apply(
                 else:
                     click.echo(f"  {message}")
 
-        try:
-            if dry_run:
-                log(
-                    f"Would delete and recreate {cfg.github_username}/{domain} from template '{template_repo}'"
-                )
-                log("Would re-enable GitHub Pages")
-                log(f"Would configure custom domain: {domain}")
-                result["success"] = True
-                return result
+        if dry_run:
+            log(
+                f"Would delete and recreate {cfg.github_username}/{domain} from template '{template_repo}'"
+            )
+            log("Would re-enable GitHub Pages")
+            log(f"Would configure custom domain: {domain}")
+            return result
 
-            with GitHubHost(default_org=cfg.github_username) as host:
-                log(f"Replacing repository with template '{template_repo}'")
-                deploy = host.deploy_site(domain, template=template_repo, force=True)
+        with GitHubHost(default_org=cfg.github_username) as host:
+            log(f"Replacing repository with template '{template_repo}'")
+            deploy = host.deploy_site(domain, template=template_repo, force=True)
 
-                if deploy.repo_created and deploy.repo_existed:
-                    log(f"Repository replaced: {cfg.github_username}/{domain}", "success")
-                elif deploy.repo_created:
-                    log(f"Repository created (was new): {cfg.github_username}/{domain}", "success")
-                else:
-                    log(f"Repository unchanged: {cfg.github_username}/{domain}", "warning")
+            if deploy.repo_created and deploy.repo_existed:
+                log(f"Repository replaced: {cfg.github_username}/{domain}", "success")
+            elif deploy.repo_created:
+                log(f"Repository created (was new): {cfg.github_username}/{domain}", "success")
+            else:
+                log(f"Repository unchanged: {cfg.github_username}/{domain}", "warning")
 
-                log("GitHub Pages enabled", "success")
-                log(f"Custom domain configured: {domain}", "success")
+            log("GitHub Pages enabled", "success")
+            log(f"Custom domain configured: {domain}", "success")
 
-                if not deploy.https_enabled:
-                    log("HTTPS enforcement pending SSL certificate", "warning")
-                else:
-                    log("HTTPS enforcement enabled", "success")
-
-            result["success"] = True
-
-        except Exception as e:
-            exit_code, category = _categorize_error(e)
-            result["error"] = f"[{category}] {e}"
-            result["error_category"] = category
-            log(str(result["error"]), "error")
+            if not deploy.https_enabled:
+                log("HTTPS enforcement pending SSL certificate", "warning")
+            else:
+                log("HTTPS enforcement enabled", "success")
 
         return result
 
-    results = process_domains_concurrent(
-        domains,
-        _apply_template,
-        workers,
-        sequential=(len(domains) == 1),
-        stop_on_error=False,
-        dry_run=dry_run,
-    )
+    def _on_error(domain: str, exc: BaseException) -> Dict[str, Any]:
+        _, category = _categorize_error(exc)
+        return {"domain": domain, "error": str(exc), "error_category": category}
 
-    # Summary
-    success_count = sum(1 for r in results if r["success"])
-    total_count = len(results)
-
-    if log_format != "json":
+    def _text(results: List[Dict[str, Any]]) -> None:
+        success_count = sum(1 for r in results if not r.get("error"))
+        total_count = len(results)
         click.echo()
         if dry_run:
             click.secho(f"DRY RUN: Would apply template to {total_count} domain(s)", fg="cyan")
@@ -187,4 +164,18 @@ def apply(
             click.secho(f"Template apply: {success_count}/{total_count} succeeded", fg=color)
         click.echo()
 
-    exit_on_failures(results)
+    results = map_items(
+        domains,
+        _apply_template,
+        workers=workers,
+        sequential=(dry_run or len(domains) == 1),
+        on_error=_on_error,
+    )
+
+    render_results(
+        results,
+        "json" if log_format == "json" else "text",
+        csv_fields=["domain", "error", "error_category"],
+        text=_text,
+    )
+    exit_on_errors(results)

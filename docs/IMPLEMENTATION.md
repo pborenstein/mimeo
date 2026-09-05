@@ -46,8 +46,9 @@ front-door verbs than it started with. See DEC-021.
   - [x] Measure: command files shrank ~65 lines but the engine added ~110,
         so cli/ net +51 lines; the payoff is structural (one pool, one
         dispatch) and compounds when status/sync build on it
-  - [ ] Follow-up: fold `process_domains_concurrent` (create, dns repair,
+  - [x] Follow-up: fold `process_domains_concurrent` (create, dns repair,
         template apply) into `map_items` — the remaining duplicate pool
+        deleted process_domains_concurrent, exit_on_failures, Lock
 - [x] Stage 2: `mimeo status [DOMAINS...]` — the cross-provider join
   - [x] One table joining Porkbun domains x GitHub repos x DNS drift x
         Pages health (DOMAIN / EXPIRES / NS / DNS / SITE + summary line)

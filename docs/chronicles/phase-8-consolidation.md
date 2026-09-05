@@ -1,5 +1,29 @@
 # Phase 8: Consolidation Chronicles
 
+## Entry 41: Fold process_domains_concurrent into map_items; template validation fix (2026-09-05)
+
+**What**: Completed Track A from Entry 40's plan. Migrated `dns repair`,
+`template apply`, and `create` from `process_domains_concurrent` to
+`map_items` + `render_results` + `exit_on_errors`. Deleted the old function,
+`exit_on_failures`, and the unused `Lock`/`_console_lock` from `_processing.py`.
+Also found and fixed a latent inconsistency: `create` had no upfront template
+validation while `template apply` called `validate_template()` before its loop.
+
+**Why**: One fan-out system instead of two; consistent result schema across all
+commands; `create` with a bad template name now fails fast with a clear message
+rather than surfacing per-domain errors mid-run.
+
+**How**: Each command's `process_fn` now lets exceptions propagate to
+`map_items`'s `on_error` handler. The `log` closure drops its result-list
+accumulation; the `success` and `log` result fields are gone. Text output moves
+into a `_text` callback passed to `render_results`. Two test assertions updated:
+mid-run progress banners (`"site1.com started"`) were artifacts of the old
+function, not meaningful behavior.
+
+**Files**: `mimeo/cli/_processing.py`, `mimeo/cli/dns.py`,
+`mimeo/cli/template.py`, `mimeo/cli/create.py`, `tests/test_cli.py`
+**Commits**: `337b359`, `f02ca53`
+
 ## Entry 40: Code review deep-dive; plan for process_domains_concurrent removal (2026-09-05)
 
 **What**: Full read-through of all source files. No code changes.

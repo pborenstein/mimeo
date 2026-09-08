@@ -147,6 +147,114 @@ front-door verbs than it started with. See DEC-021.
   - [x] Force-replace renames the target out of the way instead of
         deleting it; only deletes the renamed-old repo after `generate`
         succeeds; renames back on any failure
+- [ ] Stage 5: Collapse 9 verbs to 5 (DEC-025). Read DEC-025 in full before
+      starting — this section is the checklist, DEC-025 is the rationale.
+      No provider-layer changes anywhere in this stage; `github.py` and
+      `porkbun.py` are untouched. Target surface:
+      `create`, `status`, `sync`, `doctor`, `template lint` (lint gated
+      separately, see 5E).
+  - [ ] 5A: `create` absorbs `template apply`
+        - [ ] Add `--force` (bool) and `--yes` (bool, skip confirm) to
+              `mimeo/cli/create.py`'s `create` command
+        - [ ] Wire `--force` to the existing `deploy_site(force=True)` path
+              (already used by `template apply`, `mimeo/cli/template.py:133`)
+        - [ ] Port `template apply`'s confirmation-prompt logic (skipped by
+              `--yes`) into `create`, gated on `--force`
+        - [ ] `--template` on `create` already exists and defaults to
+              `DEFAULT_TEMPLATE`; `template apply`'s `--template` was
+              `required=True` — no behavior change needed, just drop the
+              requirement when merging
+        - [ ] Delete `mimeo/cli/template.py`; remove its registration in
+              `mimeo/cli/__init__.py`
+        - [ ] Relocate `template apply`'s tests (confirm prompt, DEC-022
+              rollback-on-failure case) onto `create --force` test cases
+        - [ ] Update `create`'s help text: state that `--force` replaces an
+              existing repo's content (same effect `template apply` had),
+              and that the domain-substitution manifest (DEC-024, once
+              implemented) reruns automatically on both plain `create` and
+              `create --force`
+  - [ ] 5B: `status` absorbs `list`, `registrar list`, `dns show`, `dns check`
+        - [ ] Add `--source {github,porkbun,dns}` to `mimeo/cli/status.py`
+        - [ ] No `--source` = current full-join behavior (unchanged)
+        - [ ] `--source github` reproduces `list`'s output (repo name, url,
+              updated, optionally health/template columns per
+              `list --health`/`--show-template`) — verify column parity
+              before deleting `list_cmd.py`
+        - [ ] `--source porkbun` reproduces `registrar list` (domain,
+              expiry, optionally `--with-dns` records, which `status`
+              already supports) — verify before deleting `registrar.py`
+        - [ ] `--source dns` reproduces `dns show` (raw live records, no
+              comparison) when used alone, and `dns check` (drift only,
+              read-only) when combined with the existing `--problems` flag
+              — verify both shapes before deleting `dns.py`'s `show`/`check`
+        - [ ] This is the stage most likely to reveal an output-shape gap
+              `status` doesn't already cover (e.g. `list --show-template`'s
+              TEMPLATE column via `get_template_repository()`). If a gap is
+              found, add it as a `status` column/flag rather than keeping
+              the old command
+        - [ ] Delete `mimeo/cli/list_cmd.py`; delete `registrar.py`'s `list`
+              command (check whether anything else in `registrar.py`
+              survives — if not, delete the file); delete `dns.py`'s `show`
+              and `check` (repair is handled in 5C — do not delete `dns.py`
+              until 5C is also done)
+        - [ ] Remove dead registrations in `mimeo/cli/__init__.py`
+        - [ ] Relocate all four commands' test coverage onto `status
+              --source X` equivalents — largest test-relocation surface of
+              the five sub-stages, budget accordingly
+  - [ ] 5C: `sync` absorbs `dns repair` and `fix https`
+        - [ ] **Before writing code**: read DEC-025's "Open question"
+              section in full. Check whether `sync --all`'s existing
+              HTTPS-enable step (`mimeo/cli/sync.py`, calls
+              `host.get_pages_health()` then
+              `host.enable_https_enforcement()`) already covers every case
+              `fix https`'s no-arg auto-discovery covers
+              (`mimeo/cli/fix.py`'s `_fix_one`, filters to
+              `health_status() == "fixable"` via `map_items`). If sync's
+              existing pass is already a superset, no new flag is needed
+              for discovery — say so explicitly in the DEC-025 update. If a
+              real gap exists, resolve per DEC-025's option (a)/(b) before
+              proceeding
+        - [ ] Add `--wait` (bool) to `sync`: after `configure_dns`, call
+              `dns_provider.verify_dns()` (10x/5s poll, same as
+              `dns repair` does today in `dns.py`)
+        - [ ] Confirm `sync`'s existing `--reset-nameservers` flag maps
+              exactly onto `dns repair`'s nameserver-reset behavior (both
+              call `registrar.update_nameservers()`) — no new flag needed,
+              just confirm parity
+        - [ ] Delete `dns.py`'s `repair` command; if `show`/`check` were
+              already deleted in 5B, delete `dns.py` and its `dns` group
+              registration entirely
+        - [ ] Delete `mimeo/cli/fix.py`; remove its registration
+        - [ ] Relocate `dns repair`'s propagation-wait tests onto
+              `sync --wait`; relocate `fix https`'s discovery-mode and
+              dry-run tests onto `sync`'s equivalent path
+  - [ ] 5D: Registration cleanup
+        - [ ] Read through `mimeo/cli/__init__.py`'s `main.add_command(...)`
+              calls; confirm exactly 4 remain registered from this stage
+              (`create`, `status`, `sync`, `doctor`) plus whatever `template
+              lint` becomes in 5E
+        - [ ] Run full test suite (`uv run pytest`), `uv run mypy mimeo`,
+              `uv run ruff check mimeo`; all must pass clean before this
+              stage is considered done
+        - [ ] Update README.md's command reference section (currently lists
+              the 9-verb surface) to match the 5-verb surface
+  - [ ] 5E: `template lint TEMPLATE` (new command, gated separately)
+        - [ ] Do not start until DEC-024's manifest schema and format
+              handlers (`js-key`, `string-replace`, `yaml-frontmatter-key`)
+              are implemented and `mimeo.template.json` exists on at least
+              one real template — this command validates that schema, so
+              it has nothing to check against until DEC-024 lands
+        - [ ] Read-only: given a template name, fetch `mimeo.template.json`
+              from the template repo if present; validate each
+              substitution entry's `format` is a known value, `file`
+              resolves to a real path in the template repo, and
+              `key`/`match` is present per format's requirements
+        - [ ] No domain argument, no writes, no calls to
+              `deploy_site`/`configure_dns`/anything mutating
+        - [ ] Report pass/fail per substitution entry with specifics (which
+              file, which field, what was wrong) — this is a template
+              author's debugging tool, error messages should name the exact
+              manifest entry at fault
 
 ---
 

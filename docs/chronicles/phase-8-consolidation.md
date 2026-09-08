@@ -340,3 +340,40 @@ and rejected alternatives in DEC-024.
 
 **Files**: `docs/IMPLEMENTATION.md`, `docs/DECISIONS.md` (no source changes —
 manifest schema and handlers not yet implemented)
+
+## Entry 45: Planned collapsing 9 CLI verbs to 5 (2026-09-08)
+
+**What**: Continued the same session into command-surface redesign. Applied
+one test across every command pair — "is this a different action, or the
+same action with a flag" — starting from the user's own call that `create`
+and `template apply` are the same operation (create is reset, forced).
+Extended the same test to the rest of the surface and wrote a full,
+self-contained implementation plan.
+
+**Why**: DEC-021 (Stage 3) had already left this exact question open
+("alias vs deprecate — decided during Stage 3") and only partially answered
+it, keeping `dns repair`/`fix https` split from `sync` for stated reasons
+(propagation-wait gap, auto-discovery gap). Re-examining whether those gaps
+still justify a split, post the atoms/composites mapping from Entry 44,
+found they're closable with flags, not separate verbs.
+
+**How**: DEC-025 records the merge and, explicitly, that it supersedes
+DEC-021 Stage 3's scalpel decision rather than being a fresh call —
+important since DEC-021 made that split for a specific, checkable reason
+that needed to be named, not silently overridden. Five-command target
+surface: `create` (+ `--force`/`--yes`, absorbing `template apply`),
+`status` (+ `--source github|porkbun|dns`, absorbing `list`/
+`registrar list`/`dns show`/`dns check`), `sync` (+ `--wait`, absorbing
+`dns repair`/`fix https`), `doctor` (unchanged), `template lint` (new,
+gated on DEC-024 landing first). One open question flagged rather than
+guessed past: whether `sync --all`'s existing HTTPS pass already subsumes
+`fix https`'s auto-discovery mode, or a real gap remains — Stage 5C must
+check the actual code before merging, not assume. Full sub-stage checklist
+in IMPLEMENTATION.md Phase 8 Stage 5, written for a fresh session to
+execute without re-deriving this reasoning.
+
+**Decisions**: DEC-025 (supersedes DEC-021 Stage 3's dns-repair/fix-https
+scalpel decision)
+
+**Files**: `docs/IMPLEMENTATION.md` (Stage 5, full checklist),
+`docs/DECISIONS.md`, `docs/CONTEXT.md` (no source changes)

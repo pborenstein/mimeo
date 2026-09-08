@@ -474,6 +474,32 @@ progress."
 
 ---
 
+### DEC-025: Collapse Nine Verbs to Five — Merge on Shared Write/Read Path, Not Surface Similarity (2026-09-08)
+
+**Status**: Active (Phase 8) — planned, not yet implemented. Full task checklist in IMPLEMENTATION.md Phase 8 Stage 5.
+
+**Context**: DEC-021 (2026-07-06) built `status`/`sync` as declarative front doors but explicitly left `dns repair`, `fix https`, `list`, `registrar list`, `dns show`, `dns check`, `template apply` in place as separate verbs, deferring their fate ("alias vs deprecate — decided during Stage 3"). Stage 3 then resolved only two of them, keeping `dns repair` and `fix https` as "targeted scalpels rather than deprecated" — a decision made *for a reason*, not left open: at that time `sync` didn't wait for DNS propagation (a gap `repair` filled) and didn't auto-discover HTTPS-fixable repos (a gap `fix https` filled). `list`, `registrar list`, `dns show`, `dns check` were never revisited at all. Reviewing the full command surface (see Entry 44's atoms/composites map, and the discussion that followed it) found the remaining split isn't different operations — it's the same few write/read paths gated by which scope of domains and which subset of systems, expressed as separate verbs instead of flags. The test applied throughout: is this actually a different action, or the same action with a flag added? Every merge below passes that test the same way `create --force == template apply` does.
+
+**Decision**: Collapse the CLI from nine top-level verbs (eleven counting dns/template/fix subcommands) to five:
+
+1. `mimeo create DOMAIN [--template NAME] [--force] [--yes]` — absorbs `template apply`. `--force` on an existing repo does what `template apply` did (rename→generate→delete, DEC-022); `--yes` skips the confirmation prompt `template apply --force` used to require.
+2. `mimeo status [DOMAIN... | --all] [--source github|porkbun|dns] [--with-dns] [--problems]` — absorbs `list`, `registrar list`, `dns show`, `dns check`. No `--source` = today's full cross-provider join. `--source github` = today's `list` (GitHub-only). `--source porkbun` = today's `registrar list`. `--source dns` = today's `dns show`/`dns check` (raw records vs. drift-only distinguished by `--problems`).
+3. `mimeo sync [DOMAIN... | --all] [--wait] [--reset-nameservers] [--dry-run]` — absorbs `dns repair` and `fix https`, **superseding** DEC-021 Stage 3's "keep as scalpels" call now that the two gaps that justified keeping them separate are closed by new flags: `--wait` runs `verify_dns` after `configure_dns` (recovers `dns repair`'s propagation wait, 10x/5s poll); `sync` with no domain arguments and no `--all` currently refuses outright (DEC-021 fleet-safety guard) — `fix https`'s no-arg auto-discovery mode (scan all mimeo repos, filter to `health == "fixable"`, fix only those) has no equivalent yet and needs one before this merge is safe. See Open Question below.
+4. `mimeo doctor` — unchanged. Local-environment checks are the one command that was never domain-state plumbing to begin with.
+5. `mimeo template lint TEMPLATE` — new command, gated on DEC-024's manifest implementation landing first. Read-only manifest validation for template authors (does `mimeo.template.json` parse, do its `file`/`key`/`match` fields resolve against the actual template repo) with no domain argument and no writes. Not part of this collapse's critical path.
+
+**Open question, must be resolved before Stage 5 merges `fix https` into `sync`**: `fix https`'s no-arg mode auto-discovers fixable repos by calling `list_mimeo_repositories()` + `get_pages_health()` per repo and filtering to `health_status() == "fixable"`. `sync` has no equivalent — its no-arg invocation is refused for fleet-safety (DEC-021 Stage 3), and `--all` runs the full missing-DNS-records-plus-HTTPS pass across everything, not a narrow "only the ones that are fixable" pass. Two options, pick one during implementation: (a) `sync --all` already checks HTTPS eligibility per-domain as part of its normal pass, so the discovery *is* already redundant — verify this against `fix.py`'s `_fix_one` logic and `sync.py`'s existing HTTPS-enable step before assuming a gap exists; (b) if there's a real behavioral difference (e.g. `fix https` fixes sites `sync --all` would otherwise skip for some reason), add a narrower `sync --all --https-only` or keep the auto-discovery as `sync`'s default reporting when combined with `--problems`. Do not merge `fix https` silently without checking (a) first — the code may already make this a non-issue.
+
+**Alternatives considered**:
+
+- Alias instead of deprecate (keep old command names as thin wrappers calling the new flag combinations, so old scripts keep working): Rejected — DEC-021 already tried "keep both" for `dns repair`/`fix https` and it didn't resolve the sprawl, it just delayed the decision. Nine verbs became eleven. Aliasing five more only grows the surface being explained rather than shrinking it. Pre-1.0, breaking changes are acceptable (see DEC-018's precedent for exactly this call).
+- Leave `dns repair`/`fix https` split as DEC-021 Stage 3 decided: Rejected because the reasoning that justified the split (propagation-wait gap, auto-discovery gap) is closable with flags on `sync`, per this decision — reopening DEC-021's call is the point, not an oversight.
+- Merge `doctor` into `status` too, for a fully unified surface: Rejected — `doctor` checks local tooling (Python version, `gh` auth, config validity), not domain state; forcing it under `status`'s domain-argument model would be fitting a shape rather than finding one.
+
+**Consequences**: CLI drops from 9 top-level command groups to 5. `mimeo/cli/template.py`, `list_cmd.py`, `registrar.py`, `fix.py` are deleted; `dns.py` is deleted entirely once `show`/`check`/`repair` are absorbed (no subcommands remain). `create.py`, `status.py`, `sync.py` grow new flags but no new provider-layer code — every merge target already calls the same `mimeo/providers/host/github.py` and `mimeo/providers/registrar/porkbun.py` atoms the command it's replacing called (verified against source in Entry 44's session). Test files for the four deleted commands need their coverage relocated onto the surviving command's new flag combinations, not just deleted — this is the largest single piece of work in the plan. No changes to `_processing.py` or the provider layer.
+
+---
+
 ## Superseded/Deprecated
 
 [No superseded decisions yet]

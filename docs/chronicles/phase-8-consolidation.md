@@ -450,3 +450,39 @@ domains/repos via `gh api`/`curl`, not just the mocked test suite.
 `mimeo/cli/template.py` (deleted), `tests/test_cli.py`,
 `tests/providers/host/test_github.py`, `docs/IMPLEMENTATION.md`,
 `docs/DECISIONS.md`. Not yet committed.
+
+## Entry 47: Implemented Stage 5B — `status --source` absorbs `list`,
+`registrar list`, `dns show`, `dns check` (2026-09-08)
+
+**What**: On the same `stage-5a-create-absorbs-template-apply` branch
+(user's call: keep stacking sub-stages rather than PR-per-stage). Added
+`--source {github,porkbun,dns}` to `status`; no `--source` keeps the
+existing full-join behavior unchanged. `--source github`/`porkbun`
+reproduce `list`/`registrar list` output exactly, including their
+`--health`/`--with-template`/`--with-dns` flags. `--source dns` reproduces
+`dns show` (raw records) alone, or `dns check` (drift) when combined with
+the existing `--problems` flag — chosen over a new flag to keep the
+surface smaller, per user's pick when asked. Deleted `list_cmd.py` and
+`registrar.py` (nothing survived in the latter once `list` moved) and
+`dns.py`'s `show`/`check` (kept `repair` for 5C). Relocated all four
+commands' tests into three new `test_status.py` classes.
+
+**Why**: Per DEC-025's Stage 5 plan — one output-shape gap was found as
+anticipated (`list --show-template`'s TEMPLATE column had no `status`
+equivalent), closed by adding `--show-template` to `status` itself rather
+than keeping `list` alive, backed by the same `get_template_repository()`
+call.
+
+**How**: No provider-layer changes. 296 tests passing (up from 270),
+ruff/mypy clean. Verification is mock-based only — no Porkbun/GitHub
+credentials configured on this machine, so unlike 5A's DEC-026 bugs (only
+found by live testing), this stage has not yet been run against a real
+account.
+
+**Decisions**: none new; implements DEC-025's Stage 5B as planned.
+
+**Files**: `mimeo/cli/status.py` (rewritten), `mimeo/cli/dns.py`,
+`mimeo/cli/__init__.py`, `mimeo/cli/list_cmd.py` (deleted),
+`mimeo/cli/registrar.py` (deleted), `tests/test_cli.py`,
+`tests/test_status.py`, `docs/IMPLEMENTATION.md`, `docs/CONTEXT.md`.
+Not yet committed.

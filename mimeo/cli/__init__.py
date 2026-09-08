@@ -16,8 +16,6 @@ from .doctor import (
     doctor,
 )
 from .fix import fix
-from .list_cmd import list_sites
-from .registrar import registrar, registrar_list
 from .status import status
 from .sync import sync
 
@@ -38,10 +36,8 @@ def main(log_format: str) -> None:
 main.add_command(create)
 main.add_command(status)
 main.add_command(sync)
-main.add_command(list_sites)
 main.add_command(dns)
 main.add_command(fix)
-main.add_command(registrar)
 main.add_command(doctor)
 
 
@@ -50,11 +46,8 @@ __all__ = [
     "create",
     "status",
     "sync",
-    "list_sites",
     "dns",
     "fix",
-    "registrar",
-    "registrar_list",
     "doctor",
     "_check_config",
     "_check_gh_auth",

@@ -176,34 +176,44 @@ front-door verbs than it started with. See DEC-021.
               and that the domain-substitution manifest (DEC-024, once
               implemented) reruns automatically on both plain `create` and
               `create --force`
-  - [ ] 5B: `status` absorbs `list`, `registrar list`, `dns show`, `dns check`
-        - [ ] Add `--source {github,porkbun,dns}` to `mimeo/cli/status.py`
-        - [ ] No `--source` = current full-join behavior (unchanged)
-        - [ ] `--source github` reproduces `list`'s output (repo name, url,
+  - [x] 5B: `status` absorbs `list`, `registrar list`, `dns show`, `dns check`
+        - [x] Add `--source {github,porkbun,dns}` to `mimeo/cli/status.py`
+        - [x] No `--source` = current full-join behavior (unchanged)
+        - [x] `--source github` reproduces `list`'s output (repo name, url,
               updated, optionally health/template columns per
               `list --health`/`--show-template`) — verify column parity
               before deleting `list_cmd.py`
-        - [ ] `--source porkbun` reproduces `registrar list` (domain,
+        - [x] `--source porkbun` reproduces `registrar list` (domain,
               expiry, optionally `--with-dns` records, which `status`
               already supports) — verify before deleting `registrar.py`
-        - [ ] `--source dns` reproduces `dns show` (raw live records, no
+        - [x] `--source dns` reproduces `dns show` (raw live records, no
               comparison) when used alone, and `dns check` (drift only,
               read-only) when combined with the existing `--problems` flag
               — verify both shapes before deleting `dns.py`'s `show`/`check`
-        - [ ] This is the stage most likely to reveal an output-shape gap
-              `status` doesn't already cover (e.g. `list --show-template`'s
-              TEMPLATE column via `get_template_repository()`). If a gap is
-              found, add it as a `status` column/flag rather than keeping
-              the old command
-        - [ ] Delete `mimeo/cli/list_cmd.py`; delete `registrar.py`'s `list`
-              command (check whether anything else in `registrar.py`
-              survives — if not, delete the file); delete `dns.py`'s `show`
-              and `check` (repair is handled in 5C — do not delete `dns.py`
-              until 5C is also done)
-        - [ ] Remove dead registrations in `mimeo/cli/__init__.py`
-        - [ ] Relocate all four commands' test coverage onto `status
-              --source X` equivalents — largest test-relocation surface of
-              the five sub-stages, budget accordingly
+        - [x] Gap found and closed as planned: `list --show-template`'s
+              TEMPLATE column had no `status` equivalent. Added `--show-template`
+              to `status` itself (valid with `--source github` or the full
+              join), backed by the same `get_template_repository()` call.
+        - [x] Deleted `mimeo/cli/list_cmd.py` and `mimeo/cli/registrar.py`
+              (registrar.py had nothing left once `list` moved); deleted
+              `dns.py`'s `show` and `check` commands (repair stays for 5C)
+        - [x] Removed dead registrations in `mimeo/cli/__init__.py`
+              (`list_sites`, `dns.show`/`dns.check` implicitly via file
+              deletion, `registrar`/`registrar_list`)
+        - [x] Relocated all four commands' test coverage onto `status
+              --source X` equivalents in `tests/test_status.py` (three new
+              classes: `TestStatusSourceGithub`, `TestStatusSourcePorkbun`,
+              `TestStatusSourceDns`); removed `TestListCommand`,
+              `TestRegistrarListCommand`, and the `show`/`check` tests out
+              of `TestDnsCommands` in `tests/test_cli.py`. 296 tests passing
+              (up from 270), ruff/mypy clean.
+        - [ ] Not done this session: a live-account smoke test against a
+              real domain/repo (no Porkbun/GitHub credentials configured on
+              this machine — only the example config template exists at
+              `~/.config/mimeo/config.toml`). All verification here is
+              mock-based; DEC-026's bugs were found by live testing, so
+              treat this stage's `create`-adjacent paths as unverified
+              against a real account until someone runs it live.
   - [ ] 5C: `sync` absorbs `dns repair` and `fix https`
         - [ ] **Before writing code**: read DEC-025's "Open question"
               section in full. Check whether `sync --all`'s existing

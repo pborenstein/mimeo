@@ -1,30 +1,24 @@
 ---
 phase: 8
 phase_name: Consolidation
-updated: 2026-09-05
-last_commit: ef3001f
+updated: 2026-09-08
+last_commit: bdddd22
 ---
 
 ## Current Focus
 
-Prerequisite for template parameterization is done: `eleventy-tech-blog` and
-`eleventy-prose-blog` (in mimeo-sites, not this repo) had their leaked
-personal identity scrubbed. The parameterization design shape itself is
-still an open decision.
+Template parameterization design shape is decided (DEC-024): a per-template
+manifest declaring where each template's own self-reference (title,
+metadata `url:`, frontmatter) lives, so `deploy_site` can stamp the target
+domain in — scoped narrowly to that one fact, not general template
+authoring. Not yet implemented.
 
 ## Active Tasks
 
-- [ ] **Template parameterization: pick a design shape**
-      Three candidates: (1) manifest in each template repo declaring
-      substitutable files/tokens, (2) token convention (`{{MIMEO_SITE_URL}}`)
-      with a repo-wide walk, (3) mimeo-side per-template registry. Leaning (1)
-      — it's the only one where a non-eleventy template costs nothing.
-      Tradeoffs in Entry 42.
-
-- [x] **Prerequisite: scrub leaked identity from two templates** (Entry 43)
-      Done in mimeo-sites. Removed personal posts/pages, genericized
-      metadata.js/package.json/CLAUDE.md/docs, fixed a hardcoded twitter
-      handle in tech-blog's base.njk.
+- [ ] **Implement DEC-024**: `mimeo.template.json` manifest schema + three
+      format handlers (`js-key`, `string-replace`, `yaml-frontmatter-key`)
+      replacing `_customize_default_template`. Add manifests to templates in
+      mimeo-sites, starting with `mimeo.lol` (already relied on).
 
 - [ ] **Track B: Stage 4 E2E test lane**
       Gated (real APIs). Blocked on having a test account/org.
@@ -35,24 +29,27 @@ still an open decision.
 
 ## Blockers
 
-None. Template parameterization needs a design decision, not unblocking.
+None.
 
 ## Context
 
-- Site identity lives in a different file/format per template family:
-  `content/_data/metadata.js` + `package.json`, inline object in
-  `eleventy.config.js`, YAML frontmatter in `index.md`, hardcoded HTML
-- `_customize_default_template` (`github.py:329-377`) handles only `mimeo.lol`;
-  gated at `github.py:324-325`. Preserve its 5x/2s retry and `updated ==
-  content` no-op guard in any redesign
-- Templates are discovered live from the `tepiton` org — no local list, so
-  `validate_template` is a GitHub API existence check
-- Both templates now use placeholder identity (`Author Name`, `example.com`)
-  matching the chapbook/folio/pamphlet convention; verified `npm run build`
-  clean on both after the cleanup
-- 297 tests passing; mypy and ruff clean
+- Scope boundary (DEC-024): mimeo propagates the target domain into a
+  template's declared self-reference point only — not bios, copy, or other
+  branding. That kind of authoring work belongs in mimeo-sites (see Entry 43).
+- 8 templates surveyed, 3 self-reference formats: hardcoded HTML string
+  (mimeo.lol, laptopistan.com), JS object key `url:` in
+  `content/_data/metadata.js` (5 eleventy-* templates), YAML frontmatter
+  `title:` (pandoc-simple). Token-convention approach rejected — doesn't fit
+  the JS-key case cleanly.
+- Manifest absent on a template → substitution skipped, not an error (same
+  as today's behavior for every template except mimeo.lol).
+- `_customize_default_template` (`github.py:329-377`) is the code being
+  replaced; preserve its 5x/2s retry against the "repo not populated yet"
+  race.
+- 297 tests passing; mypy and ruff clean (no code touched this session).
 
 ## Next Session
 
-Decide the parameterization design shape, then plan against it. Unrelated
-easy pick if you'd rather: remove the dead `HTTPClient` params.
+Implement the DEC-024 manifest schema and format handlers in
+`github.py`/`create.py`, then add `mimeo.template.json` to `mimeo.lol` first
+since `create` already depends on that substitution working.

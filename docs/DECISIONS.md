@@ -453,6 +453,27 @@ progress."
 
 ---
 
+### DEC-024: Template Substitution Scoped to Site's Own Domain, via Per-Template Manifest (2026-09-08)
+
+**Status**: Active (Phase 8)
+
+**Context**: `_customize_default_template` rewrites `mimeo.lol` -> `{domain}` in `index.html`, hardcoded to that one template, because `mimeo.lol` is itself a live site whose HTML hardcodes its own name. The open Phase 8 task ("template parameterization: pick a design shape") had drifted in scope during discussion toward general template authoring — bios, social handles, page copy, deciding what counts as "generic" identity (the concern behind Entry 43's mimeo-sites scrub). Re-examining mimeo's own identity shift (DEC-021: "fleet manager for domain-to-GitHub-Pages sites," not a site generator) surfaced that authoring judgment is a different tool's job; the piece that is legitimately mimeo's is narrow: when `foo.com` is deployed from a template, the template's boilerplate self-reference (its own name in `<title>`, `metadata.js`'s `url:`, frontmatter `title:`) should read `foo.com`, not the template's name. A survey of all 8 tepiton templates (extending Entry 42) found this single fact lives in three incompatible file formats: hardcoded HTML string (mimeo.lol, laptopistan.com), a JS object key (`content/_data/metadata.js` `url:`, used by the 5 eleventy-* templates), and YAML frontmatter (`index.md` `title:`, pandoc-simple).
+
+**Decision**: Two scope decisions:
+
+1. Mimeo's job is limited to propagating the target domain into a template's own declared self-reference point at deploy time — the same category as writing the DNS records or the Pages custom-domain field, not a general templating/content system. Template authoring (bios, tagline copy, what "generic" placeholder content looks like) stays out of mimeo; Entry 43's identity scrub correctly happened in mimeo-sites, not here, and future work of that kind belongs there too.
+2. The substitution-point design shape is a per-template manifest file (`mimeo.template.json`) at the template repo's root, declaring one or more `{file, format, key or match, value}` entries, `value` templated with `{domain}`. Three format handlers cover the current template set: `js-key` (dotted-path key into a JS `export default {...}` object, e.g. `url` or `author.url`), `string-replace` (literal string match/replace, what `_customize_default_template` does today), `yaml-frontmatter-key` (a frontmatter key in a Markdown file). `deploy_site` reads the manifest post-generation if present and applies each substitution; no manifest present -> skipped, not an error, matching today's behavior for every template except mimeo.lol.
+
+**Alternatives considered**:
+
+- Token convention (every template writes `{{MIMEO_SITE_DOMAIN}}`, mimeo does a repo-wide find/replace): Simpler on mimeo's side, no manifest to parse, but doesn't fit the `js-key` case cleanly — `url: "https://orobia.net/"` isn't a token slot without either restructuring the template's own data file or falling back to fragile string matching against the placeholder URL anyway. Also requires every template author to know and apply the convention with no declared record of where they used it.
+- mimeo-side per-template registry (mimeo hardcodes "for template X, the value lives at path Y"): What exists today for mimeo.lol, just generalized. Rejected because every new template requires a mimeo code change and release — the manifest's whole point is that a non-eleventy, non-mimeo-authored template costs mimeo nothing to support.
+- Expand scope to general template parameterization (author name, social links, arbitrary branding fields): Rejected per scope decision 1 above — no mechanical substitution scheme turns "does this bio read as sufficiently generic" into a declared key/value; that's authoring judgment, done once per template, not once per domain.
+
+**Consequences**: `_customize_default_template` is replaced by a manifest-driven dispatcher with three format handlers, used for every template that ships a manifest instead of only `mimeo.lol`. `laptopistan.com`'s hardcoded-HTML case becomes a manifest entry instead of a second special case in mimeo's code. Not yet implemented — the manifest schema and three handlers are the next Phase 8 task; existing templates (mimeo.lol first, since it's already relied on) need a `mimeo.template.json` added.
+
+---
+
 ## Superseded/Deprecated
 
 [No superseded decisions yet]

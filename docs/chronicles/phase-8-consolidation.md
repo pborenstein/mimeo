@@ -308,3 +308,35 @@ template parameterization. Full rationale and alternatives in DEC-021.
 **Decisions**: DEC-021
 
 **Files**: `docs/IMPLEMENTATION.md`, `docs/DECISIONS.md`, `docs/CONTEXT.md`
+
+## Entry 44: Scoped template parameterization to domain self-reference; manifest design (2026-09-08)
+
+**What**: Design-only session (no code changed). Built two Artifact pages
+mapping the CLI's command/provider structure, then used the discussion to
+correct course on the open "template parameterization" task and settle its
+design shape.
+
+**Why**: The command-map artifact revealed the atoms/composites/commands
+breakdown was a map of the *implementation* (provider method boundaries),
+not an independent decomposition of the *problem* — worth naming since it
+looked more authoritative than it was. Revisiting what mimeo is *for* (per
+DEC-021, a fleet manager, not a site generator) surfaced that the open
+parameterization task had drifted toward general template authoring — the
+same kind of work as Entry 43's mimeo-sites identity scrub, which is out of
+mimeo's scope. The real, narrower requirement: a deployed site's boilerplate
+should say its own domain, not the template's name.
+
+**How**: Surveyed all 8 tepiton templates' self-reference storage (extending
+Entry 42): hardcoded HTML (mimeo.lol, laptopistan.com), `metadata.js` `url:`
+key (5 eleventy-* templates), YAML frontmatter `title:` (pandoc-simple).
+Three incompatible formats ruled out a single token-replace convention.
+Settled on a per-template manifest (`mimeo.template.json`) declaring
+`{file, format, key/match, value}` substitutions across three format
+handlers (`js-key`, `string-replace`, `yaml-frontmatter-key`), replacing
+`_customize_default_template`'s mimeo.lol-only hardcoding. Full rationale
+and rejected alternatives in DEC-024.
+
+**Decisions**: DEC-024
+
+**Files**: `docs/IMPLEMENTATION.md`, `docs/DECISIONS.md` (no source changes —
+manifest schema and handlers not yet implemented)

@@ -104,13 +104,21 @@ front-door verbs than it started with. See DEC-021.
         (5x/2s) rather than swallowed.
   - [ ] Scoped to `mimeo.lol` only; `eleventy-*` templates (full site
         generators with their own config) are a separate, harder problem
-  - [ ] Surveyed all 7 tepiton templates (Entry 42). Site identity lives in a
-        different file/format per family: `content/_data/metadata.js` +
-        `package.json` (tech-blog, prose-blog, chapbook, folio), inline object
-        in `eleventy.config.js` (pamphlet), YAML frontmatter in `index.md`
-        (pandoc-simple), hardcoded HTML (mimeo.lol). Design shape still
-        undecided: per-template manifest vs. token convention vs. mimeo-side
-        registry — see Entry 42 for the tradeoffs
+  - [x] Surveyed all 8 tepiton templates (Entry 42, extended Entry 44). Site
+        identity lives in a different file/format per family:
+        `content/_data/metadata.js` `url:` key (eleventy-*, 5 templates),
+        hardcoded HTML string (mimeo.lol, laptopistan.com), YAML frontmatter
+        `title:` (pandoc-simple). Design shape decided: per-template manifest
+        (`mimeo.template.json`) declaring `{file, format, key/match, value}`
+        substitutions, format one of `js-key` / `string-replace` /
+        `yaml-frontmatter-key`. Replaces `_customize_default_template`
+        (currently `mimeo.lol`-only) with one dispatcher; templates with no
+        manifest are skipped, not errored. Not yet implemented — see Entry 44
+  - [ ] Scope boundary clarified (Entry 44): mimeo only stamps the site's own
+        domain into its one declared self-reference point (title/metadata
+        url). Template authoring — bios, copy, deciding what "generic"
+        looks like — is out of scope; Entry 43's identity scrub was that
+        kind of work and correctly happened in mimeo-sites, not here
   - [x] Prerequisite: `eleventy-tech-blog` and `eleventy-prose-blog` shipped
         real live-site identity (`pborenstein.dev`/`.com`, real email, a
         `pborenstein.2025` git URL). Scrubbed (Entry 43) — both now use

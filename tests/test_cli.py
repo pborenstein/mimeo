@@ -146,15 +146,13 @@ class TestCreateCommand:
         mock_host.required_dns_records.assert_called_once_with("example.com")
         mock_registrar.check_nameservers.assert_called_once_with("example.com")
         mock_dns_provider.configure_dns.assert_called_once_with("example.com", mock_dns_records)
-        mock_dns_provider.verify_dns.assert_called_once()
+        mock_dns_provider.verify_dns.assert_not_called()
 
     @patch("mimeo.config.Config.load")
     @patch(f"{_CREATE}.GitHubHost")
     @patch(f"{_CREATE}.PorkbunRegistrar")
-    @patch(f"{_CREATE}.PorkbunDNSProvider")
-    def test_create_dns_not_verified(
+    def test_create_skips_dns_when_repo_already_existed(
         self,
-        mock_dns_provider_class: Any,
         mock_registrar_class: Any,
         mock_host_class: Any,
         mock_config_load: Any,
@@ -162,34 +160,28 @@ class TestCreateCommand:
         mock_config: Config,
         mock_dns_records: List[DNSRecord],
     ) -> None:
-        """Test create command when DNS verification fails."""
+        """create does not touch DNS when the repo already existed (no --force)."""
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
         mock_host.deploy_site.return_value = DeployResult(
-            url="https://example.com", repo_created=True, https_enabled=True
+            url="https://example.com", repo_created=False, https_enabled=True, repo_existed=True
         )
         mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
         mock_registrar = MagicMock()
-        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
-            ok=True, actual=[], expected=[]
-        )
+        mock_registrar.domain_exists.return_value = True
         mock_registrar.__enter__.return_value = mock_registrar
         mock_registrar_class.return_value = mock_registrar
-
-        mock_dns_provider = MagicMock()
-        mock_dns_provider.verify_dns.return_value = False
-        mock_dns_provider.__enter__.return_value = mock_dns_provider
-        mock_dns_provider_class.return_value = mock_dns_provider
 
         result = runner.invoke(create, ["example.com"])
 
         assert result.exit_code == 0
-        assert "DNS records created but not yet propagated" in result.output
-        assert "Successfully created: 1/1 domain(s)" in result.output
+        assert "Repository already exists" in result.output
+        assert "skipping DNS configuration" in result.output
+        mock_registrar.check_nameservers.assert_not_called()
 
     @patch("mimeo.config.Config.load")
     def test_create_config_error(self, mock_config_load: Any, runner: CliRunner) -> None:
@@ -218,7 +210,13 @@ class TestCreateCommand:
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
-        result = runner.invoke(create, ["example.com"])
+        with patch(f"{_CREATE}.PorkbunRegistrar") as mock_registrar_class:
+            mock_registrar = MagicMock()
+            mock_registrar.domain_exists.return_value = True
+            mock_registrar.__enter__.return_value = mock_registrar
+            mock_registrar_class.return_value = mock_registrar
+
+            result = runner.invoke(create, ["example.com"])
 
         assert result.exit_code == 5
         assert "GitHub API failed" in result.output
@@ -619,13 +617,65 @@ class TestCreateCommand:
         assert "Successfully created: 2/2 domain(s)" in result.output
 
 
+class TestCreateDomainOwnership:
+    """Tests that create refuses to act on domains not owned in Porkbun."""
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_CREATE}.GitHubHost")
+    @patch(f"{_CREATE}.PorkbunRegistrar")
+    def test_create_refuses_unregistered_domain(
+        self,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """create does nothing to GitHub when the domain isn't in this Porkbun account."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        mock_registrar = MagicMock()
+        mock_registrar.domain_exists.return_value = False
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar_class.return_value = mock_registrar
+
+        result = runner.invoke(create, ["not-mine.com"])
+
+        assert result.exit_code != 0
+        assert "not registered in this Porkbun account" in result.output
+        mock_host.deploy_site.assert_not_called()
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_CREATE}.GitHubHost")
+    def test_create_dry_run_mentions_ownership_check(
+        self,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """--dry-run output reflects the ownership check even though it isn't run."""
+        mock_config_load.return_value = mock_config
+
+        result = runner.invoke(create, ["example.com", "--dry-run"])
+
+        assert result.exit_code == 0
+        assert "Would verify domain is registered in this Porkbun account" in result.output
+
+
 class TestCreateSkipDns:
     """Tests for create --skip-dns."""
 
     @patch("mimeo.config.Config.load")
     @patch(f"{_CREATE}.GitHubHost")
+    @patch(f"{_CREATE}.PorkbunRegistrar")
     def test_create_skip_dns(
         self,
+        mock_registrar_class: Any,
         mock_host_class: Any,
         mock_config_load: Any,
         runner: CliRunner,
@@ -641,6 +691,11 @@ class TestCreateSkipDns:
         mock_host.required_dns_records.return_value = []
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
+
+        mock_registrar = MagicMock()
+        mock_registrar.domain_exists.return_value = True
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar_class.return_value = mock_registrar
 
         result = runner.invoke(create, ["example.com", "--skip-dns"])
 
@@ -1860,56 +1915,103 @@ class TestDnsCommands:
         assert "Invalid domain name" in result.output
 
 
-class TestTemplateApplyCommand:
-    """Tests for template apply command."""
+class TestCreateForceCommand:
+    """Tests for create --force (absorbed from the former template apply)."""
 
     @patch("mimeo.config.Config.load")
-    @patch(f"mimeo.cli.template.GitHubHost")
-    def test_template_apply_dry_run(
+    @patch(f"{_CREATE}.GitHubHost")
+    def test_create_force_dry_run(
         self,
         mock_host_class: Any,
         mock_config_load: Any,
         runner: CliRunner,
         mock_config: Config,
     ) -> None:
-        """template apply --dry-run shows what would happen."""
-        from mimeo.cli.template import apply
-
+        """create --force --dry-run shows what would happen."""
         mock_config_load.return_value = mock_config
 
-        result = runner.invoke(apply, ["example.com", "--template", "mimeo.lol", "--dry-run"])
+        mock_host = MagicMock()
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        result = runner.invoke(
+            create, ["example.com", "--template", "mimeo.lol", "--force", "--dry-run"]
+        )
 
         assert result.exit_code == 0
         assert "DRY RUN" in result.output
         assert "Would delete and recreate" in result.output
 
     @patch("mimeo.config.Config.load")
-    @patch(f"mimeo.cli.template.GitHubHost")
-    def test_template_apply_with_yes(
+    @patch(f"{_CREATE}.GitHubHost")
+    @patch(f"{_CREATE}.PorkbunRegistrar")
+    @patch(f"{_CREATE}.PorkbunDNSProvider")
+    def test_create_force_with_yes(
         self,
+        mock_dns_provider_class: Any,
+        mock_registrar_class: Any,
         mock_host_class: Any,
         mock_config_load: Any,
         runner: CliRunner,
         mock_config: Config,
+        mock_dns_records: List[DNSRecord],
     ) -> None:
-        """template apply --yes skips confirmation."""
-        from mimeo.cli.template import apply
-
+        """create --force --yes skips confirmation."""
         mock_config_load.return_value = mock_config
 
         mock_host = MagicMock()
         mock_host.deploy_site.return_value = DeployResult(
             url="https://example.com", repo_created=True, https_enabled=True, repo_existed=True
         )
+        mock_host.required_dns_records.return_value = mock_dns_records
         mock_host.__enter__.return_value = mock_host
         mock_host_class.return_value = mock_host
 
-        result = runner.invoke(apply, ["example.com", "--template", "mimeo.lol", "--yes"])
+        mock_registrar = MagicMock()
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=True, actual=[], expected=[]
+        )
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar_class.return_value = mock_registrar
+
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.verify_dns.return_value = True
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
+
+        result = runner.invoke(
+            create, ["example.com", "--template", "mimeo.lol", "--force", "--yes"]
+        )
 
         assert result.exit_code == 0
         mock_host.deploy_site.assert_called_once_with(
             "example.com", template="mimeo.lol", force=True
         )
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_CREATE}.GitHubHost")
+    def test_create_force_prompts_without_yes(
+        self,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """create --force without --yes prompts for confirmation and aborts on 'n'."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        result = runner.invoke(
+            create, ["example.com", "--template", "mimeo.lol", "--force"], input="n\n"
+        )
+
+        assert result.exit_code == 0
+        assert "WARNING" in result.output
+        assert "Aborted." in result.output
+        mock_host.deploy_site.assert_not_called()
 
 
 class TestRegistrarListCommand:

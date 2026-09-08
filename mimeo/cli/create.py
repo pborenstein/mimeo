@@ -30,6 +30,7 @@ def _process_single_domain(
     verbose: bool = True,
     skip_dns: bool = False,
     template: str = DEFAULT_TEMPLATE,
+    force: bool = False,
 ) -> Dict[str, Any]:
     """Process a single domain creation.
 
@@ -39,6 +40,8 @@ def _process_single_domain(
         dry_run: If True, don't actually create anything
         skip_dns: If True, skip DNS configuration
         template: Template repository to use
+        force: If True, replace an existing repository's content from
+            the template instead of leaving it unchanged
 
     Returns:
         Dictionary with result information. Raises on hard failure so
@@ -71,8 +74,14 @@ def _process_single_domain(
                 click.echo(f"  {message}")
 
     if dry_run:
-        log(f"Would generate site for {domain}")
-        log(f"Would create repository: {cfg.github_username}/{domain}")
+        log("Would verify domain is registered in this Porkbun account")
+        if force:
+            log(
+                f"Would delete and recreate {cfg.github_username}/{domain} from template '{template}'"
+            )
+        else:
+            log(f"Would generate site for {domain}")
+            log(f"Would create repository: {cfg.github_username}/{domain}")
         log("Would deploy to GitHub Pages")
         if not skip_dns:
             log("Would check nameservers before configuring DNS")
@@ -98,26 +107,37 @@ def _process_single_domain(
         result["repo_url"] = f"https://github.com/{cfg.github_username}/{domain}"
         return result
 
+    # Verify domain ownership before touching anything. If the domain isn't
+    # registered in this Porkbun account, create must do nothing else --
+    # no repo, no Pages config, no CNAME write.
+    log("Verifying domain ownership")
+    with PorkbunRegistrar(cfg.porkbun_api_key, cfg.porkbun_secret) as registrar:
+        if not registrar.domain_exists(domain):
+            raise RegistrarError(
+                f"{domain} is not registered in this Porkbun account -- refusing to create"
+            )
+    log("Domain ownership verified", "success")
+
     # Deploy to GitHub Pages
     log("Configuring GitHub repository")
     dns_records = None
     try:
         with GitHubHost(default_org=cfg.github_username) as host:
-            deploy = host.deploy_site(domain, template=template)
+            deploy = host.deploy_site(domain, template=template, force=force)
             dns_records = host.required_dns_records(domain)
             result["url"] = deploy.url
             result["repo_url"] = f"https://github.com/{cfg.github_username}/{domain}"
 
-            if deploy.repo_created:
+            if deploy.repo_created and deploy.repo_existed:
+                log(f"Repository replaced: {cfg.github_username}/{domain}", "success")
+            elif deploy.repo_created:
                 log(
                     f"Repository created from template '{template}': {cfg.github_username}/{domain}",
                     "success",
                 )
             else:
                 log(f"Repository already exists: {cfg.github_username}/{domain}", "warning")
-                log(
-                    "Use 'mimeo template apply' to replace with a different template", "warning"
-                )
+                log("Use 'mimeo create --force' to replace it with a different template", "warning")
 
             log("GitHub Pages enabled", "success")
             log(f"Custom domain configured: {domain}", "success")
@@ -133,6 +153,14 @@ def _process_single_domain(
 
     if skip_dns:
         log("Skipping DNS configuration (--skip-dns)", "info")
+        result["dns_pending"] = True
+        return result
+
+    if not deploy.repo_created:
+        log(
+            "Repository already existed and was not replaced -- skipping DNS configuration",
+            "info",
+        )
         result["dns_pending"] = True
         return result
 
@@ -158,25 +186,7 @@ def _process_single_domain(
 
                     dns.configure_dns(domain, dns_records or [])
                     log("DNS records created", "success")
-
-                    log("Verifying DNS propagation")
-                    verified = dns.verify_dns(
-                        domain,
-                        dns_records or [],
-                        max_attempts=10,
-                        delay=5,
-                        progress_callback=lambda attempt, max_att: click.echo(
-                            f"  DNS check {attempt}/{max_att} -- retrying..."
-                        ),
-                    )
-                    if verified:
-                        log("DNS records verified", "success")
-                    else:
-                        log(
-                            "DNS records created but not yet propagated (may take up to 24 hours)",
-                            "warning",
-                        )
-                        result["dns_pending"] = True
+                    log("Run 'mimeo status' to confirm DNS propagation", "info")
 
     except RegistrarError as e:
         log(f"DNS configuration failed: {e}", "error")
@@ -227,6 +237,16 @@ def _process_single_domain(
     is_flag=True,
     help="Create repo and Pages only, handle DNS separately",
 )
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Replace an existing repository's content with the template",
+)
+@click.option(
+    "--yes",
+    is_flag=True,
+    help="Skip confirmation prompt (only relevant with --force)",
+)
 def create(
     domains: tuple[str, ...],
     config: Path | None,
@@ -236,14 +256,21 @@ def create(
     workers: int,
     template: str,
     skip_dns: bool,
+    force: bool,
+    yes: bool,
 ) -> None:
     """Create and deploy new sites for one or more domains.
 
     Provisions a GitHub repository from a template, enables GitHub Pages,
     configures custom domain, and sets up DNS records.
 
-    If a repository already exists, it is left unchanged. Use 'mimeo template apply'
-    to replace it with a different template.
+    If a repository already exists, it is left unchanged. Use --force to
+    replace an existing repository's content with a different template
+    instead. WARNING: --force deletes the existing repository and recreates
+    it from the template -- all existing content, issues, and history will
+    be lost. DNS records are not modified. The domain-substitution manifest
+    (DEC-024, once implemented) reruns automatically on both plain create
+    and create --force.
 
     Multiple domains are processed concurrently for faster provisioning.
 
@@ -253,6 +280,8 @@ def create(
         mimeo create example.com --dry-run
         mimeo create site1.com site2.com --sequential
         mimeo create example.com --skip-dns
+        mimeo create example.com --template mimeo.lol --force
+        mimeo create site1.com site2.com --template new-theme --force --yes
     """
     validate_domains(domains)
     cfg = load_config(config)
@@ -264,6 +293,21 @@ def create(
         except Exception as e:
             click.secho(str(e), fg="red", err=True)
             raise SystemExit(1)
+
+    if force and not dry_run and not yes:
+        click.secho(
+            "WARNING: This will delete and recreate the following repositories:",
+            fg="red",
+            bold=True,
+        )
+        for d in domains:
+            click.echo(f"  - {cfg.github_username}/{d}")
+        click.echo()
+        click.secho("All existing content, issues, and history will be lost.", fg="red")
+        click.echo()
+        if not click.confirm("Continue?"):
+            click.echo("Aborted.")
+            return
 
     if dry_run:
         click.secho("DRY RUN MODE - No changes will be made", fg="cyan", bold=True)
@@ -279,6 +323,7 @@ def create(
             verbose=verbose,
             skip_dns=skip_dns,
             template=template,
+            force=force,
         )
 
     def _on_error(domain: str, exc: BaseException) -> Dict[str, Any]:

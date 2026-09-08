@@ -377,3 +377,76 @@ scalpel decision)
 
 **Files**: `docs/IMPLEMENTATION.md` (Stage 5, full checklist),
 `docs/DECISIONS.md`, `docs/CONTEXT.md` (no source changes)
+
+## Entry 46: Implemented Stage 5A; found and fixed two live safety bugs
+against real domains (2026-09-08)
+
+**What**: New branch `stage-5a-create-absorbs-template-apply`. Implemented
+Stage 5A per the IMPLEMENTATION.md checklist: `create` gained `--force`/
+`--yes`, wired to the existing `deploy_site(force=...)` path; ported
+`template apply`'s delete-and-recreate confirmation prompt, gated on
+`--force`; deleted `mimeo/cli/template.py` and its registration; relocated
+its two CLI-layer tests onto `create --force` (DEC-022's rollback-on-failure
+coverage already lived at the provider layer and needed no move). All Stage
+5A checkboxes now `[x]`.
+
+While manually verifying the merged command against real domains (not just
+mocks), found two live bugs neither the plan nor the existing test suite
+had caught, both discovered by actually running `create` against domains
+in GitHub/Porkbun rather than trusting green tests:
+
+1. `mimeo create <domain>` for a domain not registered in this Porkbun
+   account ran end-to-end anyway — created a public repo, configured
+   Pages, wrote a CNAME — before any ownership check. `validate_domains`
+   only checks string format; the only ownership-adjacent signal
+   (`check_nameservers`) fires after the repo already exists, as a warning.
+   Caught by the user directly ("I don't own that domain") after a session
+   in which the model first misdiagnosed an unrelated repo as evidence of
+   a bug (see below) before checking the actual one.
+2. `mimeo create <domain>` on a domain with an *already-existing* repo
+   (correctly left unchanged, no `--force`) still ran DNS configuration —
+   `configure_dns` deletes and recreates every matching record
+   unconditionally, so a plain re-run silently rewrote a live site's DNS.
+   `deploy.repo_created` was available but unchecked before the DNS block.
+
+**Why**: Both are severity-inverted relative to how `create` treated them:
+ownership was a late warning instead of an early hard stop; DNS rewrite on
+an unchanged repo was invisible instead of skipped. Neither was Stage 5A's
+original scope, but both were exposed *by* Stage 5A's live testing and are
+squarely "create must not have side effects it doesn't own" — the same
+category the ownership fix belongs to. Separately, the DNS-propagation poll
+(10x5s, ~50s) added in Phase 5/6 almost never observes real propagation and
+changes nothing `create` does on either outcome — dead weight now that
+`mimeo status` exists to report drift.
+
+**How**: See DEC-026 for full rationale. Summary: `create` now calls the
+already-existing (but previously unused by `create`) `PorkbunRegistrar
+.domain_exists()` before touching GitHub at all, raising `RegistrarError`
+(exit 5, no side effects) if the domain isn't in this account; checks
+`deploy.repo_created` before running DNS config, skipping it entirely
+(same as `--skip-dns`) when the repo was left unchanged; and drops the
+`verify_dns` poll, pointing to `mimeo status` instead. A fourth, unrelated
+fix landed in the same session: generated repos were publishing the
+template's own `README.md` and `docs/` (authoring documentation, not site
+content) as live site files — found while inspecting a real deployed repo's
+contents during the branding investigation below. Added
+`_strip_template_dev_files` (+`_delete_file`/`_delete_directory`) to
+`GitHubHost`, best-effort, run right after every fresh template generation.
+
+A branding report ("the page still says the template's name") during this
+session turned out to be pure DNS/CDN propagation lag, not a code bug —
+confirmed by `curl`ing the live site directly and finding it already
+correct. Worth recording because the model's first response speculated a
+historical-artifact explanation instead of checking the live page first;
+the user's pushback on that speculation is why the ownership and DNS bugs
+above got the scrutiny they did rather than being taken on faith from a
+green test suite. Every fix in this entry was verified against real
+domains/repos via `gh api`/`curl`, not just the mocked test suite.
+
+**Decisions**: DEC-026
+
+**Files**: `mimeo/cli/create.py`, `mimeo/providers/host/github.py`,
+`mimeo/cli/__init__.py`, `mimeo/cli/sync.py` (stale doc reference),
+`mimeo/cli/template.py` (deleted), `tests/test_cli.py`,
+`tests/providers/host/test_github.py`, `docs/IMPLEMENTATION.md`,
+`docs/DECISIONS.md`. Not yet committed.

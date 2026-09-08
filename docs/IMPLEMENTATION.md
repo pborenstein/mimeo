@@ -153,22 +153,25 @@ front-door verbs than it started with. See DEC-021.
       `porkbun.py` are untouched. Target surface:
       `create`, `status`, `sync`, `doctor`, `template lint` (lint gated
       separately, see 5E).
-  - [ ] 5A: `create` absorbs `template apply`
-        - [ ] Add `--force` (bool) and `--yes` (bool, skip confirm) to
+  - [x] 5A: `create` absorbs `template apply`
+        - [x] Add `--force` (bool) and `--yes` (bool, skip confirm) to
               `mimeo/cli/create.py`'s `create` command
-        - [ ] Wire `--force` to the existing `deploy_site(force=True)` path
+        - [x] Wire `--force` to the existing `deploy_site(force=True)` path
               (already used by `template apply`, `mimeo/cli/template.py:133`)
-        - [ ] Port `template apply`'s confirmation-prompt logic (skipped by
+        - [x] Port `template apply`'s confirmation-prompt logic (skipped by
               `--yes`) into `create`, gated on `--force`
-        - [ ] `--template` on `create` already exists and defaults to
+        - [x] `--template` on `create` already exists and defaults to
               `DEFAULT_TEMPLATE`; `template apply`'s `--template` was
               `required=True` — no behavior change needed, just drop the
               requirement when merging
-        - [ ] Delete `mimeo/cli/template.py`; remove its registration in
+        - [x] Delete `mimeo/cli/template.py`; remove its registration in
               `mimeo/cli/__init__.py`
-        - [ ] Relocate `template apply`'s tests (confirm prompt, DEC-022
+        - [x] Relocate `template apply`'s tests (confirm prompt, DEC-022
               rollback-on-failure case) onto `create --force` test cases
-        - [ ] Update `create`'s help text: state that `--force` replaces an
+              (DEC-022 rollback coverage already lived at the provider layer
+              in `tests/providers/host/test_github.py`, untouched; only the
+              two CLI-layer tests moved)
+        - [x] Update `create`'s help text: state that `--force` replaces an
               existing repo's content (same effect `template apply` had),
               and that the domain-substitution manifest (DEC-024, once
               implemented) reruns automatically on both plain `create` and

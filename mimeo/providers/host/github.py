@@ -14,6 +14,13 @@ from mimeo.utils.retry import retry_with_jitter
 TEMPLATE_ORG = "tepiton"
 DEFAULT_TEMPLATE = "mimeo.lol"
 
+# Paths that exist in template repos for template *development* only
+# (authoring notes, contribution docs) and must never be published as
+# part of a generated site. Matched against the repo root: an exact
+# name strips a single file, a name ending in "/" strips that whole
+# directory.
+TEMPLATE_DEV_PATHS = ["README.md", "docs/"]
+
 GITHUB_PAGES_IPS = [
     "185.199.108.153",
     "185.199.109.153",
@@ -239,9 +246,7 @@ class GitHubHost(Host):
         """
         repo = self._gh_api(f"repos/{repo_full_name}")
         if not repo.get("is_template"):
-            self._gh_api(
-                f"repos/{repo_full_name}", method="PATCH", data={"is_template": True}
-            )
+            self._gh_api(f"repos/{repo_full_name}", method="PATCH", data={"is_template": True})
 
     def _create_from_template(
         self,
@@ -320,6 +325,7 @@ class GitHubHost(Host):
         if repo_existed:
             self._delete_stale_pages_artifacts(str(full_name))
         self._set_repository_topics(str(full_name), ["mimeo", "landing-page", "github-pages"])
+        self._strip_template_dev_files(str(full_name))
 
         if template_repo == DEFAULT_TEMPLATE and repo_name != DEFAULT_TEMPLATE:
             self._customize_default_template(str(full_name), repo_name)
@@ -376,6 +382,75 @@ class GitHubHost(Host):
             },
         )
 
+    def _strip_template_dev_files(self, repo_full_name: str) -> None:
+        """Delete template-development-only files/dirs from a generated repo.
+
+        Templates carry authoring docs (README.md, docs/) meant for people
+        maintaining the template itself, not for the sites generated from
+        it. Those files are not site content and must not be published.
+        Best-effort: a failure here should not fail the whole deploy.
+
+        Args:
+            repo_full_name: Full repository name (owner/repo)
+        """
+        for path in TEMPLATE_DEV_PATHS:
+            if path.endswith("/"):
+                self._delete_directory(repo_full_name, path.rstrip("/"))
+            else:
+                self._delete_file(repo_full_name, path)
+
+    def _delete_file(self, repo_full_name: str, path: str) -> None:
+        """Delete a single file from a repository, if it exists.
+
+        Args:
+            repo_full_name: Full repository name (owner/repo)
+            path: Path to the file within the repository
+        """
+        try:
+            file_data = self._gh_api(f"repos/{repo_full_name}/contents/{path}")
+        except HostError:
+            return  # File doesn't exist -- nothing to strip
+
+        try:
+            self._gh_api(
+                f"repos/{repo_full_name}/contents/{path}",
+                method="DELETE",
+                data={
+                    "message": f"Remove template development file: {path}",
+                    "sha": file_data["sha"],
+                },
+            )
+        except HostError:
+            pass  # Best-effort
+
+    def _delete_directory(self, repo_full_name: str, path: str) -> None:
+        """Delete every file under a directory in a repository, if it exists.
+
+        The Contents API has no recursive delete, so list the directory and
+        delete each file individually. Best-effort throughout: a template
+        without this directory, or a transient API failure, should not fail
+        the deploy.
+
+        Args:
+            repo_full_name: Full repository name (owner/repo)
+            path: Path to the directory within the repository
+        """
+        try:
+            entries = self._gh_api(f"repos/{repo_full_name}/contents/{path}")
+        except HostError:
+            return  # Directory doesn't exist -- nothing to strip
+
+        # A single-file path would return a dict, not a list; only
+        # directories are handled here.
+        if not isinstance(entries, list):
+            return
+
+        for entry in entries:
+            if entry.get("type") == "dir":
+                self._delete_directory(repo_full_name, entry["path"])
+            else:
+                self._delete_file(repo_full_name, entry["path"])
+
     def _delete_stale_pages_artifacts(self, repo_full_name: str) -> None:
         """Delete all but the newest 'github-pages' artifact from a repository.
 
@@ -392,9 +467,7 @@ class GitHubHost(Host):
         except HostError:
             return  # Best-effort; don't fail the whole operation
 
-        artifacts = [
-            a for a in data.get("artifacts", []) if a.get("name") == "github-pages"
-        ]
+        artifacts = [a for a in data.get("artifacts", []) if a.get("name") == "github-pages"]
         # Sort newest first; delete everything after the first entry
         artifacts.sort(key=lambda a: a.get("created_at", ""), reverse=True)
         for artifact in artifacts[1:]:

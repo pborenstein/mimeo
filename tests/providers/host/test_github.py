@@ -136,16 +136,17 @@ class TestGitHubHost:
         with patch.object(host, "_gh_api") as mock_api:
             with patch.object(host, "_set_repository_topics") as mock_topics:
                 with patch.object(host, "_customize_default_template"):
-                    mock_api.side_effect = [
-                        HostError("Not Found"),  # repo existence check
-                        {"is_template": True},  # template repo is_template check
-                        {"full_name": "testorg/example.com"},  # template generate
-                        {"full_name": "testorg/example.com"},  # _wait_for_repo poll
-                    ]
+                    with patch.object(host, "_strip_template_dev_files"):
+                        mock_api.side_effect = [
+                            HostError("Not Found"),  # repo existence check
+                            {"is_template": True},  # template repo is_template check
+                            {"full_name": "testorg/example.com"},  # template generate
+                            {"full_name": "testorg/example.com"},  # _wait_for_repo poll
+                        ]
 
-                    full_name, created, existed = host._create_from_template(
-                        "example.com", "testorg"
-                    )
+                        full_name, created, existed = host._create_from_template(
+                            "example.com", "testorg"
+                        )
 
                 assert full_name == "testorg/example.com"
                 assert created is True
@@ -179,31 +180,34 @@ class TestGitHubHost:
         with patch.object(host, "_gh_api") as mock_api:
             with patch.object(host, "_set_repository_topics"):
                 with patch.object(host, "_customize_default_template"):
-                    with patch.object(host, "_rename_repository") as mock_rename:
-                        with patch.object(host, "_delete_repository") as mock_delete:
-                            with patch.object(host, "_delete_stale_pages_artifacts"):
-                                with patch("time.time", return_value=1000):
-                                    mock_api.side_effect = [
-                                        {"full_name": "testorg/example.com"},  # existence check
-                                        {"is_template": True},  # is_template check
-                                        {"full_name": "testorg/example.com"},  # generate
-                                        {"full_name": "testorg/example.com"},  # _wait_for_repo
-                                    ]
+                    with patch.object(host, "_strip_template_dev_files"):
+                        with patch.object(host, "_rename_repository") as mock_rename:
+                            with patch.object(host, "_delete_repository") as mock_delete:
+                                with patch.object(host, "_delete_stale_pages_artifacts"):
+                                    with patch("time.time", return_value=1000):
+                                        mock_api.side_effect = [
+                                            {"full_name": "testorg/example.com"},  # existence check
+                                            {"is_template": True},  # is_template check
+                                            {"full_name": "testorg/example.com"},  # generate
+                                            {"full_name": "testorg/example.com"},  # _wait_for_repo
+                                        ]
 
-                                    full_name, created, existed = host._create_from_template(
-                                        "example.com", "testorg", force=True
+                                        full_name, created, existed = host._create_from_template(
+                                            "example.com", "testorg", force=True
+                                        )
+
+                                    assert full_name == "testorg/example.com"
+                                    assert created is True
+                                    assert existed is True
+
+                                    # Old repo renamed out of the way before generate was attempted.
+                                    mock_rename.assert_called_once_with(
+                                        "testorg/example.com", "example.com-mimeo-replaced-1000"
                                     )
-
-                                assert full_name == "testorg/example.com"
-                                assert created is True
-                                assert existed is True
-
-                                # Old repo renamed out of the way before generate was attempted.
-                                mock_rename.assert_called_once_with(
-                                    "testorg/example.com", "example.com-mimeo-replaced-1000"
-                                )
-                                # Old (renamed) repo deleted only after generate succeeded.
-                                mock_delete.assert_called_once_with("testorg/example.com-mimeo-replaced-1000")
+                                    # Old (renamed) repo deleted only after generate succeeded.
+                                    mock_delete.assert_called_once_with(
+                                        "testorg/example.com-mimeo-replaced-1000"
+                                    )
 
     def test_create_from_template_force_rolls_back_on_generate_failure(
         self, host: GitHubHost
@@ -239,17 +243,20 @@ class TestGitHubHost:
         """Test using a non-default template repo."""
         with patch.object(host, "_gh_api") as mock_api:
             with patch.object(host, "_set_repository_topics"):
-                mock_api.side_effect = [
-                    HostError("Not Found"),  # repo existence check
-                    {"is_template": True},  # template repo is_template check
-                    {"full_name": "testorg/example.com"},  # template generate
-                    {"full_name": "testorg/example.com"},  # _wait_for_repo poll
-                ]
+                with patch.object(host, "_strip_template_dev_files"):
+                    mock_api.side_effect = [
+                        HostError("Not Found"),  # repo existence check
+                        {"is_template": True},  # template repo is_template check
+                        {"full_name": "testorg/example.com"},  # template generate
+                        {"full_name": "testorg/example.com"},  # _wait_for_repo poll
+                    ]
 
-                host._create_from_template("example.com", "testorg", template_repo="pandoc-simple")
+                    host._create_from_template(
+                        "example.com", "testorg", template_repo="pandoc-simple"
+                    )
 
-                generate_call = mock_api.call_args_list[2]
-                assert generate_call[0][0] == f"repos/{TEMPLATE_ORG}/pandoc-simple/generate"
+                    generate_call = mock_api.call_args_list[2]
+                    assert generate_call[0][0] == f"repos/{TEMPLATE_ORG}/pandoc-simple/generate"
 
     def test_create_from_template_missing_full_name(self, host: GitHubHost) -> None:
         """Test HostError raised when template API response has no full_name."""
@@ -290,14 +297,9 @@ class TestGitHubHost:
 
             assert mock_api.call_count == 1  # read only, no PATCH
 
-    def test_customize_default_template_replaces_title_and_heading(
-        self, host: GitHubHost
-    ) -> None:
+    def test_customize_default_template_replaces_title_and_heading(self, host: GitHubHost) -> None:
         """Test the real mimeo.lol content: plain title, letter-spaced heading."""
-        content = (
-            "<title>mimeo.lol</title>\n"
-            "\t\t<h1>m i m e o . l o l</h1>\n"
-        )
+        content = "<title>mimeo.lol</title>\n\t\t<h1>m i m e o . l o l</h1>\n"
         encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
 
         with patch.object(host, "_gh_api") as mock_api:
@@ -363,56 +365,107 @@ class TestGitHubHost:
     def test_create_from_template_customizes_default_template(self, host: GitHubHost) -> None:
         """Test that _create_from_template triggers customization for the default template."""
         with patch.object(host, "_set_repository_topics"):
-            with patch.object(host, "_customize_default_template") as mock_customize:
-                with patch.object(host, "_gh_api") as mock_api:
-                    mock_api.side_effect = [
-                        HostError("Not Found"),  # repo existence check
-                        {"is_template": True},  # template repo is_template check
-                        {"full_name": "testorg/example.com"},  # template generate
-                        {"full_name": "testorg/example.com"},  # _wait_for_repo poll
-                    ]
+            with patch.object(host, "_strip_template_dev_files"):
+                with patch.object(host, "_customize_default_template") as mock_customize:
+                    with patch.object(host, "_gh_api") as mock_api:
+                        mock_api.side_effect = [
+                            HostError("Not Found"),  # repo existence check
+                            {"is_template": True},  # template repo is_template check
+                            {"full_name": "testorg/example.com"},  # template generate
+                            {"full_name": "testorg/example.com"},  # _wait_for_repo poll
+                        ]
 
-                    host._create_from_template("example.com", "testorg")
+                        host._create_from_template("example.com", "testorg")
 
-                    mock_customize.assert_called_once_with("testorg/example.com", "example.com")
+                        mock_customize.assert_called_once_with("testorg/example.com", "example.com")
 
     def test_create_from_template_skips_customization_for_other_templates(
         self, host: GitHubHost
     ) -> None:
         """Test that non-default templates are not customized."""
         with patch.object(host, "_set_repository_topics"):
-            with patch.object(host, "_customize_default_template") as mock_customize:
-                with patch.object(host, "_gh_api") as mock_api:
-                    mock_api.side_effect = [
-                        HostError("Not Found"),  # repo existence check
-                        {"is_template": True},  # template repo is_template check
-                        {"full_name": "testorg/example.com"},  # template generate
-                        {"full_name": "testorg/example.com"},  # _wait_for_repo poll
-                    ]
+            with patch.object(host, "_strip_template_dev_files"):
+                with patch.object(host, "_customize_default_template") as mock_customize:
+                    with patch.object(host, "_gh_api") as mock_api:
+                        mock_api.side_effect = [
+                            HostError("Not Found"),  # repo existence check
+                            {"is_template": True},  # template repo is_template check
+                            {"full_name": "testorg/example.com"},  # template generate
+                            {"full_name": "testorg/example.com"},  # _wait_for_repo poll
+                        ]
 
-                    host._create_from_template(
-                        "example.com", "testorg", template_repo="pandoc-simple"
-                    )
+                        host._create_from_template(
+                            "example.com", "testorg", template_repo="pandoc-simple"
+                        )
 
-                    mock_customize.assert_not_called()
+                        mock_customize.assert_not_called()
 
     def test_create_from_template_skips_customization_when_domain_is_template_name(
         self, host: GitHubHost
     ) -> None:
         """Test that mimeo.lol's own repo is never rewritten by its own template."""
         with patch.object(host, "_set_repository_topics"):
-            with patch.object(host, "_customize_default_template") as mock_customize:
-                with patch.object(host, "_gh_api") as mock_api:
-                    mock_api.side_effect = [
-                        HostError("Not Found"),  # repo existence check
-                        {"is_template": True},  # template repo is_template check
-                        {"full_name": f"testorg/{DEFAULT_TEMPLATE}"},  # template generate
-                        {"full_name": f"testorg/{DEFAULT_TEMPLATE}"},  # _wait_for_repo poll
-                    ]
+            with patch.object(host, "_strip_template_dev_files"):
+                with patch.object(host, "_customize_default_template") as mock_customize:
+                    with patch.object(host, "_gh_api") as mock_api:
+                        mock_api.side_effect = [
+                            HostError("Not Found"),  # repo existence check
+                            {"is_template": True},  # template repo is_template check
+                            {"full_name": f"testorg/{DEFAULT_TEMPLATE}"},  # template generate
+                            {"full_name": f"testorg/{DEFAULT_TEMPLATE}"},  # _wait_for_repo poll
+                        ]
 
-                    host._create_from_template(DEFAULT_TEMPLATE, "testorg")
+                        host._create_from_template(DEFAULT_TEMPLATE, "testorg")
 
-                    mock_customize.assert_not_called()
+                        mock_customize.assert_not_called()
+
+    def test_strip_template_dev_files_deletes_readme_and_docs(self, host: GitHubHost) -> None:
+        """Test that README.md and every file under docs/ are deleted."""
+        with patch.object(host, "_gh_api") as mock_api:
+            mock_api.side_effect = [
+                {"content": "", "sha": "readme-sha"},  # README.md read
+                {},  # README.md delete
+                [  # docs/ listing
+                    {"type": "file", "name": "AUTHORING.md", "path": "docs/AUTHORING.md"},
+                    {"type": "dir", "name": "guides", "path": "docs/guides"},
+                ],
+                {"content": "", "sha": "authoring-sha"},  # docs/AUTHORING.md read
+                {},  # docs/AUTHORING.md delete
+                [  # docs/guides/ listing
+                    {"type": "file", "name": "setup.md", "path": "docs/guides/setup.md"},
+                ],
+                {"content": "", "sha": "setup-sha"},  # docs/guides/setup.md read
+                {},  # docs/guides/setup.md delete
+            ]
+
+            host._strip_template_dev_files("testorg/example.com")
+
+            calls = [c[0][0] for c in mock_api.call_args_list]
+            assert "repos/testorg/example.com/contents/README.md" in calls
+            assert "repos/testorg/example.com/contents/docs" in calls
+            assert "repos/testorg/example.com/contents/docs/AUTHORING.md" in calls
+            assert "repos/testorg/example.com/contents/docs/guides" in calls
+            assert "repos/testorg/example.com/contents/docs/guides/setup.md" in calls
+
+    def test_strip_template_dev_files_missing_paths_are_noop(self, host: GitHubHost) -> None:
+        """Test that a template without README.md/docs/ is left untouched."""
+        with patch.object(host, "_gh_api") as mock_api:
+            mock_api.side_effect = HostError("Not Found")
+
+            host._strip_template_dev_files("testorg/example.com")
+
+            # Only the two existence-checking reads should have been attempted.
+            assert mock_api.call_count == 2
+
+    def test_delete_file_best_effort_on_delete_failure(self, host: GitHubHost) -> None:
+        """Test that a failed delete does not raise -- stripping is best-effort."""
+        with patch.object(host, "_gh_api") as mock_api:
+            mock_api.side_effect = [
+                {"content": "", "sha": "readme-sha"},  # read succeeds
+                HostError("locked"),  # delete fails
+            ]
+
+            host._delete_file("testorg/example.com", "README.md")  # must not raise
 
     def test_wait_for_repo_retries_until_accessible(self, host: GitHubHost) -> None:
         """Test that _wait_for_repo polls until the repo responds."""
@@ -593,16 +646,17 @@ class TestGitHubHost:
         with patch.object(host, "_gh_api") as mock_api:
             with patch.object(host, "_set_repository_topics") as mock_topics:
                 with patch.object(host, "_customize_default_template"):
-                    mock_api.side_effect = [
-                        HostError("Not found"),  # repo existence check
-                        {"is_template": True},  # template repo is_template check
-                        {"full_name": "testorg/test-repo"},  # template generate
-                        {"full_name": "testorg/test-repo"},  # _wait_for_repo poll
-                    ]
+                    with patch.object(host, "_strip_template_dev_files"):
+                        mock_api.side_effect = [
+                            HostError("Not found"),  # repo existence check
+                            {"is_template": True},  # template repo is_template check
+                            {"full_name": "testorg/test-repo"},  # template generate
+                            {"full_name": "testorg/test-repo"},  # _wait_for_repo poll
+                        ]
 
-                    full_name, created, existed = host._create_from_template(
-                        "test-repo", "testorg"
-                    )
+                        full_name, created, existed = host._create_from_template(
+                            "test-repo", "testorg"
+                        )
 
                 assert full_name == "testorg/test-repo"
                 assert created is True

@@ -116,7 +116,7 @@ def sync(
     \b
     What sync will NOT do:
       - create repositories (use: mimeo create)
-      - change site content (use: mimeo template apply)
+      - change site content (use: mimeo create --force)
       - delete DNS records it does not manage (extra records are
         reported by mimeo status but left alone)
       - touch nameservers unless --reset-nameservers is given

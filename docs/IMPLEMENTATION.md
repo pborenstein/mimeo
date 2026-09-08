@@ -214,33 +214,52 @@ front-door verbs than it started with. See DEC-021.
               mock-based; DEC-026's bugs were found by live testing, so
               treat this stage's `create`-adjacent paths as unverified
               against a real account until someone runs it live.
-  - [ ] 5C: `sync` absorbs `dns repair` and `fix https`
-        - [ ] **Before writing code**: read DEC-025's "Open question"
-              section in full. Check whether `sync --all`'s existing
-              HTTPS-enable step (`mimeo/cli/sync.py`, calls
-              `host.get_pages_health()` then
-              `host.enable_https_enforcement()`) already covers every case
-              `fix https`'s no-arg auto-discovery covers
-              (`mimeo/cli/fix.py`'s `_fix_one`, filters to
-              `health_status() == "fixable"` via `map_items`). If sync's
-              existing pass is already a superset, no new flag is needed
-              for discovery — say so explicitly in the DEC-025 update. If a
-              real gap exists, resolve per DEC-025's option (a)/(b) before
-              proceeding
-        - [ ] Add `--wait` (bool) to `sync`: after `configure_dns`, call
-              `dns_provider.verify_dns()` (10x/5s poll, same as
-              `dns repair` does today in `dns.py`)
-        - [ ] Confirm `sync`'s existing `--reset-nameservers` flag maps
+  - [x] 5C: `sync` absorbs `dns repair` and `fix https`
+        - [x] **Before writing code**: read DEC-025's "Open question"
+              section in full. Checked `sync --all`'s existing HTTPS-enable
+              step (`mimeo/cli/sync.py`'s `_sync_domain`, calls
+              `host.get_pages_health()` then `health_status() ==
+              "fixable"` then `host.enable_https_enforcement()`) against
+              `fix.py`'s `_fix_one`/discovery logic — confirmed identical
+              check, no gap. Option (a) held; DEC-025 updated accordingly.
+        - [x] Did **not** add `--wait`. Decided during implementation (not
+              part of the original checklist) to drop the propagation poll
+              entirely rather than recover it behind a flag, on the same
+              reasoning DEC-026 used to drop `create`'s `verify_dns` call:
+              it rarely observes real propagation and doesn't change
+              `sync`'s behavior either way; `mimeo status` covers
+              confirmation. DEC-025 and `sync`'s docstring updated to say
+              so explicitly.
+        - [x] Confirmed `sync`'s existing `--reset-nameservers` flag maps
               exactly onto `dns repair`'s nameserver-reset behavior (both
-              call `registrar.update_nameservers()`) — no new flag needed,
-              just confirm parity
-        - [ ] Delete `dns.py`'s `repair` command; if `show`/`check` were
-              already deleted in 5B, delete `dns.py` and its `dns` group
-              registration entirely
-        - [ ] Delete `mimeo/cli/fix.py`; remove its registration
-        - [ ] Relocate `dns repair`'s propagation-wait tests onto
-              `sync --wait`; relocate `fix https`'s discovery-mode and
-              dry-run tests onto `sync`'s equivalent path
+              call `registrar.update_nameservers()`) — no new flag needed.
+        - [x] Deleted `mimeo/cli/dns.py` entirely (only `repair` remained
+              after 5B deleted `show`/`check`) and its `dns` group
+              registration in `mimeo/cli/__init__.py`.
+        - [x] Deleted `mimeo/cli/fix.py`; removed its registration.
+        - [x] No test relocation needed: `tests/test_sync.py`'s existing
+              coverage (`test_all_targets_fleet_union`,
+              `test_fixable_https_enabled`, `test_missing_dns_applied`,
+              `test_reset_nameservers_flag`, `test_dry_run_makes_no_changes`)
+              already exercised every case `TestFixHttpsCommand`/
+              `TestDnsCommands` in `tests/test_cli.py` covered — those two
+              classes were deleted outright, no new tests written. 292
+              tests passing, ruff/mypy clean.
+        - [x] Updated `create.py`'s "Use 'mimeo dns repair'..." log message
+              and `sync.py`'s own docstring (which referenced `mimeo dns
+              repair` for propagation confirmation) to point at `sync`/
+              `status` instead.
+        - [x] Fixed direct breakage in `README.md` and
+              `docs/TROUBLESHOOTING.md` (command examples that named the
+              now-deleted `mimeo dns repair`/`mimeo fix https`). Did NOT do
+              a full pass on either file — both still reference other
+              already-absorbed commands (`mimeo list --health`, `template
+              apply`) from 5A/5B that predate this session; that's 5D's
+              "Update README.md" line, not scope creep to redo here.
+              `docs/ARCHITECTURE.md` still has a stale module map (lines
+              ~22-23 name `dns.py`/`fix.py` directly) and multiple stale
+              command sections — left entirely for 5D, it needs a
+              structural rewrite, not a find/replace.
   - [ ] 5D: Registration cleanup
         - [ ] Read through `mimeo/cli/__init__.py`'s `main.add_command(...)`
               calls; confirm exactly 4 remain registered from this stage
@@ -250,7 +269,15 @@ front-door verbs than it started with. See DEC-021.
               `uv run ruff check mimeo`; all must pass clean before this
               stage is considered done
         - [ ] Update README.md's command reference section (currently lists
-              the 9-verb surface) to match the 5-verb surface
+              the 9-verb surface) to match the 5-verb surface (partially
+              done in 5C — the two deleted-command sections and one inline
+              reference were fixed; the rest of the file's older stale refs
+              from 5A/5B, e.g. `mimeo list --health`, are still outstanding)
+        - [ ] Rewrite `docs/ARCHITECTURE.md`'s module map and command
+              sections (still names `dns.py`/`fix.py` directly and
+              documents `dns repair`/`fix https` as live commands in
+              several places) — needs a structural rewrite reflecting the
+              5-verb surface, not a find/replace
   - [ ] 5E: `template lint TEMPLATE` (new command, gated separately)
         - [ ] Do not start until DEC-024's manifest schema and format
               handlers (`js-key`, `string-replace`, `yaml-frontmatter-key`)

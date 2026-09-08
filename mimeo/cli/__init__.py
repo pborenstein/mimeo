@@ -5,7 +5,6 @@ import click
 from .. import __version__
 from ._processing import _categorize_error, _emit, set_log_format
 from .create import create
-from .dns import dns
 from .doctor import (
     _check_config,
     _check_gh_auth,
@@ -15,7 +14,6 @@ from .doctor import (
     _check_python_version,
     doctor,
 )
-from .fix import fix
 from .status import status
 from .sync import sync
 
@@ -36,8 +34,6 @@ def main(log_format: str) -> None:
 main.add_command(create)
 main.add_command(status)
 main.add_command(sync)
-main.add_command(dns)
-main.add_command(fix)
 main.add_command(doctor)
 
 
@@ -46,8 +42,6 @@ __all__ = [
     "create",
     "status",
     "sync",
-    "dns",
-    "fix",
     "doctor",
     "_check_config",
     "_check_gh_auth",

@@ -8,11 +8,11 @@ last_commit: b94685c
 ## Current Focus
 
 On branch `stage-5a-create-absorbs-template-apply` (not merged to main).
-Stage 5A (`create` absorbs `template apply`, DEC-026) is committed. Stage
-5B (`status` absorbs `list`/`registrar list`/`dns show`/`dns check` via
-`--source {github,porkbun,dns}`) is complete but **not yet committed** —
-commit it before anything else. User chose to keep stacking sub-stages on
-this one branch rather than PR-per-stage.
+Stages 5A (`create` absorbs `template apply`, DEC-026), 5B (`status`
+absorbs `list`/`registrar list`/`dns show`/`dns check`), and 5C (`sync`
+absorbs `dns repair`/`fix https`) are all implemented. **5C is not yet
+committed** — commit it before anything else. User chose to keep stacking
+sub-stages on this one branch rather than PR-per-stage.
 
 ## Active Tasks
 
@@ -22,10 +22,23 @@ this one branch rather than PR-per-stage.
       credentials" note from the 5B session was wrong, don't repeat it.
       Ran `status --source dns`/full-join against `002373.xyz` live;
       found real drift (see below), confirming the command works.
-- [ ] **Stage 5C (start here)**: `sync` absorbs `dns repair`/`fix https`.
-      Read DEC-025's "Open question" section first. Full steps in
-      IMPLEMENTATION.md Stage 5C. Use `002373.xyz`'s real drift (below) as
-      a live test case for whatever repair/extra-record handling 5C builds.
+- [x] **Stage 5C**: `sync` absorbs `dns repair`/`fix https`. Resolved
+      DEC-025's open question — `sync --all`'s existing HTTPS-fixable
+      check already covered `fix https`'s auto-discovery, confirmed by
+      reading source, no new flag needed. Deleted `mimeo/cli/dns.py` and
+      `mimeo/cli/fix.py` outright; no test relocation needed since
+      `tests/test_sync.py` already covered every case. Deliberately
+      dropped the `--wait`/propagation-poll flag the original plan called
+      for (see DEC-025/IMPLEMENTATION.md Stage 5C for why). Fixed direct
+      breakage in README.md/TROUBLESHOOTING.md only — not committed yet.
+      Not live-tested against `002373.xyz`'s real drift (mock-tested only,
+      same caveat 5B carried for `create`-adjacent paths).
+- [ ] **Stage 5C follow-up**: live-verify `sync` against `002373.xyz`'s
+      real extra-CNAME drift before or shortly after committing — confirm
+      `sync`'s DNS-missing-records step behaves as expected (it should
+      leave the extra `pixie.porkbun.com` CNAME alone, matching `sync`'s
+      documented "does not delete extras" behavior; this is expected, not
+      a bug — 5C intentionally does not add extra-record deletion).
 - [ ] **QoL: `mimeo create` with no domain args prints Click's terse
       "Missing argument" error instead of full help.** User: "If you're
       going to tell me to run --help, just run help. IOW if you're just
@@ -72,7 +85,9 @@ Stage 5E blocked on DEC-024 implementation. Everything else unblocked.
 
 ## Next Session
 
-Start Stage 5C (`sync` absorbs `dns repair`/`fix https`) — read DEC-025's
-"Open question" section first, and use `002373.xyz`'s live extra-CNAME
-drift as a real test case. Two QoL fixes are also queued (see Active
-Tasks): `create`'s no-args help behavior, and `status`'s summary line.
+Commit Stage 5C, then live-verify `sync` against `002373.xyz`'s real
+extra-CNAME drift. After that, Stage 5D (cleanup + full test/mypy/ruff +
+README/ARCHITECTURE.md doc rewrite — see IMPLEMENTATION.md for the full
+list of stale doc references 5C deliberately left for 5D). Two QoL fixes
+are also queued (see Active Tasks): `create`'s no-args help behavior, and
+`status`'s summary line.

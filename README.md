@@ -188,7 +188,7 @@ mimeo sync example.com another.lol
 mimeo sync example.com --reset-nameservers
 ```
 
-Sync will not create repositories (`mimeo create`), change content (`mimeo template apply`), delete DNS records it does not manage, touch nameservers without `--reset-nameservers`, or wait for DNS propagation (use `mimeo dns repair` for a single verified fix). A bare `mimeo sync` refuses to run: fleet-wide convergence requires the explicit `--all`.
+Sync will not create repositories (`mimeo create`), change content (`mimeo create --force`), or delete DNS records it does not manage, and it only touches nameservers with `--reset-nameservers`. A bare `mimeo sync` refuses to run: fleet-wide convergence requires the explicit `--all`.
 
 ### `mimeo list`
 
@@ -213,43 +213,7 @@ Output is sorted by severity (problems first).
 
 See [docs/LIST_COMMAND.md](./docs/LIST_COMMAND.md) for detailed format reference and scripting examples.
 
-### `mimeo dns check <domain> [<domain> ...]`
-
-Check DNS records and nameserver configuration for drift.
-
-```bash
-mimeo dns check example.com
-mimeo dns check site1.com site2.com --format json
-```
-
-### `mimeo dns repair <domain> [<domain> ...]`
-
-Re-apply expected DNS records.
-
-```bash
-mimeo dns repair example.com
-mimeo dns repair site1.com site2.com --reset-nameservers
-mimeo dns repair example.com --dry-run
-```
-
-### `mimeo template apply <domain> [<domain> ...]`
-
-Replace repository content with a different template.
-
-```bash
-mimeo template apply example.com --template eleventy-folio
-mimeo template apply example.com --dry-run
-```
-
-### `mimeo fix https [DOMAIN]...`
-
-Enable HTTPS enforcement on sites with approved SSL certificates.
-
-```bash
-mimeo fix https
-mimeo fix https example.com
-mimeo fix https --dry-run
-```
+DNS drift checking lives in `mimeo status --source dns` now; repairing missing records and enabling HTTPS enforcement are both part of `mimeo sync` (see above). Replacing repository content with a different template is `mimeo create --force` (see above).
 
 ### `mimeo registrar list`
 

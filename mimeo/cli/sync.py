@@ -121,7 +121,7 @@ def sync(
         reported by mimeo status but left alone)
       - touch nameservers unless --reset-nameservers is given
       - wait for DNS propagation (run mimeo status afterwards to
-        confirm, or mimeo dns repair for a single verified fix)
+        confirm)
 
     \b
     Examples:

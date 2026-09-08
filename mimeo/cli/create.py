@@ -175,7 +175,7 @@ def _process_single_domain(
                     f"NS records point to {actual_ns}, not Porkbun -- skipping DNS config",
                     "warning",
                 )
-                log("Use 'mimeo dns repair' to fix DNS records", "warning")
+                log("Use 'mimeo sync' to fix DNS records once nameservers are correct", "warning")
                 result["dns_pending"] = True
                 result["ns_mismatch"] = ns_result.actual
             else:

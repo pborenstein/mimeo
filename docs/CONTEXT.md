@@ -16,15 +16,28 @@ this one branch rather than PR-per-stage.
 
 ## Active Tasks
 
-- [ ] **Commit Stage 5B** (uncommitted): `status.py`/`dns.py`/`__init__.py`
-      rewritten, `list_cmd.py`/`registrar.py` deleted, tests relocated to
-      `test_status.py` (296 passing, ruff/mypy clean).
-- [ ] **Live-verify Stage 5B**: no provider credentials on this machine, so
-      5B was only mock/CLI-help verified, never against a real account —
-      do this before trusting it the way DEC-026 needed live testing to surface.
+- [x] **Commit Stage 5B**: done, `7925af9`.
+- [x] **Live-verify Stage 5B**: real credentials ARE configured at
+      `~/.config/mimeo/config.toml` (github org `tepiton`) — the "no
+      credentials" note from the 5B session was wrong, don't repeat it.
+      Ran `status --source dns`/full-join against `002373.xyz` live;
+      found real drift (see below), confirming the command works.
 - [ ] **Stage 5C (start here)**: `sync` absorbs `dns repair`/`fix https`.
       Read DEC-025's "Open question" section first. Full steps in
-      IMPLEMENTATION.md Stage 5C.
+      IMPLEMENTATION.md Stage 5C. Use `002373.xyz`'s real drift (below) as
+      a live test case for whatever repair/extra-record handling 5C builds.
+- [ ] **QoL: `mimeo create` with no domain args prints Click's terse
+      "Missing argument" error instead of full help.** User: "If you're
+      going to tell me to run --help, just run help. IOW if you're just
+      printing a short usage message, don't." Click's `no_args_is_help`
+      doesn't apply automatically to a required `nargs=-1` argument; needs
+      an explicit check in `create.py` (e.g. detect empty `domains` before
+      Click's own argument validation fires, or invoke the help callback).
+- [ ] **QoL: `status`'s problem-count summary line should say how to fix,
+      not just count.** User: do this after 5C, don't forget. Once 5C
+      lands, the summary (currently just "N domain(s), M with issues")
+      should point at the merged repair command (`sync`?) for domains
+      with fixable problems.
 - [ ] **Stage 5D**: cleanup + full test/mypy/ruff pass + README update
       (README's `mimeo template apply` refs are stale from 5A too).
 - [ ] **Stage 5E**: `template lint`. Blocked on DEC-024 implementation.
@@ -50,8 +63,16 @@ Stage 5E blocked on DEC-024 implementation. Everything else unblocked.
 - Prefer testing provider-touching CLI changes (create/sync/status) against
   a real domain/repo, not mocks alone — DEC-026's bugs were invisible to
   mocks that didn't model the ownership/existing-repo distinction.
+- **Real drift found live**: `002373.xyz` has an extra `CNAME * ->
+  pixie.porkbun.com` (Porkbun's default parking wildcard) that GitHub
+  Pages never expected. `dns repair --dry-run` only re-asserts the
+  expected A/CNAME records — it does NOT delete extras, so it will not
+  clear this drift. Left as-is deliberately to be a real 5C test case for
+  "extra record" handling; don't delete it out of band.
 
 ## Next Session
 
-Commit Stage 5B, then either live-verify it or move to Stage 5C — read
-DEC-025's "Open question" section before writing any 5C code.
+Start Stage 5C (`sync` absorbs `dns repair`/`fix https`) — read DEC-025's
+"Open question" section first, and use `002373.xyz`'s live extra-CNAME
+drift as a real test case. Two QoL fixes are also queued (see Active
+Tasks): `create`'s no-args help behavior, and `status`'s summary line.

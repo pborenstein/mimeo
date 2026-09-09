@@ -45,7 +45,7 @@ def _text(rows: List[Dict[str, Any]]) -> None:
         elif row.get("dns_status") == "drift":
             drifted += 1
             click.secho("drift", fg="yellow", nl=False)
-            click.echo(" (extra DNS record(s) present; sync does not remove them -- see mimeo status)")
+            click.echo(" (extra DNS record(s) present; sync does not remove records it does not manage)")
             for rec in row.get("extra", []):
                 click.secho(
                     f"      extra:   {rec['type']} {rec['name']} -> {rec['content']}",

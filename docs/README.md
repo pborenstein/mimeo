@@ -14,6 +14,7 @@ Navigation index for all Mimeo documentation files.
 | [DECISIONS.md](DECISIONS.md) | Contributors | Architectural decision registry (DEC-001 through DEC-026) |
 | [CONTEXT.md](CONTEXT.md) | Contributors | Current session state, active tasks, blockers |
 | [CODE_REVIEW.md](CODE_REVIEW.md) | Contributors | Critical code review: verified bugs, design concerns, priorities |
+| [SUBDOMAINS.md](SUBDOMAINS.md) | Contributors | Proposed design: sites on subdomains (hostname vs. DNS zone split) |
 
 ## Contributor Entry Points
 

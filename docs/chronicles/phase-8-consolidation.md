@@ -641,3 +641,15 @@ bugs' root causes.
 **Decisions**: DEC-025's status line updated to note `template lint` moved to Stage 6.
 
 **Files**: `docs/IMPLEMENTATION.md`, `docs/DECISIONS.md`, `docs/CONTEXT.md`.
+
+## Entry 53: Subdomain sites design doc (2026-09-09)
+
+**What**: Wrote `docs/SUBDOMAINS.md`, a proposed design for hosting sites on subdomains (`mimeo create --template eleventy-service service.example.com`). No code changed.
+
+**Why**: Every "domain" string currently plays three roles at once — site hostname, DNS zone, and status/sync join key — which coincide only for apex domains. Subdomains split them and make zones one-to-many with sites; the doc's six required changes follow from that split (identity split, zone resolution as ownership check, per-site DNS desired state, drift scoping to managed names, type-conflict replacement, fleet joins). User asked for the write-up structured as "what needs to happen," with implementation detail quarantined in an appendix table.
+
+**How**: Traced live behavior first: `validate_domains` already accepts subdomains syntactically, and `create` refuses cleanly at the ownership check (Porkbun's API is zone-scoped) before creating anything — correcting an earlier in-chat claim that repo/Pages creation would happen first. Indexed the doc in `docs/README.md`; added a Phase 8 task entry pointing at it. Four open decisions (repo naming, zone-resolution source, ignore_domains semantics, apex behavior freeze) deliberately left unratified — no DEC-xxx numbers assigned yet.
+
+**Decisions**: None ratified; recommendations recorded in SUBDOMAINS.md's Open Decisions table.
+
+**Files**: `docs/SUBDOMAINS.md` (new), `docs/README.md`, `docs/IMPLEMENTATION.md`, `docs/CONTEXT.md`.

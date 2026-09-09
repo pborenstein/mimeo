@@ -353,6 +353,13 @@ front-door verbs than it started with. See DEC-021.
         node per the review's own framing
   - [x] `docs/CODE_REVIEW.md` updated inline (FIXED/REMOVED/left-open
         markers per finding) rather than tracked in a separate checklist
+- [ ] Subdomain sites (`mimeo create service.example.com`) — proposed,
+      design only, not scheduled. Full design in `docs/SUBDOMAINS.md`:
+      six required changes, four open decisions, two-pass staging. Core
+      shift: split "site hostname" from "DNS zone" so one zone can hold
+      many sites (drift scoping, record conflicts, and the status/sync
+      joins all follow from that). No code written. Resolve the open
+      decisions before scheduling implementation.
 
 ---
 

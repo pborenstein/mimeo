@@ -653,3 +653,15 @@ removal, not an architectural choice.
 **Decisions**: None ratified; recommendations recorded in SUBDOMAINS.md's Open Decisions table.
 
 **Files**: `docs/SUBDOMAINS.md` (new), `docs/README.md`, `docs/IMPLEMENTATION.md`, `docs/CONTEXT.md`.
+
+## Entry 55: Repaired chronicle numbering and ordering (2026-09-09)
+
+**What**: Sorted chronicle entries into ascending order within the four affected phase files (phase-5, phase-6, phase-7, phase-8) and resolved a duplicate number: the subdomain-design entry (added earlier tonight as Entry 53) became Entry 54, since the code-review pass legitimately owns 53 by commit order (`2e8580b`). Pure reordering — 413 lines moved, none added or removed. All other entry numbers preserved: IMPLEMENTATION.md and DECISIONS.md cross-reference entries by number.
+
+**Why**: User noticed the numbering was "all messed up." Root cause of the duplicate: the code-review Entry 53 sat physically near the top of phase-8 (with 32-43 fully reversed below it), so a tail-of-file scan for the highest number only saw 52 — a misfiled entry poisoned the append recipe.
+
+**How**: Per-file Python sort keyed on entry number, preamble preserved, duplicate resolved by title match. Hardened `~/.zcode/skills/session-wrapup/SKILL.md` (outside this repo) to compute the next number as the max across all matches via an explicit grep/sort pipeline plus a `uniq -d` duplicate guard. Noted but deliberately left alone: entries 49-52 are dated 2026-09-09 while their commits landed the evening of 09-08 — possibly written the morning after; dates unchanged pending user intent.
+
+**Decisions**: None.
+
+**Files**: `docs/chronicles/phase-{5,6,7,8}-*.md` (repair commit `29192be`); `~/.zcode/skills/session-wrapup/SKILL.md` (not a repo file).

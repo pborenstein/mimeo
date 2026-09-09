@@ -24,8 +24,6 @@ class TestHTTPClient:
         client = HTTPClient(
             base_url="https://api.example.com",
             timeout=60,
-            max_retries=5,
-            backoff_factor=1.0,
         )
         assert client.base_url == "https://api.example.com"
         assert client.timeout == 60

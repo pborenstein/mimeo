@@ -4,9 +4,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 import responses
-import dns.resolver
 
-from mimeo.exceptions import RegistrarError, DNSError
+from mimeo.exceptions import RegistrarError
 from mimeo.models import DNSRecord, NameserverCheckResult
 from mimeo.providers.host.github import GITHUB_PAGES_IPS
 from mimeo.providers.registrar.porkbun import (
@@ -404,109 +403,6 @@ class TestPorkbunDNSProvider:
 
         # 1 retrieve + 0 deletes + 1 create = 2 total
         assert len(responses.calls) == 2
-
-    @patch("mimeo.providers.registrar.porkbun.dns.resolver.Resolver")
-    def test_verify_dns_success(
-        self, mock_resolver_class: Mock, provider: PorkbunDNSProvider
-    ) -> None:
-        mock_resolver = Mock()
-        mock_resolver_class.return_value = mock_resolver
-
-        mock_answer = Mock()
-        mock_answer.__str__ = Mock(return_value="1.2.3.4")
-        mock_resolver.resolve.return_value = [mock_answer]
-
-        record = DNSRecord(type="A", name="", content="1.2.3.4", ttl=600)
-        result = provider.verify_dns("example.com", [record], max_attempts=1)
-
-        assert result is True
-        mock_resolver.resolve.assert_called_once_with("example.com", "A")
-
-    @patch("mimeo.providers.registrar.porkbun.dns.resolver.Resolver")
-    def test_verify_dns_with_subdomain(
-        self, mock_resolver_class: Mock, provider: PorkbunDNSProvider
-    ) -> None:
-        mock_resolver = Mock()
-        mock_resolver_class.return_value = mock_resolver
-
-        mock_answer = Mock()
-        mock_answer.__str__ = Mock(return_value="target.example.com.")
-        mock_resolver.resolve.return_value = [mock_answer]
-
-        record = DNSRecord(type="CNAME", name="www", content="target.example.com", ttl=600)
-        result = provider.verify_dns("example.com", [record], max_attempts=1)
-
-        assert result is True
-        mock_resolver.resolve.assert_called_once_with("www.example.com", "CNAME")
-
-    @patch("mimeo.providers.registrar.porkbun.dns.resolver.Resolver")
-    def test_verify_dns_not_found(
-        self, mock_resolver_class: Mock, provider: PorkbunDNSProvider
-    ) -> None:
-        mock_resolver = Mock()
-        mock_resolver_class.return_value = mock_resolver
-        mock_resolver.resolve.side_effect = dns.resolver.NXDOMAIN()
-
-        record = DNSRecord(type="A", name="", content="1.2.3.4", ttl=600)
-        result = provider.verify_dns("example.com", [record], max_attempts=1, delay=0)
-
-        assert result is False
-
-    @patch("mimeo.providers.registrar.porkbun.dns.resolver.Resolver")
-    @patch("mimeo.providers.registrar.porkbun.time.sleep")
-    def test_verify_dns_retry(
-        self,
-        mock_sleep: Mock,
-        mock_resolver_class: Mock,
-        provider: PorkbunDNSProvider,
-    ) -> None:
-        mock_resolver = Mock()
-        mock_resolver_class.return_value = mock_resolver
-
-        mock_answer = Mock()
-        mock_answer.__str__ = Mock(return_value="1.2.3.4")
-        mock_resolver.resolve.side_effect = [
-            dns.resolver.NXDOMAIN(),
-            [mock_answer],
-        ]
-
-        record = DNSRecord(type="A", name="", content="1.2.3.4", ttl=600)
-        result = provider.verify_dns("example.com", [record], max_attempts=2, delay=1)
-
-        assert result is True
-        assert mock_resolver.resolve.call_count == 2
-        mock_sleep.assert_called_once_with(1)
-
-    @patch("mimeo.providers.registrar.porkbun.dns.resolver.Resolver")
-    def test_verify_dns_wrong_content(
-        self, mock_resolver_class: Mock, provider: PorkbunDNSProvider
-    ) -> None:
-        mock_resolver = Mock()
-        mock_resolver_class.return_value = mock_resolver
-
-        mock_answer = Mock()
-        mock_answer.__str__ = Mock(return_value="9.9.9.9")
-        mock_resolver.resolve.return_value = [mock_answer]
-
-        record = DNSRecord(type="A", name="", content="1.2.3.4", ttl=600)
-        result = provider.verify_dns("example.com", [record], max_attempts=1)
-
-        assert result is False
-
-    @patch("mimeo.providers.registrar.porkbun.dns.resolver.Resolver")
-    def test_verify_dns_unexpected_error(
-        self, mock_resolver_class: Mock, provider: PorkbunDNSProvider
-    ) -> None:
-        mock_resolver = Mock()
-        mock_resolver_class.return_value = mock_resolver
-        mock_resolver.resolve.side_effect = Exception("Unexpected error")
-
-        record = DNSRecord(type="A", name="", content="1.2.3.4", ttl=600)
-
-        with pytest.raises(DNSError) as exc_info:
-            provider.verify_dns("example.com", [record], max_attempts=1)
-
-        assert "unexpectedly" in str(exc_info.value)
 
     def test_normalize_record_name_apex(self, provider: PorkbunDNSProvider) -> None:
         domain = "example.com"

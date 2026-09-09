@@ -384,9 +384,7 @@ Re-run `mimeo create example.com`. The command is idempotent:
    mimeo create failed-domain.com another-failed.org
    ```
 
-2. Use `--stop-on-error` in future runs to halt at first failure
-
-3. Use `--sequential` for better per-step output when debugging:
+2. Use `--sequential` for better per-step output when debugging:
    ```bash
    mimeo create example.com --sequential
    ```

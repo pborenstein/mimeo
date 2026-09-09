@@ -23,16 +23,12 @@ class HTTPClient:
         self,
         base_url: str,
         timeout: int = 30,
-        max_retries: int = 3,
-        backoff_factor: float = 0.5,
     ) -> None:
         """Initialize HTTP client.
 
         Args:
             base_url: Base URL for all requests
             timeout: Request timeout in seconds
-            max_retries: Unused; kept for API compatibility
-            backoff_factor: Unused; kept for API compatibility
         """
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
@@ -82,6 +78,50 @@ class HTTPClient:
         except requests.JSONDecodeError as e:
             raise APIError(f"Invalid JSON response: {e}") from e
 
+    def _request(
+        self,
+        method: str,
+        path: str,
+        params: Optional[Dict[str, Any]] = None,
+        data: Optional[Dict[str, Any]] = None,
+        json: Optional[Dict[str, Any]] = None,
+        headers: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        """Send an HTTP request and parse the JSON response.
+
+        Args:
+            method: HTTP method (e.g. "GET", "POST")
+            path: API endpoint path
+            params: Query parameters
+            data: Form data
+            json: JSON data
+            headers: Additional headers
+
+        Returns:
+            Parsed JSON response
+
+        Raises:
+            NetworkError: If network request fails
+            APIError: If API returns an error
+        """
+        url = self._build_url(path)
+
+        try:
+            response = self.session.request(
+                method,
+                url,
+                params=params,
+                data=data,
+                json=json,
+                headers=headers,
+                timeout=self.timeout,
+            )
+            return self._handle_response(response)
+        except requests.RequestException as e:
+            if isinstance(e, requests.HTTPError):
+                raise  # Already handled by _handle_response
+            raise NetworkError(f"Network request failed: {e}") from e
+
     def get(
         self,
         path: str,
@@ -102,20 +142,7 @@ class HTTPClient:
             NetworkError: If network request fails
             APIError: If API returns an error
         """
-        url = self._build_url(path)
-
-        try:
-            response = self.session.get(
-                url,
-                params=params,
-                headers=headers,
-                timeout=self.timeout,
-            )
-            return self._handle_response(response)
-        except requests.RequestException as e:
-            if isinstance(e, requests.HTTPError):
-                raise  # Already handled by _handle_response
-            raise NetworkError(f"Network request failed: {e}") from e
+        return self._request("GET", path, params=params, headers=headers)
 
     def post(
         self,
@@ -139,21 +166,7 @@ class HTTPClient:
             NetworkError: If network request fails
             APIError: If API returns an error
         """
-        url = self._build_url(path)
-
-        try:
-            response = self.session.post(
-                url,
-                data=data,
-                json=json,
-                headers=headers,
-                timeout=self.timeout,
-            )
-            return self._handle_response(response)
-        except requests.RequestException as e:
-            if isinstance(e, requests.HTTPError):
-                raise  # Already handled by _handle_response
-            raise NetworkError(f"Network request failed: {e}") from e
+        return self._request("POST", path, data=data, json=json, headers=headers)
 
     def put(
         self,
@@ -177,21 +190,7 @@ class HTTPClient:
             NetworkError: If network request fails
             APIError: If API returns an error
         """
-        url = self._build_url(path)
-
-        try:
-            response = self.session.put(
-                url,
-                data=data,
-                json=json,
-                headers=headers,
-                timeout=self.timeout,
-            )
-            return self._handle_response(response)
-        except requests.RequestException as e:
-            if isinstance(e, requests.HTTPError):
-                raise  # Already handled by _handle_response
-            raise NetworkError(f"Network request failed: {e}") from e
+        return self._request("PUT", path, data=data, json=json, headers=headers)
 
     def delete(
         self,
@@ -213,20 +212,7 @@ class HTTPClient:
             NetworkError: If network request fails
             APIError: If API returns an error
         """
-        url = self._build_url(path)
-
-        try:
-            response = self.session.delete(
-                url,
-                params=params,
-                headers=headers,
-                timeout=self.timeout,
-            )
-            return self._handle_response(response)
-        except requests.RequestException as e:
-            if isinstance(e, requests.HTTPError):
-                raise  # Already handled by _handle_response
-            raise NetworkError(f"Network request failed: {e}") from e
+        return self._request("DELETE", path, params=params, headers=headers)
 
     def close(self) -> None:
         """Close the HTTP session."""

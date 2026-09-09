@@ -210,11 +210,6 @@ def _process_single_domain(
     help="Show what would be created without actually creating anything",
 )
 @click.option(
-    "--stop-on-error",
-    is_flag=True,
-    help="Stop processing if any domain fails (default: continue with remaining domains)",
-)
-@click.option(
     "--sequential",
     is_flag=True,
     help="Process domains sequentially instead of concurrently",
@@ -253,7 +248,6 @@ def create(
     domains: tuple[str, ...],
     config: Path | None,
     dry_run: bool,
-    stop_on_error: bool,
     sequential: bool,
     workers: int,
     template: str,
@@ -270,7 +264,8 @@ def create(
     replace an existing repository's content with a different template
     instead. WARNING: --force deletes the existing repository and recreates
     it from the template -- all existing content, issues, and history will
-    be lost. DNS records are not modified.
+    be lost. DNS records are also reconfigured (existing managed records are
+    deleted and recreated), unless --skip-dns is also passed.
 
     Multiple domains are processed concurrently for faster provisioning.
 

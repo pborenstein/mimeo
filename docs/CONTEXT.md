@@ -1,23 +1,27 @@
 ---
 phase: 8
 phase_name: Consolidation
-updated: 2026-09-09
-last_commit: 56d75bd
+updated: 2026-09-08
+last_commit: pending (see Next Session)
 ---
 
 ## Current Focus
 
-Stage 5 (DEC-025's 9-verbs-to-5 collapse: 5A-5D) is merged to `main` and
-pushed (merge commit `56d75bd`, real merge not a fast-forward, per user
-request). `template lint` was split out of Stage 5 (was "5E") into its
-own Stage 6, since it validates DEC-024's manifest schema rather than
-collapsing existing verbs.
+Worked through GLM 5.3's `docs/CODE_REVIEW.md`. Fixed BUG 1, 2, 3, 5 and
+most of the dead-code table (`verify_dns` removed entirely, `HTTPClient`
+collapsed to one `_request` helper with dead ctor params dropped, stale
+`config.py` comment fixed). `default_registrar`/`default_host` (D2) and
+`ProviderError` deliberately left open — see `docs/CODE_REVIEW.md`'s
+dead-code table for why.
 
 ## Active Tasks
 
 - [ ] **Stage 6**: `template lint`. Blocked on DEC-024 implementation.
 - [ ] **Track B**: Stage 4 E2E test lane, blocked on test account/org.
-- [ ] **Backlog**: dead `max_retries`/`backoff_factor` params in `http.py`.
+- [ ] **Backlog**: BUG 4/6/7 and the error-semantics refactor
+      (`docs/CODE_REVIEW.md` recommendation #2) — not started.
+- [ ] **Backlog**: D2 (`default_registrar`/`default_host`) — decide
+      factory vs. removal.
 
 ## Blockers
 
@@ -25,18 +29,18 @@ Stage 6 blocked on DEC-024 implementation. Everything else unblocked.
 
 ## Context
 
-- DEC-025 status updated to Complete and merged; DEC-026 covers
-  `create`'s safety fixes found during 5A.
-- 296 tests passing, mypy/ruff clean on `main` post-merge (re-verified).
-- `mimeo/cli/dns.py`, `fix.py`, `list_cmd.py`, `registrar.py`,
-  `template.py`, and `docs/LIST_COMMAND.md` are gone from `main` now.
-  `create`, `status`, `sync`, `doctor` are the full CLI surface until
-  Stage 6 adds `template lint`.
-- Real credentials configured at `~/.config/mimeo/config.toml` (github
-  org `tepiton`) — live testing is possible.
+- 289 tests passing (was 296; -7 from deleting `verify_dns`-only tests),
+  mypy clean, ruff unchanged from baseline (5 pre-existing errors,
+  untouched files).
+- `docs/CODE_REVIEW.md` updated inline (FIXED/REMOVED/left-open markers
+  per finding) instead of a separate checklist — read it directly for
+  current bug/dead-code status.
+- BUG 1's fix matches on Porkbun's `"Domain not found"` message text,
+  confirmed against this repo's own test fixtures, not a live API call —
+  re-verify if `domain_exists` misclassifies again.
 
 ## Next Session
 
-No active work queued except Stage 6 (blocked) and the one backlog
-item above. Check in with the user for direction, or start on DEC-024
-if ready to unblock Stage 6.
+Not yet committed — commit this session's fixes first. Then either start
+BUG 4/6/7 + error-semantics refactor (recommendation #2), or DEC-024 to
+unblock Stage 6.

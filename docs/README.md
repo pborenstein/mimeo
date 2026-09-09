@@ -13,6 +13,7 @@ Navigation index for all Mimeo documentation files.
 | [IMPLEMENTATION.md](IMPLEMENTATION.md) | Contributors | Phase tracker, current tasks, completed work |
 | [DECISIONS.md](DECISIONS.md) | Contributors | Architectural decision registry (DEC-001 through DEC-026) |
 | [CONTEXT.md](CONTEXT.md) | Contributors | Current session state, active tasks, blockers |
+| [CODE_REVIEW.md](CODE_REVIEW.md) | Contributors | Critical code review: verified bugs, design concerns, priorities |
 
 ## Contributor Entry Points
 

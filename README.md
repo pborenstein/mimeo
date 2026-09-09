@@ -65,9 +65,6 @@ mimeo create example.com another.lol third.com
 # Preview without executing
 mimeo create example.com --dry-run
 
-# Stop on first failure (default: continue)
-mimeo create example.com --stop-on-error
-
 # Run sequentially instead of concurrently
 mimeo create example.com another.lol --sequential
 ```

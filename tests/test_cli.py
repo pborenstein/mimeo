@@ -125,7 +125,6 @@ class TestCreateCommand:
         mock_registrar_class.return_value = mock_registrar
 
         mock_dns_provider = MagicMock()
-        mock_dns_provider.verify_dns.return_value = True
         mock_dns_provider.__enter__.return_value = mock_dns_provider
         mock_dns_provider_class.return_value = mock_dns_provider
 
@@ -143,7 +142,6 @@ class TestCreateCommand:
         mock_host.required_dns_records.assert_called_once_with("example.com")
         mock_registrar.check_nameservers.assert_called_once_with("example.com")
         mock_dns_provider.configure_dns.assert_called_once_with("example.com", mock_dns_records)
-        mock_dns_provider.verify_dns.assert_not_called()
 
     @patch("mimeo.config.Config.load")
     @patch(f"{_CREATE}.GitHubHost")
@@ -344,7 +342,6 @@ class TestCreateCommand:
         mock_registrar_class.return_value = mock_registrar
 
         mock_dns_provider = MagicMock()
-        mock_dns_provider.verify_dns.return_value = True
         mock_dns_provider.__enter__.return_value = mock_dns_provider
         mock_dns_provider_class.return_value = mock_dns_provider
 
@@ -386,7 +383,6 @@ class TestCreateCommand:
         mock_registrar_class.return_value = mock_registrar
 
         mock_dns_provider = MagicMock()
-        mock_dns_provider.verify_dns.return_value = True
         mock_dns_provider.__enter__.return_value = mock_dns_provider
         mock_dns_provider_class.return_value = mock_dns_provider
 
@@ -427,7 +423,6 @@ class TestCreateCommand:
         mock_registrar_class.return_value = mock_registrar
 
         mock_dns_provider = MagicMock()
-        mock_dns_provider.verify_dns.return_value = True
         mock_dns_provider.__enter__.return_value = mock_dns_provider
         mock_dns_provider_class.return_value = mock_dns_provider
 
@@ -469,7 +464,6 @@ class TestCreateCommand:
         mock_registrar_class.return_value = mock_registrar
 
         mock_dns_provider = MagicMock()
-        mock_dns_provider.verify_dns.return_value = True
         mock_dns_provider.__enter__.return_value = mock_dns_provider
         mock_dns_provider_class.return_value = mock_dns_provider
 
@@ -511,7 +505,6 @@ class TestCreateCommand:
         mock_registrar_class.return_value = mock_registrar
 
         mock_dns_provider = MagicMock()
-        mock_dns_provider.verify_dns.return_value = True
         mock_dns_provider.__enter__.return_value = mock_dns_provider
         mock_dns_provider_class.return_value = mock_dns_provider
 
@@ -554,7 +547,6 @@ class TestCreateCommand:
         mock_registrar_class.return_value = mock_registrar
 
         mock_dns_provider = MagicMock()
-        mock_dns_provider.verify_dns.return_value = True
         mock_dns_provider.__enter__.return_value = mock_dns_provider
         mock_dns_provider_class.return_value = mock_dns_provider
 
@@ -602,7 +594,6 @@ class TestCreateCommand:
         mock_registrar_class.return_value = mock_registrar
 
         mock_dns_provider = MagicMock()
-        mock_dns_provider.verify_dns.return_value = True
         mock_dns_provider.__enter__.return_value = mock_dns_provider
         mock_dns_provider_class.return_value = mock_dns_provider
 
@@ -1112,7 +1103,6 @@ class TestLogFormatOption:
         mock_registrar_class.return_value = mock_registrar
 
         mock_dns_provider = MagicMock()
-        mock_dns_provider.verify_dns.return_value = True
         mock_dns_provider.__enter__.return_value = mock_dns_provider
         mock_dns_provider_class.return_value = mock_dns_provider
 
@@ -1227,7 +1217,6 @@ class TestCreateForceCommand:
         mock_registrar_class.return_value = mock_registrar
 
         mock_dns_provider = MagicMock()
-        mock_dns_provider.verify_dns.return_value = True
         mock_dns_provider.__enter__.return_value = mock_dns_provider
         mock_dns_provider_class.return_value = mock_dns_provider
 

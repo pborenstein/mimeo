@@ -330,6 +330,29 @@ front-door verbs than it started with. See DEC-021.
         file, which field, what was wrong) — this is a template
         author's debugging tool, error messages should name the exact
         manifest entry at fault
+- [x] Code review fix pass (GLM 5.3's `docs/CODE_REVIEW.md`, 2026-09-08)
+  - [x] Fixed BUG 1 (`domain_exists` conflated "not owned" with "API
+        broken" — now only Porkbun's actual "Domain not found" response
+        maps to `False`), BUG 2 (`create --force` help text falsely said
+        DNS is untouched), BUG 3 (`status --source dns --problems` exited
+        0 on API errors — added the missing `exit_on_errors` call), BUG 5
+        (`--stop-on-error` on `create` was accepted and silently ignored —
+        deleted the flag)
+  - [x] Removed dead `verify_dns` entirely (ABC slot, Porkbun impl, and
+        its stale test coverage — net -7 tests, 296 -> 289, all
+        `verify_dns`-only); collapsed `HTTPClient`'s four HTTP verbs onto
+        one `_request` helper and dropped its dead `max_retries`/
+        `backoff_factor` ctor params; fixed a stale comment in
+        `config.py`
+  - [x] Left BUG 4, 6, 7, the error-semantics refactor, and D1-D5 (design
+        concerns) untouched — out of scope for this pass. `default_
+        registrar`/`default_host` (D2) and `ProviderError` deliberately
+        left in the dead-code table too: D2 is documented user-facing
+        config surface needing a real decision (factory vs. removal), not
+        mechanical sweeping; `ProviderError` is a legitimate hierarchy
+        node per the review's own framing
+  - [x] `docs/CODE_REVIEW.md` updated inline (FIXED/REMOVED/left-open
+        markers per finding) rather than tracked in a separate checklist
 
 ---
 

@@ -87,7 +87,7 @@ class Config:
             "secret_key"
         )
 
-        # GitHub username (use default_org from config, or get from gh CLI)
+        # GitHub username (required; no fallback to gh CLI's authenticated user)
         github_username = os.getenv("MIMEO_GITHUB_USERNAME") or github_config.get(
             "default_org"
         )

@@ -1,5 +1,46 @@
 # Phase 8: Consolidation Chronicles
 
+## Entry 53: Code review fix pass — BUG 1/2/3/5 and dead-code sweep (2026-09-08)
+
+**What**: Worked through GLM 5.3's `docs/CODE_REVIEW.md` (dated 2026-09-08,
+pinned to `0c3c6ba`). Fixed the four small user-facing bugs it flagged as
+independent of any design decision (BUG 1, 2, 3, 5), then most of its
+dead-code table: removed `verify_dns` entirely (ABC slot, Porkbun impl, and
+all its test coverage), collapsed `HTTPClient`'s four HTTP verbs onto one
+`_request` helper and dropped its two dead constructor params, and fixed a
+stale comment in `config.py`.
+
+**Why**: The review's own priority order put these first — "small, all
+user-facing, none need design decisions" — and pre-1.0 was called out as the
+cheap time to cut dead surface before it taxes a future provider
+implementation (`verify_dns`'s ABC slot was the one flagged as taxing the
+future most).
+
+**How**: Verified each bug against the actual code and, for BUG 1, against
+this repo's own Porkbun test fixtures (`"Domain not found"` is the real
+error-message text Porkbun returns, confirmed via `tests/providers/registrar/
+test_porkbun.py`'s mocked responses across other endpoints — no live-API
+call was made). Checked in with the user before touching `default_registrar`/
+`default_host` (D2) and the `HTTPClient.get/put/delete` scope, since both
+carried real design-decision or test-surface weight beyond mechanical
+cleanup; D2 was deliberately left, `HTTPClient` was done but kept its public
+`get`/`put`/`delete` methods (real tests exercise them, not just dead
+surface). Full suite re-run after: 289 passed (296 - 7, all `verify_dns`-only
+tests), mypy clean, ruff unchanged from baseline (5 pre-existing errors, none
+in touched files). `docs/CODE_REVIEW.md` updated in place with
+FIXED/REMOVED/left-open markers per finding, instead of a separate tracking
+checklist.
+
+**Decisions**: None new. No DEC entry — this was bug fixes and dead-code
+removal, not an architectural choice.
+
+**Files**: `mimeo/providers/registrar/porkbun.py`, `mimeo/providers/base.py`,
+`mimeo/cli/create.py`, `mimeo/cli/status.py`, `mimeo/config.py`,
+`mimeo/utils/http.py`, `tests/providers/registrar/test_porkbun.py`,
+`tests/test_cli.py`, `tests/test_providers_base.py`,
+`tests/utils/test_http.py`, `README.md`, `docs/TROUBLESHOOTING.md`,
+`docs/CODE_REVIEW.md`.
+
 ## Entry 43: Scrub leaked identity from eleventy-tech-blog / eleventy-prose-blog (2026-09-05)
 
 **What**: Removed real personal identity from both templates in mimeo-sites

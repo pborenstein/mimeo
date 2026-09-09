@@ -1,11 +1,10 @@
 """Porkbun registrar and DNS provider implementations."""
 
-import time
-from typing import Any, Callable, Dict, List
+from typing import Any, Dict, List
 
 import dns.resolver
 
-from mimeo.exceptions import RegistrarError, DNSError
+from mimeo.exceptions import RegistrarError
 from mimeo.models import DNSRecord, NameserverCheckResult
 from mimeo.providers.base import DNSProvider, Registrar
 from mimeo.utils.http import HTTPClient
@@ -130,12 +129,20 @@ class PorkbunRegistrar(_PorkbunClient, Registrar):
 
         Returns:
             True if the domain exists in the account
+
+        Raises:
+            RegistrarError: If the check fails for a reason other than the
+                domain not being in the account (e.g. invalid credentials,
+                network failure, rate limit) -- these must not be reported
+                as "not registered".
         """
         try:
             self._make_request(f"/domain/getNs/{domain}", {})
             return True
-        except RegistrarError:
-            return False
+        except RegistrarError as e:
+            if "domain not found" in str(e).lower():
+                return False
+            raise
 
     def list_domains(self) -> List[Dict[str, Any]]:
         """Return all domains in the Porkbun account.
@@ -274,78 +281,6 @@ class PorkbunDNSProvider(_PorkbunClient, DNSProvider):
             if isinstance(e, RegistrarError):
                 raise
             raise RegistrarError(f"Failed to configure DNS for {domain}: {e}") from e
-
-    def verify_dns(
-        self,
-        domain: str,
-        records: List[DNSRecord],
-        max_attempts: int = 10,
-        delay: int = 5,
-        progress_callback: Callable[[int, int], None] | None = None,
-    ) -> bool:
-        """Verify DNS records have propagated.
-
-        Args:
-            domain: Domain name to verify
-            records: Expected DNS records
-            max_attempts: Maximum number of verification attempts
-            delay: Delay between attempts in seconds
-
-        Returns:
-            True if all records are verified, False otherwise
-
-        Raises:
-            DNSError: If verification fails unexpectedly
-        """
-        resolver = dns.resolver.Resolver()
-        resolver.timeout = 5
-        resolver.lifetime = 5
-
-        for attempt in range(max_attempts):
-            try:
-                all_verified = True
-
-                for record in records:
-                    if record.name in ("", "@"):
-                        query_name = domain
-                    else:
-                        query_name = f"{record.name}.{domain}"
-
-                    try:
-                        answers = resolver.resolve(query_name, record.type)
-
-                        found = False
-                        for rdata in answers:
-                            actual_content = str(rdata).rstrip(".")
-                            expected_content = record.content.rstrip(".")
-
-                            if actual_content == expected_content:
-                                found = True
-                                break
-
-                        if not found:
-                            all_verified = False
-                            break
-
-                    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
-                        all_verified = False
-                        break
-                    except dns.exception.Timeout:
-                        all_verified = False
-                        break
-
-                if all_verified:
-                    return True
-
-                if attempt < max_attempts - 1:
-                    if progress_callback is not None:
-                        progress_callback(attempt + 1, max_attempts)
-                    time.sleep(delay)
-
-            except Exception as e:
-                raise DNSError(f"DNS verification failed unexpectedly: {e}") from e
-
-        return False
 
     def check_dns_drift(
         self,

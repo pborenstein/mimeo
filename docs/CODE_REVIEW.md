@@ -1,229 +1,429 @@
 # Mimeo Code Review
 
-A critical, user-perspective review of the mimeo codebase (v0.1.0).
+A critical review of the mimeo codebase, written for both human contributors
+and LLM agents. Findings are self-contained: each states the claim, the exact
+location (pinned to the commit below), the evidence, and a suggested fix.
+Line numbers drift as the code changes; re-locate by symbol name if a line no
+longer matches.
 
-**Date**: 2026-03-28
-**Scope**: All source in `mimeo/`, all tests in `tests/`, documentation, and README.
-**Stats**: ~2,700 lines of source (excluding init files), 244 tests passing, clean ruff + mypy.
+**Date**: 2026-09-08
+**Pinned to commit**: `0c3c6ba` (main)
+**Scope**: All source in `mimeo/` (~4,250 lines), all tests in `tests/`,
+prior `docs/CODE_REVIEW.md` (2026-03-28), `docs/DECISIONS.md` DEC-001..DEC-026.
+**Method**: Full read of every source file; cross-checked claims against
+`grep` where noted; test suite executed (`uv run pytest -q`): 296 passed in
+0.49s.
+**Supersedes**: the 2026-03-28 review. Disposition of its findings is in the
+last section.
 
----
-
-## Executive Summary
-
-Mimeo does one thing -- take a domain from nothing to a live GitHub Pages site with Porkbun DNS -- and it does it well enough to be useful. The architecture is clean, the provider abstractions are sensible, and the test suite is thorough.
-
-But the polish has gaps that a user will hit. Some are real bugs (documented flags that don't exist, env var name mismatches). Some are design issues that will hurt as the tool grows (CLI code reaching into private provider methods, no domain validation despite a Domain model existing). And some are user-hostile defaults (no progress during DNS propagation, silent partial failures, noisy stdout that breaks piping).
-
-The codebase is in good shape for a v0.1.0. The issues below are ranked by severity.
-
----
-
-## Critical Issues
-
-### 1. README documents a flag that doesn't exist
-
-The README lists:
-
-```
-mimeo create example.com --force-dns-update
-```
-
-There is no `--force-dns-update` flag on the create command. The `create --help` output confirms it. A user copy-pasting from the README will get an error.
-
-**Fix**: Either implement the flag or remove it from the README.
-
-### 2. Config example has wrong environment variable name
-
-`config.toml.example` line 17 says:
-
-```
-export MIMEO_PORKBUN_SECRET_KEY="your-secret"
-```
-
-But `config.py:86` reads:
-
-```python
-os.getenv("MIMEO_PORKBUN_SECRET")
-```
-
-Anyone following the example to set up env vars will have their secret silently ignored, falling back to the config file (or failing with "Missing required configuration" if there's no config file). This is the kind of silent failure that wastes an hour of debugging.
-
-**Fix**: Change the example to `MIMEO_PORKBUN_SECRET`.
-
-### 3. README project structure references a file that doesn't exist
-
-The README lists `mimeo/content.py` as "Landing page HTML generation". No such file exists. The project structure diagram is out of date.
-
-**Fix**: Update the README to reflect the actual file layout (templates are now fetched from GitHub repos, not generated locally).
-
-### 4. No domain validation at the CLI layer
-
-The `Domain` model exists in `models.py` with a regex validator, but it is never used anywhere. The create command accepts any string:
-
-```
-mimeo create "not a domain"
-mimeo create ""
-```
-
-Both will proceed to call GitHub and Porkbun APIs with garbage input. The Domain model should be the gatekeeper.
-
-**Fix**: Validate domain arguments at the CLI entry point using `Domain(name)`. Fail fast before making any API calls.
-
-### 5. No ownership check before creating a site
-
-`mimeo create random.com` will create a GitHub repo even if you don't own the domain in Porkbun. The tool should verify the domain exists in the registrar account before proceeding with the host setup. As-is, you can end up with orphaned GitHub repos for domains you don't control.
+**Session note (2026-09-08, same day)**: BUG 1, 2, 3, 5 fixed; the dead-code
+table's `verify_dns` chain, `--stop-on-error`, `HTTPClient` duplication/dead
+params, and the stale `config.py` comment are addressed inline in their
+sections below (search "FIXED"/"REMOVED"). `default_registrar`/`default_host`
+(D2) and `ProviderError` were deliberately left open -- see the table.
+Full suite re-run after these changes: 289 passed (was 296; -7 net from
+deleting `verify_dns`-only tests), mypy clean, ruff shows the same 5
+pre-existing errors this pass didn't touch. Line numbers elsewhere in this
+document are from before these edits and will have drifted; re-locate by
+symbol name.
 
 ---
 
-## Design Concerns
+## Purpose and Verdict
 
-### 6. CLI code reaches into private provider methods
+Mimeo's stated purpose (DEC-021): a fleet manager for domain-to-GitHub-Pages
+sites -- one command takes a domain from nothing to a live HTTPS site
+(Porkbun registrar/DNS + GitHub Pages host), then `status`/`sync` observe and
+converge the fleet. The current CLI surface is `create`, `status`, `sync`,
+`doctor` (DEC-025 collapse, merged as `56d75bd`), with `template lint` planned
+as Stage 6.
 
-`fix.py:98` calls `host._enable_https_enforcement(repo_full_name)` directly. `registrar.py:110` calls `dns_prov._get_domain_records(domain_name)`. These are private methods (underscore prefix) being used as public API.
+**Verdict: the tool achieves its purpose, and the architecture is the right
+shape for its scale.** The provider seam (`Registrar`/`DNSProvider`/`Host`
+ABCs in `mimeo/providers/base.py`) sits where the real concerns split, and the
+DEC-025 verb collapse required zero provider-layer changes -- evidence the seam
+is real. The safety engineering (DEC-022/023/026) is incident-hardened rather
+than speculative. The problems below are second-order: seven small verified
+bugs, one systemic brittleness (GitHub error semantics recovered by
+string-matching `gh` stderr), and accumulated dead weight from the verb
+collapse. Nothing threatens the core flows.
 
-If the provider implementation changes, the CLI breaks with no warning. This defeats the purpose of the ABC layer.
+### What is working well -- do not "fix" these
 
-**Fix**: Add public methods to the provider ABCs for operations the CLI needs (`enable_https`, `get_dns_records`). Make the CLI go through the public interface.
+An LLM making changes should treat the following as deliberate design, not
+incidents to correct:
 
-### 7. `_health_status` is a private function imported in CLI code
-
-`list_cmd.py` and `fix.py` both import `_health_status` from `github.py`. This function should either be public (drop the underscore) or live in a shared utilities module.
-
-### 8. GITHUB_PAGES_IPS defined in the wrong module
-
-The GitHub Pages IP addresses live in `porkbun.py` but are imported by `github.py`. The Host provider depends on the Registrar provider for its own configuration data. If someone adds a new host provider, they'd need to import DNS IPs from a registrar module.
-
-**Fix**: Move `GITHUB_PAGES_IPS` to `github.py` (or a shared constants module). The host should own its own IPs. The registrar uses them for DNS config, so it should import from the host.
-
-### 9. Duplicated `check_nameservers` in Registrar and DNSProvider
-
-Both `PorkbunRegistrar` and `PorkbunDNSProvider` have identical `check_nameservers` implementations. They inherit from different ABCs (`Registrar`, `DNSProvider`) that both declare the same method. This is a red flag that the abstraction might be wrong -- nameserver management is a registrar concern, not a DNS record concern.
-
-**Fix**: Remove `check_nameservers` from `DNSProvider` ABC. Users who need to check nameservers should use the `Registrar`.
-
-### 10. Host ABC doesn't match its concrete implementation
-
-`Host.deploy_site()` takes `(domain)` but `GitHubHost.deploy_site()` takes `(domain, template, force)`. Callers that use the ABC can't pass template or force. This means the abstraction doesn't actually support swapping hosts without changing caller code.
-
-**Fix**: Either add `template` and `force` to the ABC, or restructure so callers don't depend on host-specific parameters.
-
----
-
-## User Experience Issues
-
-### 11. No progress indication during DNS propagation
-
-DNS verification does up to 10 attempts with 5-second delays (50 seconds max). The user sees nothing during this wait. For a CLI tool, silence feels like a hang.
-
-**Fix**: Print a dot or a spinner character between attempts. Or at minimum, print "Waiting for DNS propagation (attempt 1/10)...".
-
-### 12. `load_config` prints "Loading configuration..." to stdout
-
-This message appears in text mode, JSON mode, and even when piping output to other commands. It pollutes `mimeo list --format csv | cut -d, -f1` output with a non-CSV line.
-
-**Fix**: Print to stderr or remove entirely. Config loading should be silent unless it fails.
-
-### 13. Partial failures are silent in concurrent mode
-
-When processing multiple domains concurrently, if DNS configuration fails for one domain, the summary just shows "2/3 succeeded" in yellow. The user has to scan back through the output to figure out which one failed and why. In concurrent mode, domain outputs are interleaved and hard to follow.
-
-**Fix**: Always print a per-domain failure summary at the end, even in concurrent mode.
-
-### 14. No confirmation prompt for destructive DNS changes
-
-`dns repair` deletes all matching DNS records and recreates them. There's a `--dry-run` flag but no confirmation prompt by default. If someone runs `mimeo dns repair example.com --reset-nameservers` by accident, it silently nukes and recreated their DNS.
-
-**Fix**: Add a confirmation prompt when making destructive changes, similar to `template apply`.
-
-### 15. `registrar list --with-dns` creates a new HTTP session per domain
-
-The `_enrich` function in `registrar.py` creates a new `PorkbunRegistrar` and `PorkbunDNSProvider` for every domain. For 100 domains, that's 200 HTTP sessions. This is wasteful and slower than reusing a single session.
-
-**Fix**: Create the provider instances once before the thread pool and pass them to `_enrich`.
+- **Declarative scope line**: `sync` never touches site content, never deletes
+  DNS records it does not manage, never creates repos. This is DEC-021's
+  "content is a choice, not drift" decision, restated in `sync`'s help text.
+- **Rename-then-generate-then-delete** in `_create_from_template`
+  (`mimeo/providers/host/github.py`), with rename-back on generate failure
+  (DEC-022) and numeric-ID renames (DEC-023). This exists because
+  delete-first destroyed `tepiton/laptopistan.com` once (see DEC-022 context).
+- **`create`'s ownership gate and DNS-skipping** (DEC-026):
+  `domain_exists` check before any GitHub work; DNS only touched when
+  `deploy.repo_created` is true. The implementation of the gate has a bug
+  (bug 4 below) -- fix the bug, keep the gate.
+- **`map_items` fan-out engine** (`mimeo/cli/_processing.py`): ordered partial
+  results, exceptions become error rows, one dispatch for text/json/csv.
+  Successor commands should use it, not hand-roll thread pools.
+- **Exit-code taxonomy** (`mimeo/exceptions.py` + `_categorize_error`):
+  better than most CLIs. The fallthrough default is wrong (bug 5) but the
+  taxonomy itself is sound.
+- **`gh` CLI as the GitHub auth mechanism**: delegating token handling to `gh`
+  is a legitimate choice for a personal tool. The criticism below is about
+  *error parsing*, not about using `gh`.
+- **Dropped propagation polls**: `create` and `sync` intentionally do not wait
+  for DNS propagation (DEC-025/026). Do not re-add polling calls; `verify_dns`
+  itself was dead code and has since been removed (see Dead Code).
 
 ---
 
-## Code Quality Issues
+## Bugs (verified)
 
-### 16. Dead code: `NSMismatchError` is never raised
+Ordered by user impact, not severity of code damage.
 
-`exceptions.py` defines `NSMismatchError(RegistrarError)` but nothing in the codebase raises it. The `check_nameservers` methods return a result object instead.
+### BUG 1: `domain_exists` conflates "not owned" with "API broken" -- FIXED (2026-09-08)
 
-**Fix**: Remove it or use it in `check_nameservers` when NS doesn't match.
+- **Where**: `PorkbunRegistrar.domain_exists`,
+  `mimeo/providers/registrar/porkbun.py` (~line 125).
+- **Claim**: the method catches *every* `RegistrarError` and returns `False`.
+  `_PorkbunClient._make_request` raises `RegistrarError` for invalid
+  credentials ("Porkbun API error: ..."), network failures, and rate limits
+  alike -- `retry_with_jitter` re-raises the last transient error after
+  retries are exhausted.
+- **Consequence**: `create`'s ownership gate
+  (`mimeo/cli/create.py` ~line 115) reports
+  `"{domain} is not registered in this Porkbun account -- refusing to create"`
+  when the real problem is an expired API key or a network outage. Every
+  domain in a batch fails with the same misleading message, sending the user
+  to debug ownership instead of credentials. Most user-misleading bug in the
+  repo.
+- **Fix applied**: `domain_exists` now only maps a `RegistrarError` whose
+  message contains "domain not found" (case-insensitive) to `False`; every
+  other `RegistrarError` (auth failure, network error, rate limit) propagates.
+  The match string was confirmed against this repo's own Porkbun test fixtures
+  (`tests/providers/registrar/test_porkbun.py`), which use `"Domain not
+  found"` consistently across `updateNs`/`dns/retrieve` mocked responses --
+  no live-API confirmation was done for the `getNs` endpoint specifically, so
+  re-verify against real Porkbun output if `domain_exists` starts
+  misclassifying again.
 
-### 17. Dead code: `Domain` model is never used
+### BUG 2: `create --force` help text says "DNS records are not modified" -- false -- FIXED (2026-09-08)
 
-The `Domain` class with its validation, `tld`, and `sld` properties is defined but never instantiated anywhere. The CLI operates on raw strings.
+- **Where**: `create` command docstring, `mimeo/cli/create.py` ~line 269-273.
+- **Claim**: with `--force`, `repo_created` is True, so execution falls
+  through to the DNS block (~line 159) and `configure_dns` deletes-then-
+  recreates every managed record. DEC-026's own text says DNS is touched "on
+  first creation or explicit `--force` replace."
+- **Cause**: the sentence is a leftover from `template apply`'s help text that
+  survived the Stage 5A merge (`template apply` was content-only and did skip
+  DNS).
+- **Fix applied**: corrected the sentence to say DNS records are also
+  reconfigured on `--force`, unless `--skip-dns` is also passed.
 
-### 18. `--format` shadows Python builtin
+### BUG 3: `status --source dns --problems` exits 0 on API errors -- FIXED (2026-09-08)
 
-Multiple CLI commands use `format` as a parameter name (e.g., `list_cmd.py:30`). This shadows the Python builtin `format()`. While it works because Click parameters are local, it's a linting red flag and can cause confusion.
+- **Where**: `_status_dns_check`, `mimeo/cli/status.py` (~line 858-927).
+- **Claim**: error rows are built (both the internal `except` around
+  `check_dns_drift` and `_on_error` set `error`/`error_category`), the text
+  renderer prints them, but the function never calls `exit_on_errors`.
+  Verified by grep: `exit_on_errors` is called at status.py lines 611
+  (`_status_full`), 786 (`_status_porkbun`), 855 (`_status_dns_show`) -- and
+  nowhere in `_status_dns_check` or after its `render_results`.
+- **Consequence**: contradicts the documented contract ("API errors exit
+  nonzero with partial results", ARCHITECTURE.md) and silently breaks scripts
+  that branch on `$?`.
+- **Fix applied**: added `exit_on_errors(results)` after `render_results` in
+  `_status_dns_check`, matching `_status_dns_show`. `_status_github` was left
+  alone, as noted below -- its semantics are a separate decision.
+- **Note kept**: `_status_github` still lacks the call, but that is
+  defensible-by-design -- its health-fetch failures become `health:
+  "pages_error"` rows with no `error` field (treated as findings, not command
+  errors), and a `list_mimeo_repositories` failure raises to the
+  command-level handler. Do not "fix" `_status_github` without deciding its
+  semantics first.
 
-**Fix**: Use `output_format` consistently (as `registrar.py` already does).
+### BUG 4: unexpected exceptions (programming errors) categorized as "transient"
 
-### 19. `test_cli.py` has massive mock setup duplication
+- **Where**: `_categorize_error` fallthrough, `mimeo/cli/_processing.py`
+  ~line 129 (`return EXIT_TRANSIENT, "provider"`); also the command-level
+  `except Exception` handlers in `status` (~line 461) and `sync` (~line 283).
+- **Claim**: a `KeyError` from a dict-shape change (e.g., Porkbun or GitHub
+  API response changes a field name) prints `[provider] ...` and exits 5 --
+  claiming a transient network condition. Misleads both users and any
+  automation retrying on exit code 5.
+- **Fix**: unknown exception types should map to `EXIT_GENERAL` (1) with
+  category `"error"`; reserve `EXIT_TRANSIENT` for `NetworkError`/`APIError`
+  5xx/429 and the matched provider cases. `EXIT_GENERAL` currently has almost
+  no users (`load_config`'s catch-all only), which is itself a smell.
 
-Almost every test repeats the same 15-line mock setup for `mock_host`, `mock_registrar`, `mock_dns_provider`. The file is ~1,400 lines when it could be ~800 with proper fixture reuse.
+### BUG 5: `--stop-on-error` flag on `create` is accepted and ignored -- FIXED (2026-09-08)
 
-**Fix**: Extract the common "all providers mocked successfully" setup into a single fixture or decorator.
+- **Where**: declared `mimeo/cli/create.py` ~line 213, bound to parameter at
+  ~line 256, referenced nowhere else. Verified by grep across `mimeo/`.
+- **Consequence**: users who pass it get silent continue-on-error while
+  believing they requested stop-on-error.
+- **Fix applied**: deleted the option and its parameter, consistent with how
+  DEC-025 treated dead surface. Also removed its mentions from `README.md`
+  and `docs/TROUBLESHOOTING.md` (no test referenced it).
 
-### 20. Thread safety of `click.echo` in concurrent mode
+### BUG 6: missing-`schema_version` warning is invisible to actual users
 
-`click.echo()` and `click.secho()` are not thread-safe. In concurrent mode, multiple threads write to stdout simultaneously, which can produce garbled output. The `_console_lock` exists in `_processing.py` but isn't used in the per-domain logging functions (`_process_single_domain`, `_repair_domain`, `_apply_template`).
+- **Where**: `Config.load`, `mimeo/config.py` ~lines 58-63 uses
+  `warnings.warn(..., DeprecationWarning)`.
+- **Claim**: Python hides `DeprecationWarning` outside `__main__` by default;
+  CLI users never see it, only pytest does (hence the 15 warnings in the test
+  run). The nudge ("Add 'schema_version = 1' to suppress this warning")
+  reaches an audience of zero.
+- **Fix**: print a visible line to stderr, or drop the check. Related stale
+  comment at ~line 90: "GitHub username (use default_org from config, or get
+  from gh CLI)" -- there is no gh fallback; `github_username` is a hard
+  requirement (missing-config error at ~line 101).
 
-**Fix**: Route all concurrent output through the lock, or buffer per-thread and print sequentially at the end.
+### BUG 7: `get_pages_health` cannot distinguish "no Pages" from "couldn't check"
+
+- **Where**: `GitHubHost.get_pages_health`, `mimeo/providers/host/github.py`
+  ~lines 695-710: any `HostError` returns `pages_configured: False`, which
+  `health_status` maps to `pages_error` (red `error` in `status`).
+- **Consequence**: a transient network blip during a fleet sweep paints
+  healthy sites as broken -- exactly the false alarm a monitoring tool must
+  avoid, and it erodes trust in the SITE column.
+- **Fix**: let the caller distinguish. Minimal: propagate unexpected
+  `HostError`s and only map genuine 404 ("Pages not configured") to the
+  `pages_configured: False` shape. This requires structured status codes --
+  see the systemic section next; fixing this well is blocked on that.
 
 ---
 
-## Minor Issues
+## Systemic weakness: error semantics via string matching over `gh` stderr
 
-### 21. `configure_dns` is not transactional
+Every GitHub operation is a subprocess (`subprocess.run(["gh", ...])`), and
+the meaning of failures is recovered by substring-matching error text in
+three separate places:
 
-The method deletes all matching records, then creates new ones. If creation fails partway through (e.g., API error on record 3 of 5), the domain is left in a broken state with missing records. There's no rollback.
+1. `"422" in str(e)` for rename conflicts -- `_rename_repository`,
+   `github.py` ~line 228.
+2. `"certificate does not exist" in str(e).lower()` for HTTPS enforcement --
+   `enable_https_enforcement`, `github.py` ~line 631.
+3. Keyword tuples `("502", "503", "500", "rate limit", "timeout")` in
+   `mimeo/utils/retry.py` (`_TRANSIENT_HOST_KEYWORDS`, ~line 16) and again,
+   differently, in `_processing.py` (`_TRANSIENT_KEYWORDS` adds
+   "connection", ~line 93).
 
-**Mitigation**: The DNS records are simple enough that re-running the command fixes it. But the user should be warned.
+This works today because it was validated against live `gh` output, but it is
+brittle across `gh` versions (error wording has changed before) and it is the
+root cause shape behind BUG 1 (Porkbun), BUG 7, and the keyword lists' gradual
+divergence.
 
-### 22. `list_mimeo_repositories` hardcodes limit of 1000
+**Recommended fix, incremental**: give `HostError` a `status_code` attribute
+(mirror `APIError` in `mimeo/exceptions.py`); parse `HTTP <code>` from `gh`
+stderr in exactly one place (`_run_gh_command`/`_gh_api` in `github.py` -- gh
+prints e.g. `gh: Not Found (HTTP 404)`); make all three call sites branch on
+the code instead of the text.
 
-GitHub search API caps at 1000 results. For this tool's use case, that's fine. But if someone manages thousands of domains through mimeo, they'll silently not see all of them.
+**Recommended fix, full**: replace the `gh` subprocess with `requests` +
+`GH_TOKEN`. `GitHubHost.__init__` already accepts a `token` parameter but only
+forwards it as an env var to the subprocess -- the seam exists. This also
+buys speed: every GitHub call is currently a process spawn, so `status --all`
+costs several spawns per domain, and every `GitHubHost` construction runs
+`gh auth status` (~line 73). `create` constructs one `GitHubHost` per domain
+plus one at CLI level for `validate_template`. The trade-off is taking on
+token management that `gh` currently handles; for a single-user tool that is
+a real cost, so the incremental fix is acceptable indefinitely.
 
-### 23. `check_dns_drift` ignores TTL differences
+Adjacent data-freshness risks (document nowhere; consider a `doctor` check or
+a README note):
 
-Records with matching type/name/content but different TTLs are considered "ok". This is probably fine for the use case but could mask configuration drift.
-
-### 24. `fix https` has no `--workers` option
-
-Every other multi-domain command supports `--workers` for concurrency. `fix https` processes targets sequentially in a for loop.
-
-### 25. Exit code 1 is never used
-
-The exit code constants skip from 0 (`EXIT_OK`) to 2 (`EXIT_CONFIG`). Exit code 1 (the standard Unix error code) is never used, which might confuse users checking `$?`.
+- `GITHUB_PAGES_IPS` is hardcoded (`github.py` ~line 24). GitHub publishes
+  the current set at `api.github.com/meta` (`pages` field) and has changed
+  them historically. A wrong list means silently pointing new domains at
+  stale IPs while `status` reports "ok" against the same stale expectations.
+- Fleet discovery rides `gh search repos topic:mimeo`
+  (`list_mimeo_repositories`, `github.py` ~line 742). GitHub's search index
+  is eventually consistent: a site created seconds ago may not appear in
+  `status`, which reads as a bug to a user who doesn't know. There is also
+  the search API's 1000-result cap.
 
 ---
 
-## What's Done Well
+## Design concerns (not bugs)
 
-- **Exception hierarchy** is clean and maps well to exit codes. `_categorize_error` does a good job classifying failures.
-- **Retry logic** with exponential backoff and jitter is production-quality. The `_is_retryable` function correctly distinguishes transient from permanent failures.
-- **Provider abstraction via ABCs** is the right approach. Even though it has coupling issues now, the shape is correct for adding Cloudflare, Route53, Netlify, etc.
-- **Context manager pattern** for providers ensures sessions are cleaned up.
-- **Dry-run support** across create, dns repair, and template apply is thorough.
-- **Concurrent processing** with `ThreadPoolExecutor` and ordered results is well-implemented.
-- **Test coverage** is strong at 244 tests with good use of `responses` and mocking.
-- **JSON logging mode** (`--log-format json`) makes the tool scriptable.
-- **CSV output** across list commands makes data exportable.
+### D1: `sync`'s "apply N missing records" rewrites more than N
+
+`_sync_domain` (`mimeo/cli/sync.py` ~lines 222-228) calls
+`check_dns_drift`, and if anything is missing calls `configure_dns(domain,
+expected)`. But `configure_dns` (`porkbun.py` ~line 232) deletes *all*
+existing records whose (type, normalized-name) is in the managed set, then
+recreates the full expected set. One missing record churns four correct apex
+A records and the www CNAME through a delete/recreate cycle, with a brief
+degraded window (TTL 600 caching masks it in practice). The action message
+("apply 1 missing DNS record(s)") also under-describes what happens.
+`configure_dns` also re-fetches the record list that `check_dns_drift`
+just fetched (double fetch).
+
+**Improvement**: a create-only-missing path for `sync` (Porkbun's
+`/dns/create` per record needs no delete first). Keep delete-then-recreate
+for `create`'s first-provision case, where clearing conflicts is the point.
+
+### D2: provider pluggability is advertised but not wired
+
+`Config` loads and keeps `default_registrar` / `default_host`
+(`mimeo/config.py` ~lines 121-122), but every command instantiates
+`PorkbunRegistrar` / `PorkbunDNSProvider` / `GitHubHost` by name. The config
+fields suggest a provider factory that does not exist. Either wire one (a
+simple dict lookup keyed on those fields) or drop the fields -- a config
+option that does nothing is worse than no option, because it implies
+support.
+
+Related: `DNSProvider.verify_dns` is an *abstract* method (`base.py`
+~line 67) that no production code calls anymore (both callers dropped in
+DEC-025/026). Every future DNS provider must implement dead code. See Dead
+Code below.
+
+### D3: one `requests.Session` shared across worker threads
+
+`status` and `sync` construct one `PorkbunRegistrar`/`PorkbunDNSProvider`
+and pass them into `map_items` closures running on up to 5 threads; each
+provider holds one `HTTPClient` with one `requests.Session`
+(`_PorkbunClient.__init__`). urllib3's connection pool is thread-safe, but
+`requests.Session` cookie handling is not formally guaranteed thread-safe.
+Porkbun responses set no cookies, so the practical risk today is near zero --
+this is a latent landmine, not an active bug. A per-thread client or a lock
+around `_make_request` would make it a non-thought. (Note: the 2026-03-28
+review's item 15 pushed *toward* shared sessions from the opposite problem --
+per-domain session creation -- which was fixed; the fix overshot into the
+sharing case.)
+
+### D4: triplicated generate-race retry loop in `github.py`
+
+The "contents API 404s on a freshly generated repo until GitHub populates the
+file tree" workaround (5 attempts x 2s) is copy-pasted three times:
+`_customize_default_template` (~line 356), `_delete_file` (~line 417),
+`_delete_directory` (~line 457). Extract one helper (e.g.
+`_get_contents_with_retry(repo, path) -> Dict | None`). Any future
+contents-API consumer will otherwise copy-paste a fourth.
+
+### D5: silently ignored flag combinations
+
+`status --health` without `--source github` and `--problems` with
+`--source github`/`porkbun` are accepted and ignored (`mimeo/cli/status.py`,
+flag parsing ~lines 440-460). A one-line "ignored here" warning on stderr
+would prevent confusion. Similarly `doctor` exits `EXIT_CONFIG` even for
+nameserver-mismatch failures, which are not config problems.
 
 ---
 
-## Recommendations (Priority Order)
+## Dead code / dead surface (pre-1.0 is the cheap time to cut)
 
-1. Fix the env var name in `config.toml.example` (2 minutes, breaks setup for env-var users)
-2. Remove or implement `--force-dns-update` from README (5 minutes)
-3. Add domain validation at CLI entry points using the existing `Domain` model (30 minutes)
-4. Move "Loading configuration..." to stderr or remove it (5 minutes)
-5. Make `_health_status` and `_enable_https_enforcement` public API on the Host class (20 minutes)
-6. Move `GITHUB_PAGES_IPS` to `github.py` (15 minutes)
-7. Add progress indication during DNS propagation (30 minutes)
-8. Add ownership check in `create` before deploying to GitHub (1 hour)
-9. Reuse HTTP sessions in `registrar list --with-dns` (30 minutes)
-10. Remove dead code (`NSMismatchError`, unused `Domain`) (15 minutes)
+| Item | Where | Note |
+|:--|:--|:--|
+| `verify_dns` chain | `base.py` ABC slot, `porkbun.py` impl (only raiser of `DNSError`), ~7 mock setups in `tests/test_cli.py` | **REMOVED (2026-09-08)**. Deleted the ABC slot, the `PorkbunDNSProvider` implementation, and its now-dead imports (`time`, `Callable`, `DNSError`) from `porkbun.py`. Also deleted 6 direct unit tests in `tests/providers/registrar/test_porkbun.py`, the stub + test in `tests/test_providers_base.py`, and 10 dead `mock_dns_provider.verify_dns` preset/assert lines across `tests/test_cli.py`. Test count dropped from 296 to 289 (net -7, all `verify_dns`-only tests). |
+| `--stop-on-error` | `create.py` | **REMOVED (2026-09-08)**. See BUG 5. |
+| `HTTPClient.get/put/delete` | `mimeo/utils/http.py` | **PARTIALLY ADDRESSED (2026-09-08)**. Kept the public `get`/`put`/`delete` methods (still exercised by real, working tests in `tests/utils/test_http.py` -- not just dead surface), but collapsed all four verbs onto one `_request(method, ...)` helper, removing the ~90-line duplication. `post` remains the only one called by production code (`_PorkbunClient`). |
+| `max_retries`/`backoff_factor` params | `http.py` `__init__` | **REMOVED (2026-09-08)**. Dropped both dead constructor params; updated `tests/utils/test_http.py::test_initialization` to match. Nothing external imported this class, and nothing passed these params in production code. |
+| `default_registrar`/`default_host` | `config.py` | D2. **Deliberately left open** -- this is documented, user-facing config surface (`config.toml.example`'s `[defaults]` section, covered by `tests/test_config.py`), and the fix requires a real decision (wire a provider factory vs. drop the fields), not mechanical sweeping. Revisit as its own task. |
+| `ProviderError` | `exceptions.py` | **Left as-is** -- it's the real parent of `RegistrarError`/`HostError`, not literally unreachable code; the review's own text frames this as a taxonomy-grew-ahead-of-use note, not a removal recommendation. |
+| stale comment "or get from gh CLI" | `config.py` ~line 90 | **FIXED (2026-09-08)**. Comment now says the GitHub username is required with no `gh` CLI fallback. The `warnings.warn(..., DeprecationWarning)` visibility problem itself (BUG 6) is unfixed -- that's a behavior change, out of scope for this pass. |
+
+---
+
+## Minor and cosmetic
+
+- Full-join EXPIRES column width computed from the untruncated date string
+  but displays `[:10]` (`status.py` `_text`, ~lines 95 vs 115) -- column is
+  permanently ~9 chars too wide.
+- `create`'s dry-run duplicates `required_dns_records` logic
+  (`create.py` ~lines 89-101) instead of calling it. It does this to avoid
+  constructing a `GitHubHost` (whose `__init__` spawns `gh auth status`) --
+  itself a symptom of the constructor side effect. Either accept the
+  duplication with a comment or make record-construction a module function.
+- `doctor` runs `gh auth status` twice (auth check + scope check) --
+  `_check_gh_auth` and `_check_gh_workflow_scope` each spawn it.
+- `mimeo/cli/__init__.py` exports underscore-private `_check_*` functions
+  (and `_categorize_error`, `_emit`) purely for tests, via `__all__`. Works,
+  but every consumer of privacy is a test is a signal the functions want a
+  home (e.g., a `checks` module for doctor).
+- `_check_gh_workflow_scope` parses human-readable `gh auth status` output
+  ("Token scopes: ..."). Pragmatic; `gh` offers no structured scope query.
+  Leave unless the full API-client migration happens.
+- `_handle_response`'s `isinstance(e, requests.HTTPError): raise` branch in
+  `http.py` `get/post/put/delete` is unreachable -- `_handle_response`
+  converts `HTTPError` to `APIError` before it can escape.
+- Domain validation regex (`_processing.py` ~line 42) is ASCII-only; IDNs
+  must be punycoded by the user. Acceptable; worth a help-text mention at
+  most.
+
+---
+
+## Test suite assessment
+
+- 296 tests, 0.49s, fully mocked (`responses`, `unittest.mock`,
+`CliRunner`). Provider layer coverage is genuinely good -- DEC-022 rollback
+paths, drift math, normalization, retry behavior all have direct tests.
+- The blind spot is integration reality: every incident in the decision log
+  (DEC-022's destroyed repo, DEC-026's DNS-rewrite-on-existing-repo, the
+  Stage 5C drift-reporting bug) was found by live testing, not by the suite.
+  This is the strongest argument for Track B's E2E lane (blocked on a test
+  account/org per CONTEXT.md). Priority should track unblocking it.
+- `tests/test_cli.py` (1,266 lines) still has the mock-setup duplication the
+  March review flagged (~163 `MagicMock`/`patch` occurrences). The March fix
+  suggestion (shared "all providers mocked OK" fixture) still applies.
+- Stale mock surface tracks dead code: `verify_dns` appears in ~7 test setups
+  that assert nothing about it. Deleting dead code should sweep these.
+
+---
+
+## Recommendations (priority order)
+
+1. ~~**Fix misleading-diagnosis bugs**: BUG 1 (`domain_exists` conflation),
+   BUG 2 (`--force` help text), BUG 3 (missing `exit_on_errors`).~~ **Done
+   2026-09-08.**
+2. **Structure the error path**: `status_code` on `HostError`, parse gh's
+   `HTTP <code>` in one place, replace keyword matching in
+   `_rename_repository` / `enable_https_enforcement` / `retry.py` /
+   `_processing.py`; route unexpected exceptions to `EXIT_GENERAL` (BUG 4).
+   Unblocks a proper fix for BUG 7. **Not started.**
+3. **Land DEC-024 -- and give the manifest `TEMPLATE_DEV_PATHS` too**.
+   `TEMPLATE_DEV_PATHS = ["README.md", "docs/"]` (`github.py` ~line 22) is
+   the same class of template-specific knowledge as `mimeo.lol`'s hardcoded
+   title: per-template fact encoded in mimeo's source. The
+   `mimeo.template.json` manifest being designed is the natural home for
+   both, and Stage 6's `template lint` then validates both. **Not started;
+   this is Stage 6's actual blocker (DEC-024).**
+4. ~~**Cut the dead surface** (table above); `verify_dns`'s ABC slot is the
+   one that taxes the future most.~~ **Mostly done 2026-09-08** -- `verify_dns`,
+   `--stop-on-error`, `HTTPClient`'s dead ctor params and get/put/delete
+   duplication, and the stale `config.py` comment are cleared. Still open:
+   `default_registrar`/`default_host` (D2) and `ProviderError` -- both
+   deliberately left, see the dead-code table.
+5. **Track B E2E lane** -- the mocked suite's blind spot is precisely where
+   every real incident has come from. **Not started; blocked on a test
+   account/org per `docs/CONTEXT.md`.**
+6. Longer term: fetch Pages IPs from `api.github.com/meta` (cache + hardcoded
+   fallback); gentler `sync` apply path (D1); provider factory or config-field
+   removal (D2). **Not started.**
+
+---
+
+## Disposition of the 2026-03-28 review
+
+That review (244 tests, v0.1.0) is superseded; its findings were triaged as
+part of this pass:
+
+- **Fixed since**: README `--force-dns-update` phantom flag; env var name in
+  `config.toml.example`; README structure; domain validation at CLI layer
+  (`validate_domains`); ownership check (DEC-026); public
+  `health_status`/provider methods for CLI-facing operations (DEC-020);
+  `GITHUB_PAGES_IPS` moved to `github.py`; `check_nameservers` deduplicated
+  into `PorkbunRegistrar` only; per-domain HTTP session churn in fleet
+  commands (now shared -- see D3 for the new nuance); DNS-propagation silence
+  (polls since dropped entirely per DEC-025/026); `NSMismatchError` and
+  `Domain` dead classes (deleted with the models' slimming); destructive
+  `--force` confirmation prompt (Stage 5A).
+- **Still open in new form**: mock duplication in `test_cli.py`; exit-code
+  edge cases (was "exit 1 never used" -- now BUG 4); `configure_dns`
+  non-transactionality (accepted with re-run mitigation; D1 narrows the
+  blast radius for `sync`); search-API 1000 cap (noted under systemic
+  weakness); TTL-blind drift comparison (still accepted -- TTL is not part
+  of desired state by design).

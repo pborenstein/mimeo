@@ -32,10 +32,6 @@ class ConcreteDNSProvider(DNSProvider):
         """Test implementation."""
         pass
 
-    def verify_dns(self, domain: str, records: list[DNSRecord]) -> bool:
-        """Test implementation."""
-        return True
-
 
 class ConcreteHost(Host):
     """Concrete implementation of Host for testing."""
@@ -91,14 +87,6 @@ def test_dns_provider_has_configure_dns_method() -> None:
     provider = ConcreteDNSProvider()
     records = [DNSRecord(type="A", name="@", content="1.2.3.4")]
     provider.configure_dns("example.com", records)
-
-
-def test_dns_provider_has_verify_dns_method() -> None:
-    """DNSProvider should have verify_dns method."""
-    provider = ConcreteDNSProvider()
-    records = [DNSRecord(type="A", name="@", content="1.2.3.4")]
-    result = provider.verify_dns("example.com", records)
-    assert result is True
 
 
 def test_host_can_be_instantiated() -> None:

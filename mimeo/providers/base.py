@@ -63,22 +63,6 @@ class DNSProvider(ABC):
         """
         pass
 
-    @abstractmethod
-    def verify_dns(self, domain: str, records: list[DNSRecord]) -> bool:
-        """Verify DNS records have propagated.
-
-        Args:
-            domain: Domain name to verify
-            records: Expected DNS records
-
-        Returns:
-            True if all records are verified, False otherwise
-
-        Raises:
-            DNSError: If verification fails unexpectedly
-        """
-        pass
-
 
 @dataclass
 class DeployResult:

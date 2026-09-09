@@ -925,3 +925,4 @@ def _status_dns_check(
         csv_rows=_csv_rows,
         text=_text_dns_check,
     )
+    exit_on_errors(results)

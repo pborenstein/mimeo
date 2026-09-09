@@ -486,3 +486,69 @@ account.
 `mimeo/cli/registrar.py` (deleted), `tests/test_cli.py`,
 `tests/test_status.py`, `docs/IMPLEMENTATION.md`, `docs/CONTEXT.md`.
 Not yet committed.
+
+## Entry 48: Implemented Stage 5C; live testing found two more bugs
+(sync's drift reporting, template dev-file strip race) (2026-09-09)
+
+**What**: Implemented Stage 5C — `sync` absorbs `dns repair`/`fix https`.
+Resolved DEC-025's open question by reading source before writing any
+code: `sync --all`'s existing HTTPS-fixable check (`get_pages_health()` +
+`health_status() == "fixable"`) already duplicated `fix https`'s
+auto-discovery exactly, so no new flag was needed. Deleted
+`mimeo/cli/dns.py` and `mimeo/cli/fix.py` outright. Deliberately did not
+add the `--wait` flag the original plan called for — dropped `dns
+repair`'s propagation poll entirely instead, same reasoning DEC-026 used
+for `create`. No test relocation needed: `tests/test_sync.py` already
+covered every case the deleted test classes did. (Commit `b96d493`.)
+
+Live-verifying 5C against `002373.xyz` (real extra-CNAME drift left over
+from Entry 46/47) surfaced a genuine bug, not just a confirmation:
+`sync --dry-run` reported `ok` for a domain `status` correctly reports as
+`DNS: drift`. `_sync_domain` only ever inspected `drift["missing"]`,
+never `drift["status"]`/`drift["extra"]` — an extra-only result fell
+through to "ok" silently. User asked "why does status think this is
+drift but sync doesn't" then "can we make status and sync use the same
+terms" — fixed by having `sync` surface the same `dns_status`/`extra`
+fields and literal `"drift"` term `status` already uses, rather than
+inventing sync-specific wording. First fix included a "-- see mimeo
+status" pointer in the message; user correctly called it useless (you're
+already looking at the fact status would report) and it was dropped in
+favor of stating *why* sync leaves it alone. (Commits `585e489`,
+`053ff52`.)
+
+Live-testing `create --template laptopistan.com` (a non-default template,
+first real test of Entry 46's `_strip_template_dev_files` outside
+mimeo.lol) found the generated repo still had the template's `README.md`.
+Root cause: `_delete_file`/`_delete_directory` treated any `HostError`
+from the existence-check read as "file doesn't exist" — including a
+fresh repo's transient "repository is empty" 404 before
+generate-from-template finishes populating the tree. That's the identical
+race `_customize_default_template` already retries around (5x/2s); the
+strip helpers had no equivalent, so a real file could silently survive.
+
+**Why**: Both bugs were invisible to the mocked test suite because mocks
+don't model the specific failure mode (an HTTP 404 that's actually "not
+ready yet" vs. "genuinely absent"; a `status` field with three states
+collapsed into a boolean check) — same lesson as Entry 46's DEC-026 bugs.
+Live-testing against real domains/repos keeps finding real bugs; mocks
+alone would not have caught either.
+
+**How**: `sync` now sets `dns_status`/`extra` on its result row and
+reports literal `"drift"` instead of falling through to `"ok"`; no change
+to what `sync` acts on (still never deletes extras). `_delete_file`/
+`_delete_directory` now retry their existence-check call up to 5x/2s
+before concluding a path is genuinely absent, matching
+`_customize_default_template`'s pattern. Manually deleted the stray
+`README.md` from the live `tepiton/002372.xyz` repo. 294 tests passing,
+mypy/ruff clean throughout.
+
+**Decisions**: DEC-025 updated with the resolved open question and both
+bugs' root causes.
+
+**Files**: `mimeo/cli/dns.py`/`mimeo/cli/fix.py` (deleted),
+`mimeo/cli/__init__.py`, `mimeo/cli/create.py`, `mimeo/cli/sync.py`,
+`mimeo/providers/host/github.py`, `tests/test_cli.py`,
+`tests/test_sync.py`, `tests/providers/host/test_github.py`,
+`README.md`, `docs/TROUBLESHOOTING.md`, `docs/DECISIONS.md`,
+`docs/IMPLEMENTATION.md`, `docs/CONTEXT.md`. Commits `b96d493`,
+`585e489`, `053ff52`, `497f43f`.

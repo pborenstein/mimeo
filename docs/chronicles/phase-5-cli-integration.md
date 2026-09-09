@@ -242,6 +242,22 @@ Implemented the main `mimeo create` command that orchestrates the complete site 
 
 **Result**: ✅ Now shows all 63 repos. JSON/CSV enable scripting (`mimeo list --format csv | tail -n +2 | cut -d, -f1` for domain list). 151 tests passing.
 
+## Entry 12: Idempotent Create Command for Existing Repos (2026-02-16)
+
+**What**: Fixed create command to handle existing repositories gracefully instead of failing on push rejection.
+
+**Why**: Running `mimeo create caponislands.com` on an existing repo failed with a git push rejection. User needed to configure DNS for existing sites without full redeployment.
+
+**How**:
+- deploy_site() checks if repo exists via `_gh_api(f"repos/{owner}/{repo_name}")` before pushing
+- Sets `_repo_was_created` flag to communicate new vs existing to CLI
+- Existing repos: skip content push, still configure GitHub Pages settings and DNS
+- CLI messaging distinguishes new ("Repository created") from existing ("Repository exists / Skipped content push")
+
+**Files**: Commit 75c27c1 (github.py, cli.py, 2 test files)
+
+**Result**: ✅ create command is now idempotent. Tested with caponislands.com. 152 tests passing.
+
 ## Entry 13: Remove Dead Abstractions and Structured DeployResult (2026-02-16)
 
 **What**: Removed unused code that accumulated during initial design phase, replaced instance flag side-channel with a proper return type.
@@ -261,22 +277,6 @@ Implemented the main `mimeo create` command that orchestrates the complete site 
 **Files**: mimeo/models.py, mimeo/config.py, mimeo/providers/base.py, mimeo/providers/host/github.py, mimeo/cli.py, all test files
 
 **Result**: ✅ 145 tests passing. Ruff clean. No mypy regressions (pre-existing issue in cli.py heterogeneous dict).
-
-## Entry 12: Idempotent Create Command for Existing Repos (2026-02-16)
-
-**What**: Fixed create command to handle existing repositories gracefully instead of failing on push rejection.
-
-**Why**: Running `mimeo create caponislands.com` on an existing repo failed with a git push rejection. User needed to configure DNS for existing sites without full redeployment.
-
-**How**:
-- deploy_site() checks if repo exists via `_gh_api(f"repos/{owner}/{repo_name}")` before pushing
-- Sets `_repo_was_created` flag to communicate new vs existing to CLI
-- Existing repos: skip content push, still configure GitHub Pages settings and DNS
-- CLI messaging distinguishes new ("Repository created") from existing ("Repository exists / Skipped content push")
-
-**Files**: Commit 75c27c1 (github.py, cli.py, 2 test files)
-
-**Result**: ✅ create command is now idempotent. Tested with caponislands.com. 152 tests passing.
 
 ## Entry 14: Health Check and HTTPS Fix for List Command (2026-02-16)
 

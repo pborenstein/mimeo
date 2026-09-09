@@ -1,81 +1,5 @@
 # Phase 6: Hardening Chronicles
 
-## Entry 26: Replace content generation with GitHub template repo API (2026-03-19)
-
-**What**: Deleted `content.py` and the git-init/push flow. `mimeo create` now
-instantiates repos via `POST /repos/tepiton/{template}/generate`. Added
-`--template` flag (default: `mimeo.lol`). Set `is_template=true` on
-`tepiton/mimeo.lol` via API.
-
-**Why**: Simpler, fewer moving parts. No local content generation, no temp
-dirs, no git operations. Template repos in `tepiton` org are the source of
-truth for site content and GitHub Actions workflows.
-
-**How**: Added `_create_from_template()` to `GitHubHost`, removed
-`_create_repository()` and `_init_and_push_repository()`. Updated `deploy_site`
-signature (no `content_path`). Deleted `test_content.py`. 242 tests passing.
-
-**Decisions**: See DEC-017.
-
-**Files**: `mimeo/providers/host/github.py`, `mimeo/cli.py`, `mimeo/providers/base.py`
-
-## Entry 24: Documentation sync (2026-02-25)
-
-**What**: Updated ARCHITECTURE.md and README.md to reflect all Phase 6 additions
-that had been implemented but not yet documented.
-
-**Why**: Docs lagged behind implementation. ARCHITECTURE.md still described the
-old two-ABC design (`Registrar` + `Host`); README.md was missing several flags
-and the global `--log-format` option entirely.
-
-**How**:
-- ARCHITECTURE.md: component map, provider abstractions, create/list/doctor/registrar-list
-  workflows, exit codes table, structured logging section — all updated to match code
-- README.md: global options section (`--log-format`), `--force-dns-update`, `--dns-check`,
-  `doctor [domain...]` NS check, `utils/retry.py` in project structure
-- CONTEXT.md: updated to 2026-02-25
-
-**Files**: docs/ARCHITECTURE.md, README.md, docs/CONTEXT.md
-
-## Entry 23: mimeo registrar list subcommand (2026-02-20)
-
-**What**: Added `mimeo registrar list` — lists all domains in the Porkbun account with
-NS status, expiry, and optional DNS records. Concurrent enrichment, three output formats.
-Also renamed `list` function to `list_sites` in cli.py to stop shadowing Python's builtin.
-
-**Why**: `scripts/fetch_porkbun_domains.py` did this as a standalone script; moving it into
-the CLI makes it discoverable and consistent. The `list` shadowing had caused two separate
-bugs (`list(enumerate(...))` calling the Click command, `isinstance(data, list)` failing in tests).
-
-**How**:
-- `Registrar` ABC: `list_domains() -> list[dict[str, Any]]` abstract method
-- `PorkbunRegistrar.list_domains()`: calls `/domain/listAll`, returns domain list
-- `cli.py`: `registrar` group + `registrar_list` command; concurrent `_enrich()` closure
-  per domain (NS via `check_nameservers()`, DNS via `_get_domain_records()`)
-- `list` Click command renamed to `list_sites` (no CLI surface change)
-- 81 new tests (258 total); mypy and ruff clean
-- Docs: README, docs/LIST_COMMAND.md, docs/IMPLEMENTATION.md updated
-
-**Files**: commit acb399b
-
-## Entry 22: --force-dns-update flag (2026-02-20)
-
-**What**: Added `--force-dns-update` flag to `mimeo create`. When NS mismatch is detected,
-resets the domain's nameservers to Porkbun via API then proceeds with full DNS config.
-
-**Why**: Real-world use case — domain registered at Porkbun with NS delegated to Cloudflare.
-Without the flag, mimeo warns and skips DNS. With it, ownership is asserted back to Porkbun.
-
-**How**:
-- `Registrar` ABC: added `update_nameservers(domain)` abstract method
-- `PorkbunRegistrar.update_nameservers()`: calls `/domain/updateNs/{domain}` with `PORKBUN_NAMESERVERS`
-- `_process_single_domain`: `force_dns_update` param; on mismatch calls `update_nameservers` then falls through to DNS config
-- `create` command: `--force-dns-update` flag, threaded through sequential and concurrent paths
-- 5 new tests (244 total); mypy and ruff clean
-
-**Files**: mimeo/providers/base.py, mimeo/providers/registrar/porkbun.py, mimeo/cli.py,
-tests/test_providers_base.py, tests/test_cli.py, tests/providers/registrar/test_porkbun.py
-
 ## Entry 15: Documentation Refresh (2026-02-17)
 
 **What**: Rewrote README and refreshed all planning docs to match current state. Moved PLAN.md to archive.
@@ -201,6 +125,63 @@ config; warn-and-skip if NS doesn't point at Porkbun. See DEC-015, DEC-016.
 
 **Files**: mimeo/providers/base.py, mimeo/providers/registrar/porkbun.py, mimeo/providers/host/github.py, mimeo/cli.py, mimeo/models.py, mimeo/exceptions.py, tests/
 
+## Entry 22: --force-dns-update flag (2026-02-20)
+
+**What**: Added `--force-dns-update` flag to `mimeo create`. When NS mismatch is detected,
+resets the domain's nameservers to Porkbun via API then proceeds with full DNS config.
+
+**Why**: Real-world use case — domain registered at Porkbun with NS delegated to Cloudflare.
+Without the flag, mimeo warns and skips DNS. With it, ownership is asserted back to Porkbun.
+
+**How**:
+- `Registrar` ABC: added `update_nameservers(domain)` abstract method
+- `PorkbunRegistrar.update_nameservers()`: calls `/domain/updateNs/{domain}` with `PORKBUN_NAMESERVERS`
+- `_process_single_domain`: `force_dns_update` param; on mismatch calls `update_nameservers` then falls through to DNS config
+- `create` command: `--force-dns-update` flag, threaded through sequential and concurrent paths
+- 5 new tests (244 total); mypy and ruff clean
+
+**Files**: mimeo/providers/base.py, mimeo/providers/registrar/porkbun.py, mimeo/cli.py,
+tests/test_providers_base.py, tests/test_cli.py, tests/providers/registrar/test_porkbun.py
+
+## Entry 23: mimeo registrar list subcommand (2026-02-20)
+
+**What**: Added `mimeo registrar list` — lists all domains in the Porkbun account with
+NS status, expiry, and optional DNS records. Concurrent enrichment, three output formats.
+Also renamed `list` function to `list_sites` in cli.py to stop shadowing Python's builtin.
+
+**Why**: `scripts/fetch_porkbun_domains.py` did this as a standalone script; moving it into
+the CLI makes it discoverable and consistent. The `list` shadowing had caused two separate
+bugs (`list(enumerate(...))` calling the Click command, `isinstance(data, list)` failing in tests).
+
+**How**:
+- `Registrar` ABC: `list_domains() -> list[dict[str, Any]]` abstract method
+- `PorkbunRegistrar.list_domains()`: calls `/domain/listAll`, returns domain list
+- `cli.py`: `registrar` group + `registrar_list` command; concurrent `_enrich()` closure
+  per domain (NS via `check_nameservers()`, DNS via `_get_domain_records()`)
+- `list` Click command renamed to `list_sites` (no CLI surface change)
+- 81 new tests (258 total); mypy and ruff clean
+- Docs: README, docs/LIST_COMMAND.md, docs/IMPLEMENTATION.md updated
+
+**Files**: commit acb399b
+
+## Entry 24: Documentation sync (2026-02-25)
+
+**What**: Updated ARCHITECTURE.md and README.md to reflect all Phase 6 additions
+that had been implemented but not yet documented.
+
+**Why**: Docs lagged behind implementation. ARCHITECTURE.md still described the
+old two-ABC design (`Registrar` + `Host`); README.md was missing several flags
+and the global `--log-format` option entirely.
+
+**How**:
+- ARCHITECTURE.md: component map, provider abstractions, create/list/doctor/registrar-list
+  workflows, exit codes table, structured logging section — all updated to match code
+- README.md: global options section (`--log-format`), `--force-dns-update`, `--dns-check`,
+  `doctor [domain...]` NS check, `utils/retry.py` in project structure
+- CONTEXT.md: updated to 2026-02-25
+
+**Files**: docs/ARCHITECTURE.md, README.md, docs/CONTEXT.md
+
 ## Entry 25: Docs cleanup (2026-03-06)
 
 **What**: Removed dead-weight documentation files; updated docs/README.md.
@@ -217,3 +198,22 @@ config; warn-and-skip if NS doesn't point at Porkbun. See DEC-015, DEC-016.
 - `CONTRIBUTING.md`
 
 **Files**: docs/README.md
+## Entry 26: Replace content generation with GitHub template repo API (2026-03-19)
+
+**What**: Deleted `content.py` and the git-init/push flow. `mimeo create` now
+instantiates repos via `POST /repos/tepiton/{template}/generate`. Added
+`--template` flag (default: `mimeo.lol`). Set `is_template=true` on
+`tepiton/mimeo.lol` via API.
+
+**Why**: Simpler, fewer moving parts. No local content generation, no temp
+dirs, no git operations. Template repos in `tepiton` org are the source of
+truth for site content and GitHub Actions workflows.
+
+**How**: Added `_create_from_template()` to `GitHubHost`, removed
+`_create_repository()` and `_init_and_push_repository()`. Updated `deploy_site`
+signature (no `content_path`). Deleted `test_content.py`. 242 tests passing.
+
+**Decisions**: See DEC-017.
+
+**Files**: `mimeo/providers/host/github.py`, `mimeo/cli.py`, `mimeo/providers/base.py`
+

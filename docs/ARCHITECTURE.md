@@ -8,22 +8,24 @@ The tool is structured around a provider abstraction that separates the registra
 
 Site content comes from GitHub template repositories in the `tepiton` org, generated via GitHub's template repo API (`POST /repos/{owner}/{repo}/generate`). There is no local content generation step.
 
+The CLI surface is five verbs: `create`, `status`, `sync`, `doctor`, and (once DEC-024 lands) `template lint`. Each of `create`, `status`, and `sync` absorbed one or more single-purpose commands from an earlier design (DEC-025); the provider layer underneath was untouched by that collapse.
+
 ## Component Map
 
 ```
 mimeo/
 ├── cli/                 Command-line interface (Click)
 │   ├── __init__.py        main group, --log-format {text|json} global option
+│   │                       registers: create, status, sync, doctor
 │   ├── _processing.py     Shared concurrent processing, domain validation,
 │   │                       error categorization, exit-on-failure helpers
 │   │                       ThreadPoolExecutor for concurrent provisioning
-│   ├── create.py          mimeo create -- template-based provisioning
-│   ├── list_cmd.py        mimeo list -- read-only site enumeration
-│   ├── dns.py             mimeo dns check / mimeo dns repair
-│   ├── fix.py             mimeo fix https -- enable HTTPS enforcement
-│   ├── doctor.py          mimeo doctor -- prerequisite checks
-│   ├── template.py        mimeo template apply -- replace repo from template
-│   └── registrar.py       mimeo registrar list -- Porkbun domain inventory
+│   ├── create.py          mimeo create -- provision, and optionally replace
+│   │                       (--force), a site from a template
+│   ├── status.py          mimeo status -- cross-provider fleet view;
+│   │                       --source narrows to one provider
+│   ├── sync.py            mimeo sync -- converge DNS + HTTPS enforcement
+│   └── doctor.py          mimeo doctor -- prerequisite checks
 │
 ├── config.py           Configuration loader
 │                         TOML file: ~/.config/mimeo/config.toml
@@ -57,7 +59,8 @@ mimeo/
 │   │                     _PorkbunClient: shared API plumbing
 │   │                     PorkbunRegistrar: list_domains, check_nameservers,
 │   │                       update_nameservers, domain_exists
-│   │                     PorkbunDNSProvider: configure_dns, verify_dns, check_dns_drift
+│   │                     PorkbunDNSProvider: configure_dns, verify_dns, check_dns_drift,
+│   │                       get_domain_records
 │   │                     HTTP calls to api-ipv4.porkbun.com/api/json/v3
 │   │                     configure_dns: delete conflicts, create records
 │   │                     verify_dns: poll with dnspython
@@ -70,7 +73,8 @@ mimeo/
 │                         Repository creation from template via GitHub API
 │                         Pages enable, custom domain, HTTPS enforcement
 │                         health_status() classifier
-│                         get_pages_health(), list_mimeo_repositories()
+│                         get_pages_health(), list_mimeo_repositories(),
+│                         get_template_repository()
 │
 └── utils/
     ├── http.py         HTTP client
@@ -92,10 +96,12 @@ check_nameservers(domain)          configure_dns(domain, records)
   -> NameserverCheckResult         verify_dns(domain, records)
 update_nameservers(domain)           max_attempts, delay
 list_domains()                       progress_callback -> bool
-        │                                      │
-        ▼                                      ▼
-PorkbunRegistrar                  PorkbunDNSProvider
-(porkbun.py)                      (porkbun.py)
+        │                           check_dns_drift(domain, expected)
+        ▼                           get_domain_records(domain)
+PorkbunRegistrar                              │
+(porkbun.py)                                  ▼
+                                    PorkbunDNSProvider
+                                    (porkbun.py)
 
 Host (ABC)
 ──────────────────────────────────────────
@@ -103,6 +109,9 @@ deploy_site(domain, template, force)
   -> DeployResult
 required_dns_records(domain) -> list[DNSRecord]
 enable_https_enforcement(repo_full_name) -> bool
+get_pages_health(repo_full_name) -> dict
+list_mimeo_repositories() -> list[dict]
+get_template_repository(repo_full_name) -> str | None
         │
         ▼
 GitHubHost
@@ -120,7 +129,7 @@ New providers implement these interfaces. The CLI orchestration in `cli/` calls 
 The `mimeo create <domain>` command orchestrates stages in sequence per domain:
 
 ```
-mimeo create example.com [--template mimeo.lol] [--skip-dns] [--force]
+mimeo create example.com [--template mimeo.lol] [--skip-dns] [--force] [--yes]
         │
         ▼
 Validate domain format (_processing.validate_domains)
@@ -130,10 +139,17 @@ Load Config
 (~/.config/mimeo/config.toml or env vars)
         │
         ▼
+--force + not --yes? ──► confirm destructive replacement, abort if declined
+        │
+        ▼
+Verify domain is registered in this Porkbun account
+  not registered ──► abort, nothing else touched
+        │
+        ▼
 Deploy to GitHub Pages (GitHubHost)
-  ┌── repo exists? ─── yes ──► skip creation
-  │                              │
-  no                             │
+  ┌── repo exists? ─── yes, no --force ──► leave content unchanged
+  │                    yes, --force ──► delete existing repo, recreate
+  no                              │
   │                              │
   ▼                              ▼
   create from template       enable Pages
@@ -150,7 +166,7 @@ Deploy to GitHub Pages (GitHubHost)
                    ▼
 Check Nameservers (PorkbunRegistrar)
   ns_ok? ── no ──► warn, skip DNS config
-                   suggest 'mimeo dns repair'
+                   suggest 'mimeo sync' once nameservers are correct
                    │
   ns_ok? ── yes
                    │
@@ -162,15 +178,11 @@ Configure DNS (PorkbunDNSProvider)
   create www CNAME (user.github.io)
                    │
                    ▼
-Verify DNS propagation
-  poll with dnspython
-  up to 10 attempts, 5s delay
-  progress_callback for status output
-  returns True/False (does not block success)
-                   │
-                   ▼
 Report result: url, https_pending, dns_pending
+  (no propagation poll -- run 'mimeo status' to confirm)
 ```
+
+`--force` replaces an existing repository's content from the template; without it, an existing repo is left unchanged and DNS configuration is skipped (nothing new to point at). The domain-substitution manifest (DEC-024, once implemented) reruns automatically on both plain `create` and `create --force`.
 
 ### Concurrency
 
@@ -188,46 +200,83 @@ mimeo create a.com b.com c.com
         print summary
 ```
 
-Single domains and `--dry-run` always run sequentially with verbose per-step output. Concurrent mode suppresses per-step output to prevent garbled interleaving; each domain prints a single completion line.
+Single domains, `--dry-run`, and `--sequential` always run with verbose per-step output. Concurrent mode suppresses per-step output to prevent garbled interleaving; each domain prints a single completion line.
 
-## List and Health Workflow
+## Status Workflow
 
-`mimeo list` enumerates repositories tagged with the `mimeo` topic. This is a read-only command with no side effects.
+`mimeo status` is a read-only cross-provider view: registration expiry, nameservers, DNS drift, and Pages health per domain, joining the Porkbun account against mimeo-managed repos. `--source` narrows it to a single provider.
 
 ```
-mimeo list [--health]
+mimeo status [domains ...] | --all [--source {github,porkbun,dns}] [--problems] [--with-dns] [--show-template]
         │
-        ▼
-gh search repos user:<owner> topic:mimeo
+        ├── no --source ──► full cross-provider join
+        │       │
+        │       ▼
+        │   PorkbunRegistrar.list_domains() + GitHubHost.list_mimeo_repositories()
+        │       │
+        │       ▼
+        │   per domain (concurrent, default 5 workers):
+        │     check_nameservers() -> ns_ok
+        │     (--with-dns) get_domain_records()
+        │     (has repo) get_pages_health() -> site_health, classify via health_status()
+        │     (has repo, --show-template) get_template_repository()
+        │     (has repo + registered) required_dns_records() + check_dns_drift() -> dns_status
+        │       │
+        │       ▼
+        │   (--problems) filter to domains needing attention
         │
-        ▼
-normalize: name, repository URL, site URL, updated date
+        ├── --source github ──► mimeo-managed repos only (former `list`)
+        │       (--health) fetch Pages health concurrently
+        │       (--show-template) fetch template per repo
         │
-        ├── (no --health) ──► sort by name ──► display
+        ├── --source porkbun ──► registered domains only (former `registrar list`)
+        │       per domain: check_nameservers()
+        │       (--with-dns) get_domain_records()
         │
-        └── (--health) ──► fetch Pages health concurrently (10 workers)
-                                  │
-                           get_pages_health(repo)
-                           -> pages_configured
-                              https_enforced
-                              cert_state
-                              pages_status
-                                  │
-                           classify: health_status()
-                           ┌──────────────────────────────┐
-                           │ pages_error  Pages not set up │
-                           │ no_cert      no certificate   │
-                           │ cert_pending cert in progress │
-                           │ fixable      cert approved    │
-                           │              HTTPS not on yet │
-                           │ healthy      HTTPS enforced   │
-                           └──────────────────────────────┘
-                                  │
-                        sort by severity
-                        display table
+        └── --source dns ──► live DNS records or drift, no cross-provider join
+                (no --problems) get_domain_records() -- raw records (former `dns show`)
+                (--problems)    required_dns_records() + check_dns_drift() (former `dns check`)
+                requires explicit domain names -- no fleet-wide mode
 ```
 
-Use `mimeo fix https` to fix sites in `fixable` state.
+A bare `mimeo status` refuses to run: the fleet sweep is slow, so it requires the explicit `--all` (this restriction does not apply to `--source dns`, which always requires named domains instead). Registered domains with no site show `no repo`; sites whose domain is not in the Porkbun account show `-` on the registrar side. The DNS column is `-` when there is no repo (no desired state to compare against). Drift and unhealthy sites are findings (exit 0); API errors exit nonzero with partial results.
+
+## Sync Workflow
+
+`mimeo sync` converges domains on their desired state: applies missing DNS records and enables HTTPS enforcement when the certificate is ready. It absorbed the former `dns repair` and `fix https` commands (DEC-025).
+
+```
+mimeo sync [domains ...] | --all [--reset-nameservers] [--dry-run]
+        │
+        ▼
+PorkbunRegistrar.list_domains() + GitHubHost.list_mimeo_repositories()
+        │
+        ▼
+per domain (concurrent unless --dry-run):
+  not in Porkbun account ──► skip: "not in Porkbun account"
+  not a mimeo repo ──► skip: "no repo (use: mimeo create)"
+        │
+        ▼
+  check_nameservers()
+    ns_ok? ── no, no --reset-nameservers ──► skip: NS mismatch, suggest the flag
+    ns_ok? ── no, --reset-nameservers ──► update_nameservers()
+    ns_ok? ── yes
+        │
+        ▼
+  required_dns_records() + check_dns_drift()
+    missing records ──► configure_dns() -- apply them
+    extra-only drift  ──► report dns_status="drift" (same term `status` uses);
+                          sync does not delete records it does not manage
+        │
+        ▼
+  get_pages_health()
+    health_status() == "fixable" ──► enable_https_enforcement()
+        │
+        ▼
+  report actions taken (or would-take, under --dry-run)
+```
+
+Sync will not create repositories (`mimeo create`), change site content (`mimeo create --force`), or delete DNS records it does not manage. It does not poll for DNS propagation -- run `mimeo status` afterwards to confirm. A bare `mimeo sync` refuses to run: fleet-wide convergence requires the explicit `--all`; naming domains is always allowed.
 
 ## Doctor Workflow
 
@@ -252,7 +301,7 @@ workflow scope?     ok / fail + remediation
 config valid?       ok / fail + remediation
         │
         ▼
-(for each domain) NS check via _lookup_nameservers()
+(for each domain) NS check via lookup_nameservers()
   ns_ok? ──► ok
   !ns_ok? ──► warn: nameservers point elsewhere
         │
@@ -262,122 +311,6 @@ any fail? ──► print failures ──► exit EXIT_CONFIG
 ```
 
 Each check returns `(ok: bool, detail: str, fix: str)`. The checks are implemented as standalone functions and are independently testable.
-
-## DNS Check/Repair Workflow
-
-`mimeo dns check` inspects DNS configuration for drift:
-
-```
-mimeo dns check example.com [--format text|json|csv]
-        │
-        ▼
-GitHubHost.required_dns_records(domain) -> expected
-PorkbunRegistrar.check_nameservers(domain) -> ns_ok
-PorkbunDNSProvider.check_dns_drift(domain, expected) -> status
-        │
-        ▼
-┌─────────────────────────────────────────────┐
-│ status: ok      all expected records match   │
-│ status: drift   extra records found          │
-│ status: missing expected records absent      │
-│ status: error   API failure                  │
-└─────────────────────────────────────────────┘
-        │
-        ▼
-display: domain, ns_ok, nameservers, dns_status, missing, extra
-```
-
-`mimeo dns repair` re-applies expected DNS records:
-
-```
-mimeo dns repair example.com [--reset-nameservers] [--dry-run]
-        │
-        ▼
-PorkbunRegistrar.check_nameservers(domain)
-        │
-        ├── ns_ok ──► proceed
-        │
-        └── !ns_ok + --reset-nameservers ──► update_nameservers(domain)
-                                                        │
-            !ns_ok (no flag) ──► error, abort      ns_ok now
-                                        │
-                                        ▼
-                               GitHubHost.required_dns_records(domain)
-                                        │
-                                        ▼
-                               PorkbunDNSProvider.configure_dns(domain, records)
-                                        │
-                                        ▼
-                               PorkbunDNSProvider.verify_dns(domain, records)
-                                  max_attempts=10, delay=5
-                                  progress_callback for status
-                                        │
-                                        ▼
-                               report result
-```
-
-## Template Apply Workflow
-
-`mimeo template apply` replaces repository content with a different template:
-
-```
-mimeo template apply example.com --template new-theme [--yes] [--dry-run]
-        │
-        ▼
-Validate domain format
-        │
-        ▼
-Confirm destructive operation (skip with --yes)
-        │
-        ▼
-GitHubHost.deploy_site(domain, template, force=True)
-  ┌── repo exists? ── yes ──► delete existing repo
-  │                              │
-  └──────────────────────────────┘
-                 │
-                 ▼
-  create from template (POST /repos/{tepiton}/{template}/generate)
-  set topics: mimeo, landing-page, github-pages
-  enable GitHub Pages
-  set custom domain
-  try HTTPS enforcement
-                 │
-                 ▼
-  DeployResult(repo_existed=True, repo_created=True)
-                 │
-                 ▼
-report result
-```
-
-DNS records are not modified by this command.
-
-## Fix HTTPS Workflow
-
-`mimeo fix https` enables HTTPS enforcement on sites with approved SSL certificates:
-
-```
-mimeo fix https [domains ...] [--dry-run]
-        │
-        ├── domains provided ──► fix those repos
-        │
-        └── no domains ──► discover fixable repos
-                │
-                ▼
-        GitHubHost.list_mimeo_repositories()
-                │
-                ▼
-        fetch Pages health concurrently (10 workers)
-        filter for health_status == "fixable"
-                │
-                ▼
-        GitHubHost.enable_https_enforcement(repo_full_name)
-          returns True  -> success
-          returns False -> certificate not ready (swallowed)
-          raises HostError -> failure
-                │
-                ▼
-        display summary: fixed N/M
-```
 
 ## Data Flow: DNS Record Creation
 
@@ -412,6 +345,7 @@ parse TOML (tomllib, stdlib 3.11+)
   [porkbun]         api_key, secret_key
   [github]          default_org
   [defaults]        registrar, host
+  ignore_domains    list of domains excluded from fleet-wide sweeps
         │
         ▼
 apply env var overrides (take precedence)
@@ -426,6 +360,8 @@ raise ConfigurationError if missing
         ▼
 return Config dataclass
 ```
+
+`ignore_domains` only trims fleet-wide sweeps (`status --all`, `sync --all`); explicitly named domains are always processed regardless of the ignore list.
 
 ## Exception Hierarchy
 
@@ -454,31 +390,6 @@ The CLI catches `ConfigurationError` and `HostError` at the top level and prints
 | 5 | EXIT_TRANSIENT | Transient network/server error |
 | 6 | EXIT_PARTIAL | Some domains succeeded, some failed |
 
-## Registrar List Workflow
-
-`mimeo registrar list` enumerates all domains in the Porkbun account and enriches them concurrently:
-
-```
-mimeo registrar list [--with-dns] [--workers N]
-        │
-        ▼
-PorkbunRegistrar.list_domains()
-  POST /domain/listAll
-        │
-        ▼
-concurrent enrichment (ThreadPoolExecutor, default 5 workers)
-  per domain:
-    check_nameservers() -> NameserverCheckResult (ns_ok)
-    (--with-dns) _get_domain_records() -> list[DNSRecord]
-        │
-        ▼
-sort alphabetically by domain name
-        │
-        ▼
-output: domain, tld, expires, auto_renew, ns_ok, nameservers
-  (--format text|json|csv)
-```
-
 ## Structured Logging
 
 The `--log-format json` global option switches all diagnostic output to newline-delimited JSON on stderr:
@@ -500,7 +411,7 @@ new
   -> approved        <-- HTTPS can be enforced here ("fixable")
 ```
 
-The `create` command attempts HTTPS enforcement at deploy time. If the certificate is not yet approved, it logs a warning and sets `https_pending = True`. The `fix https` command can later enable HTTPS for any repo in `fixable` state.
+The `create` command attempts HTTPS enforcement at deploy time. If the certificate is not yet approved, it logs a warning and sets `https_pending = True`. `mimeo sync` later enables HTTPS for any repo in `fixable` state.
 
 ## Dependencies
 
@@ -521,12 +432,12 @@ Python's `tomllib` (stdlib, 3.11+) handles TOML config parsing -- no external TO
 
 `mimeo create` is safe to re-run:
 
-- Repository creation: checks for existing repo before creating; if it exists, skips creation
+- Repository creation: checks for existing repo before creating; if it exists, skips creation (unless `--force`)
 - Content generation: no local content push; template repo API handles everything server-side
 - Pages configuration: `enable_github_pages` checks if Pages is already on
 - DNS configuration: deletes existing records of matching type/name before creating new ones
 - HTTPS enforcement: attempts to enable; swallows "certificate does not exist" error
 
-`mimeo template apply` uses `force=True` which deletes and recreates the repository from the template. This is intentionally destructive.
+`mimeo create --force` deletes and recreates the repository from the template. This is intentionally destructive and requires confirmation unless `--yes` is given.
 
-Partial failure states (e.g., GitHub Pages deployed but DNS not configured) can be resolved by running `mimeo dns repair` or re-running `mimeo create`.
+Partial failure states (e.g., GitHub Pages deployed but DNS not configured) can be resolved by running `mimeo sync` or re-running `mimeo create`.

@@ -552,3 +552,15 @@ bugs' root causes.
 `README.md`, `docs/TROUBLESHOOTING.md`, `docs/DECISIONS.md`,
 `docs/IMPLEMENTATION.md`, `docs/CONTEXT.md`. Commits `b96d493`,
 `585e489`, `053ff52`, `497f43f`.
+
+## Entry 49: Stage 5D — registration cleanup, full validation pass, doc rewrite (2026-09-09)
+
+**What**: Closed out Stage 5D of DEC-025's verb collapse. Verified `mimeo/cli/__init__.py` already registers exactly the 4 target commands (no change needed — 5A/5B/5C left it correct). Ran the full test/mypy/ruff pass clean: 294 tests, mypy clean (19 files), ruff clean. Rewrote README.md's command reference (the `mimeo list`/`mimeo registrar list` sections became `mimeo status --source github`/`--source porkbun`, added a missing `--source dns` section) and did a structural rewrite of docs/ARCHITECTURE.md — replaced the five separate per-command workflow diagrams (list, dns check, dns repair, template apply, fix https) with Create/Status/Sync workflow sections matching current behavior, including --source, --problems, --with-dns, --show-template, --reset-nameservers, the extra-only-drift fix, and the dropped propagation poll.
+
+**Why**: 5A/5B/5C left docs pointing at deleted commands and files (`dns.py`, `fix.py`, `mimeo list --health`) — 5D was scoped specifically to close that gap before the branch merges.
+
+**How**: Read every current CLI module (create.py, status.py, sync.py, doctor.py) directly rather than trusting the old docs, to make sure the rewrite matched actual flag behavior. Doc sweep also found docs/LIST_COMMAND.md fully documenting the deleted `list` command and three stale `mimeo list --health`/`mimeo dns repair` refs in TROUBLESHOOTING.md, none of which were in the original 5D checklist — confirmed with user before deleting LIST_COMMAND.md (its content is superseded by `status --source github`) rather than silently expanding scope. Swept docs/DECISIONS.md too; left its historical entries alone since a decision log correctly describes the surface as it existed at the time.
+
+**Decisions**: None new — this was cleanup, no architectural change.
+
+**Files**: `README.md`, `docs/ARCHITECTURE.md`, `docs/TROUBLESHOOTING.md`, `docs/IMPLEMENTATION.md`, `docs/CONTEXT.md`. Deleted `docs/LIST_COMMAND.md`.

@@ -273,24 +273,42 @@ front-door verbs than it started with. See DEC-021.
               collapsing extra-only drift into "ok". See DEC-025's
               "Bug found post-merge" note for full detail. Test:
               `test_extra_only_reports_drift_not_ok`. 293 tests passing.
-  - [ ] 5D: Registration cleanup
-        - [ ] Read through `mimeo/cli/__init__.py`'s `main.add_command(...)`
-              calls; confirm exactly 4 remain registered from this stage
-              (`create`, `status`, `sync`, `doctor`) plus whatever `template
-              lint` becomes in 5E
-        - [ ] Run full test suite (`uv run pytest`), `uv run mypy mimeo`,
-              `uv run ruff check mimeo`; all must pass clean before this
-              stage is considered done
-        - [ ] Update README.md's command reference section (currently lists
-              the 9-verb surface) to match the 5-verb surface (partially
-              done in 5C — the two deleted-command sections and one inline
-              reference were fixed; the rest of the file's older stale refs
-              from 5A/5B, e.g. `mimeo list --health`, are still outstanding)
-        - [ ] Rewrite `docs/ARCHITECTURE.md`'s module map and command
-              sections (still names `dns.py`/`fix.py` directly and
-              documents `dns repair`/`fix https` as live commands in
-              several places) — needs a structural rewrite reflecting the
-              5-verb surface, not a find/replace
+  - [x] 5D: Registration cleanup
+        - [x] Read through `mimeo/cli/__init__.py`'s `main.add_command(...)`
+              calls; confirmed exactly 4 registered (`create`, `status`,
+              `sync`, `doctor`) — already correct from 5A/5B/5C, no change
+              needed.
+        - [x] Full test suite, mypy, ruff all pass clean: 294 tests passing,
+              mypy clean (19 source files), ruff clean.
+        - [x] Updated README.md's command reference section to the 5-verb
+              surface: `mimeo list` section rewritten as `mimeo status
+              --source github`, `mimeo registrar list` section rewritten as
+              `mimeo status --source porkbun`, added a `mimeo status
+              --source dns` section (raw records / drift, no prior README
+              section existed for it). Updated project-structure file list
+              and test count (233 -> 294).
+        - [x] Rewrote `docs/ARCHITECTURE.md` structurally: component map,
+              provider abstraction diagram, and command-workflow sections
+              now reflect the 5-verb surface. Replaced the four separate
+              List/DNS-check/DNS-repair/Fix-HTTPS/Template-apply workflow
+              sections with Create/Status/Sync workflow sections matching
+              current `create.py`/`status.py`/`sync.py` behavior (including
+              `--source`, `--problems`, `--with-dns`, `--show-template`,
+              `--reset-nameservers`, the extra-only-drift reporting fix from
+              5C, and the dropped propagation poll).
+        - [x] Deleted `docs/LIST_COMMAND.md` (documented the fully-deleted
+              `mimeo list` command; not in the original checklist but found
+              during the doc sweep — confirmed with user before deleting).
+              Removed its two README references (Documentation table,
+              project-structure file list).
+        - [x] Fixed three stale `docs/TROUBLESHOOTING.md` refs found during
+              the sweep: two `mimeo list --health` -> `mimeo status --all
+              --source github --health`, one `mimeo dns repair` -> `mimeo
+              sync`.
+        - [x] Swept `docs/DECISIONS.md` for stale refs: none needed fixing —
+              its mentions of `template apply`/`dns repair`/`list`/etc. are
+              historical decision-record entries describing the surface as
+              it existed at the time, which is correct for a decision log.
   - [ ] 5E: `template lint TEMPLATE` (new command, gated separately)
         - [ ] Do not start until DEC-024's manifest schema and format
               handlers (`js-key`, `string-replace`, `yaml-frontmatter-key`)

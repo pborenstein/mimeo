@@ -304,7 +304,7 @@ For full reprovisioning (repository, Pages, and DNS), re-run `mimeo create`.
 1. Wait 15-60 minutes for certificate provisioning
 2. Check certificate status:
    ```bash
-   mimeo list --health
+   mimeo status --all --source github --health
    ```
    Status will show `cert_pending` while the certificate is being issued, and `fixable` once it is approved.
 
@@ -317,7 +317,7 @@ For full reprovisioning (repository, Pages, and DNS), re-run `mimeo create`.
 
 **Symptoms:**
 
-- `mimeo list --health` shows `fixable`
+- `mimeo status --all --source github --health` shows `fixable`
 - `mimeo sync` reports an error for the site
 
 **Cause:** The certificate transitioned states between the health check and the fix attempt.
@@ -399,7 +399,7 @@ The `create` command is safe to re-run at any point. It checks for existing stat
 - Existing Pages configuration: skips Pages setup
 - Existing DNS records: deletes matching records and recreates them
 
-For DNS-only issues, use `mimeo dns repair example.com` to fix records without touching the repository or Pages configuration. For nameserver mismatches, add `--reset-nameservers`.
+For DNS-only issues, use `mimeo sync example.com` to fix records without touching the repository or Pages configuration. For nameserver mismatches, add `--reset-nameservers`.
 
 The only non-idempotent behavior is the content push — it is skipped if the repository already exists. To update site content on an existing repository, push directly to the repository.
 

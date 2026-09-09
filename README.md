@@ -248,7 +248,6 @@ mimeo/
 | [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) | Failure diagnosis and remediation |
 | [docs/DECISIONS.md](./docs/DECISIONS.md) | Architectural decision registry |
 | [docs/IMPLEMENTATION.md](./docs/IMPLEMENTATION.md) | Phase tracker and task status |
-| [CONTRIBUTING.md](./CONTRIBUTING.md) | Development setup, code style, PR process |
 
 ## Known limitations
 
@@ -257,8 +256,6 @@ mimeo/
 
 ## Development
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup, coding standards, and PR process.
+See [docs/INSTALLATION.md](./docs/INSTALLATION.md) for dev setup, and [CLAUDE.md](./CLAUDE.md) for coding standards, testing, and git workflow.
 
 See [docs/DECISIONS.md](./docs/DECISIONS.md) for architectural decisions.
-
-See [CLAUDE.md](./CLAUDE.md) for AI-assisted session workflow.

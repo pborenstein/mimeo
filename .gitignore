@@ -61,3 +61,5 @@ config.toml
 
 # Data directory
 data/
+
+.zcode/

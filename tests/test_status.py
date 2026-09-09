@@ -400,6 +400,68 @@ class TestStatusCommand:
         assert data[0]["site_health"] == "fixable"
         assert data[0]["ns_ok"] is False
 
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_STATUS}.GitHubHost")
+    @patch(f"{_STATUS}.PorkbunRegistrar")
+    @patch(f"{_STATUS}.PorkbunDNSProvider")
+    def test_summary_points_at_sync_for_fixable_problems(
+        self,
+        mock_dns_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """The text summary calls out how many problems sync can fix."""
+        mock_config_load.return_value = mock_config
+        mock_registrar_class.return_value = _make_registrar(
+            [{"domain": "drifty.com", "expireDate": "2027-01-01", "autoRenew": "1"}],
+            ns_ok=False,
+        )
+        mock_host_class.return_value = _make_host(
+            [{"name": "drifty.com"}],
+            health={
+                "pages_configured": True,
+                "https_enforced": False,
+                "cert_state": "approved",
+                "pages_status": "built",
+            },
+        )
+        mock_dns_class.return_value = _make_dns_provider(drift_status="missing")
+
+        result = runner.invoke(status, ["--all"])
+
+        assert result.exit_code == 0
+        assert "1 domain(s), 1 with issues (1 fixable with: mimeo sync)" in result.output
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_STATUS}.GitHubHost")
+    @patch(f"{_STATUS}.PorkbunRegistrar")
+    @patch(f"{_STATUS}.PorkbunDNSProvider")
+    def test_summary_omits_sync_hint_when_nothing_fixable(
+        self,
+        mock_dns_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """A registered domain with no repo is a problem sync can't touch."""
+        mock_config_load.return_value = mock_config
+        mock_registrar_class.return_value = _make_registrar(
+            [{"domain": "nosite.com", "expireDate": "2027-01-01", "autoRenew": "1"}]
+        )
+        mock_host_class.return_value = _make_host([])
+        mock_dns_class.return_value = _make_dns_provider()
+
+        result = runner.invoke(status, ["--all"])
+
+        assert result.exit_code == 0
+        assert "1 domain(s), 1 with issues" in result.output
+        assert "fixable with" not in result.output
+
 
 class TestStatusSourceGithub:
     """Tests for status --source github (absorbed from the former `list`)."""

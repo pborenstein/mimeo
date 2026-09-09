@@ -65,6 +65,27 @@ def _has_problem(row: Dict[str, Any]) -> bool:
     return False
 
 
+def _fixable_by_sync(row: Dict[str, Any]) -> bool:
+    """True when `mimeo sync` can act on this domain's problem.
+
+    Missing/drifted DNS, NS mismatch, and HTTPS-enforceable certs are all
+    things sync converges. Missing repos, unregistered domains, other
+    site-health states (no_cert, cert_pending, pages_error), and API
+    errors are not -- sync has nothing to do for those.
+    """
+    if row.get("error"):
+        return False
+    if not row["registered"] or not row["repo"]:
+        return False
+    if row["ns_ok"] is False:
+        return True
+    if row["dns_status"] in ("drift", "missing"):
+        return True
+    if row["site_health"] == "fixable":
+        return True
+    return False
+
+
 def _text(rows: List[Dict[str, Any]], with_dns: bool = False, show_template: bool = False) -> None:
     if not rows:
         click.echo("Nothing to report.")
@@ -82,9 +103,12 @@ def _text(rows: List[Dict[str, Any]], with_dns: bool = False, show_template: boo
     click.secho("  " + "-" * (len(header) - 2), fg="white", dim=True)
 
     problems = 0
+    fixable = 0
     for row in rows:
         if _has_problem(row):
             problems += 1
+            if _fixable_by_sync(row):
+                fixable += 1
 
         click.echo(f"  {row['domain']:<{domain_w}}  ", nl=False)
 
@@ -148,7 +172,10 @@ def _text(rows: List[Dict[str, Any]], with_dns: bool = False, show_template: boo
 
     click.echo()
     color = "green" if problems == 0 else "yellow"
-    click.secho(f"{len(rows)} domain(s), {problems} with issues", fg=color)
+    summary = f"{len(rows)} domain(s), {problems} with issues"
+    if fixable:
+        summary += f" ({fixable} fixable with: mimeo sync)"
+    click.secho(summary, fg=color)
     click.echo()
 
 

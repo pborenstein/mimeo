@@ -198,7 +198,7 @@ def _process_single_domain(
 
 
 @click.command()
-@click.argument("domains", nargs=-1, required=True)
+@click.argument("domains", nargs=-1)
 @click.option(
     "--config",
     type=click.Path(exists=True, path_type=Path),
@@ -247,7 +247,9 @@ def _process_single_domain(
     is_flag=True,
     help="Skip confirmation prompt (only relevant with --force)",
 )
+@click.pass_context
 def create(
+    ctx: click.Context,
     domains: tuple[str, ...],
     config: Path | None,
     dry_run: bool,
@@ -283,6 +285,10 @@ def create(
         mimeo create example.com --template mimeo.lol --force
         mimeo create site1.com site2.com --template new-theme --force --yes
     """
+    if not domains:
+        click.echo(ctx.get_help())
+        ctx.exit(2)
+
     validate_domains(domains)
     cfg = load_config(config)
     log_format = get_log_format()

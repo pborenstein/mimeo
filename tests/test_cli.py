@@ -85,10 +85,12 @@ class TestCreateCommand:
         assert "DOMAINS" in result.output
 
     def test_create_requires_domain(self, runner: CliRunner) -> None:
-        """Test create command requires domain argument."""
+        """No domain args prints full help instead of Click's terse error."""
         result = runner.invoke(create, [])
         assert result.exit_code != 0
-        assert "Missing argument" in result.output
+        assert "Missing argument" not in result.output
+        assert "Usage: create" in result.output
+        assert "Provisions a GitHub repository from a template" in result.output
 
     @patch("mimeo.config.Config.load")
     @patch(f"{_CREATE}.GitHubHost")

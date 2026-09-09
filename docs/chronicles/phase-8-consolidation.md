@@ -564,3 +564,15 @@ bugs' root causes.
 **Decisions**: None new — this was cleanup, no architectural change.
 
 **Files**: `README.md`, `docs/ARCHITECTURE.md`, `docs/TROUBLESHOOTING.md`, `docs/IMPLEMENTATION.md`, `docs/CONTEXT.md`. Deleted `docs/LIST_COMMAND.md`.
+
+## Entry 50: Two QoL fixes -- create prints full help with no args, status points at sync (2026-09-09)
+
+**What**: Implemented the two QoL items queued after Stage 5D. `mimeo create` with no domain arguments now prints full `--help` output (exit 2) instead of Click's terse `Error: Missing argument 'DOMAINS...'.` -- dropped `required=True` from the `domains` argument, added `@click.pass_context`, and check emptiness explicitly at the top of the command body via `ctx.get_help()`. `mimeo status`'s text summary line now appends `(N fixable with: mimeo sync)` when the fleet has problems sync can actually converge.
+
+**Why**: Click's built-in missing-argument error is unhelpful for a command with this many flags; the fix keeps the same exit code but gives the user something actionable. The status summary previously just counted problems with no pointer to the fix, echoing the same gap Entry 48 found in sync's drift message (a bare count with no next step).
+
+**How**: Added `_fixable_by_sync()` in status.py, deliberately narrower than `_has_problem()` -- it returns true only for NS mismatch, DNS drift/missing, and HTTPS-fixable cert state, not for "no repo"/"not registered"/other site-health states/API errors, since sync has nothing to do for those. Live-verified both fixes: `mimeo create` (no args) against the real CLI, and `mimeo status --all` against the real 113-domain fleet (86 issues, 42 correctly counted as sync-fixable). Updated `test_create_requires_domain` (was asserting the old undesirable behavior) and added two new status tests for the sync-hint present/absent cases. 296 tests passing, mypy/ruff clean.
+
+**Decisions**: None new -- both were pre-scoped backlog items from CONTEXT.md, no new tradeoffs surfaced.
+
+**Files**: `mimeo/cli/create.py`, `mimeo/cli/status.py`, `tests/test_cli.py`, `tests/test_status.py`, `docs/CONTEXT.md`.

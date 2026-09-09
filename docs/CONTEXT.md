@@ -2,15 +2,15 @@
 phase: 8
 phase_name: Consolidation
 updated: 2026-09-09
-last_commit: e75fe6b
+last_commit: f73e05d
 ---
 
 ## Current Focus
 
-Wrote `docs/SUBDOMAINS.md`: a proposed design for hosting sites on
-subdomains (`mimeo create service.example.com`). Design only, no code.
-Structured as "what needs to happen" — six changes, implementation detail
-in an appendix table.
+Subdomain-sites design written and committed (`e75fe6b`, see Entry 54).
+Then repaired the chronicles: four phase files had out-of-order entries
+and a duplicate Entry 53, fixed in `29192be` (Entry 55). The wrap-up
+skill's numbering recipe hardened to max-across-all-matches.
 
 ## Active Tasks
 
@@ -30,17 +30,17 @@ Stage 6 blocked on DEC-024 implementation. Everything else unblocked.
 
 ## Context
 
-- Core design insight: "domain" currently means site hostname, DNS zone,
-  and fleet join key at once — true only for apex domains. Subdomains
-  split the three and make zones one-to-many with sites.
-- Today `create` on a subdomain refuses cleanly at the ownership check
-  (Porkbun's API is zone-scoped); nothing partial is created.
-- Hosting side and Porkbun API plumbing already speak the right language;
-  the work is the hostname/zone split, DNS desired state, drift scoping,
-  and the status/sync joins. Two-pass staging in the doc.
+- Chronicles are now sorted ascending per file; next entry number is 55+1.
+  Entries 49-52 are dated 09-09 but their commits are 09-08 evening —
+  left alone, confirm intent before "fixing".
+- Subdomain design core: "domain" means hostname + zone + join key at
+  once; subdomains split them and make zones one-to-many with sites.
+  Today `create` on a subdomain refuses cleanly at the ownership check.
+- 289 tests passing, mypy clean, ruff unchanged from baseline (5
+  pre-existing errors, untouched files). No code changed this session.
 
 ## Next Session
 
-Committed as `e75fe6b`. Either ratify SUBDOMAINS.md's open decisions and
-schedule the work, or start BUG 4/6/7 + error-semantics refactor, or
-DEC-024 to unblock Stage 6.
+Either ratify SUBDOMAINS.md's open decisions and schedule the work, or
+start BUG 4/6/7 + error-semantics refactor, or DEC-024 to unblock
+Stage 6.

@@ -588,3 +588,15 @@ bugs' root causes.
 **Decisions**: DEC-025 status updated to Complete and merged (`56d75bd`); Stage 5E remains open, blocked on DEC-024.
 
 **Files**: `mimeo/cli/create.py`. Merge commit `56d75bd` on `main` (12 commits: d4debf2..be515b0).
+
+## Entry 52: Split 'template lint' out of Stage 5 into its own Stage 6 (2026-09-09)
+
+**What**: Renamed what IMPLEMENTATION.md called "Stage 5E" (`template lint TEMPLATE`) to its own top-level Stage 6. Updated the Stage 5 intro line, DEC-025's status line, and CONTEXT.md accordingly.
+
+**Why**: User pointed out `template lint` is a different kind of work than Stages 5A-5D -- those collapsed nine existing verbs into four by merging shared write/read paths (DEC-025's actual scope); `template lint` is new functionality that validates DEC-024's manifest schema, unrelated to the verb-collapse. Filing it as "5E" implied it was part of the same effort when it isn't.
+
+**How**: Pure renumbering, no code change. Stage 5's own checklist (5A-5D) is now marked `[x]` complete as a whole, since nothing in Stage 6 blocks calling Stage 5 done.
+
+**Decisions**: DEC-025's status line updated to note `template lint` moved to Stage 6.
+
+**Files**: `docs/IMPLEMENTATION.md`, `docs/DECISIONS.md`, `docs/CONTEXT.md`.

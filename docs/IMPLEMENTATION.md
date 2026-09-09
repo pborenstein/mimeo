@@ -147,12 +147,14 @@ front-door verbs than it started with. See DEC-021.
   - [x] Force-replace renames the target out of the way instead of
         deleting it; only deletes the renamed-old repo after `generate`
         succeeds; renames back on any failure
-- [ ] Stage 5: Collapse 9 verbs to 5 (DEC-025). Read DEC-025 in full before
+- [x] Stage 5: Collapse 9 verbs to 5 (DEC-025). Read DEC-025 in full before
       starting — this section is the checklist, DEC-025 is the rationale.
       No provider-layer changes anywhere in this stage; `github.py` and
-      `porkbun.py` are untouched. Target surface:
-      `create`, `status`, `sync`, `doctor`, `template lint` (lint gated
-      separately, see 5E).
+      `porkbun.py` are untouched. Target surface: `create`, `status`,
+      `sync`, `doctor`. Complete and merged to `main` (2026-09-09, merge
+      commit `56d75bd`). The fifth verb, `template lint`, is a separate
+      concern (validates DEC-024's manifest schema rather than collapsing
+      existing verbs) — moved to Stage 6.
   - [x] 5A: `create` absorbs `template apply`
         - [x] Add `--force` (bool) and `--yes` (bool, skip confirm) to
               `mimeo/cli/create.py`'s `create` command
@@ -309,23 +311,25 @@ front-door verbs than it started with. See DEC-021.
               its mentions of `template apply`/`dns repair`/`list`/etc. are
               historical decision-record entries describing the surface as
               it existed at the time, which is correct for a decision log.
-  - [ ] 5E: `template lint TEMPLATE` (new command, gated separately)
-        - [ ] Do not start until DEC-024's manifest schema and format
-              handlers (`js-key`, `string-replace`, `yaml-frontmatter-key`)
-              are implemented and `mimeo.template.json` exists on at least
-              one real template — this command validates that schema, so
-              it has nothing to check against until DEC-024 lands
-        - [ ] Read-only: given a template name, fetch `mimeo.template.json`
-              from the template repo if present; validate each
-              substitution entry's `format` is a known value, `file`
-              resolves to a real path in the template repo, and
-              `key`/`match` is present per format's requirements
-        - [ ] No domain argument, no writes, no calls to
-              `deploy_site`/`configure_dns`/anything mutating
-        - [ ] Report pass/fail per substitution entry with specifics (which
-              file, which field, what was wrong) — this is a template
-              author's debugging tool, error messages should name the exact
-              manifest entry at fault
+- [ ] Stage 6: `template lint TEMPLATE` (new command, validates DEC-024's
+      manifest schema). Split out from Stage 5's "5E" — this is new
+      functionality gated on DEC-024, not part of the verb-collapse work.
+  - [ ] Do not start until DEC-024's manifest schema and format
+        handlers (`js-key`, `string-replace`, `yaml-frontmatter-key`)
+        are implemented and `mimeo.template.json` exists on at least
+        one real template — this command validates that schema, so
+        it has nothing to check against until DEC-024 lands
+  - [ ] Read-only: given a template name, fetch `mimeo.template.json`
+        from the template repo if present; validate each
+        substitution entry's `format` is a known value, `file`
+        resolves to a real path in the template repo, and
+        `key`/`match` is present per format's requirements
+  - [ ] No domain argument, no writes, no calls to
+        `deploy_site`/`configure_dns`/anything mutating
+  - [ ] Report pass/fail per substitution entry with specifics (which
+        file, which field, what was wrong) — this is a template
+        author's debugging tool, error messages should name the exact
+        manifest entry at fault
 
 ---
 

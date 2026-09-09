@@ -33,12 +33,20 @@ sub-stages on this one branch rather than PR-per-stage.
       breakage in README.md/TROUBLESHOOTING.md only — not committed yet.
       Not live-tested against `002373.xyz`'s real drift (mock-tested only,
       same caveat 5B carried for `create`-adjacent paths).
-- [ ] **Stage 5C follow-up**: live-verify `sync` against `002373.xyz`'s
-      real extra-CNAME drift before or shortly after committing — confirm
-      `sync`'s DNS-missing-records step behaves as expected (it should
-      leave the extra `pixie.porkbun.com` CNAME alone, matching `sync`'s
-      documented "does not delete extras" behavior; this is expected, not
-      a bug — 5C intentionally does not add extra-record deletion).
+- [x] **Stage 5C follow-up**: live-verified `sync` against `002373.xyz`'s
+      real extra-CNAME drift — found a real bug, not just a confirmation:
+      `sync --dry-run` reported `ok` for a domain `status` reports as
+      `DNS: drift`. Root cause: `_sync_domain` only ever inspected
+      `drift["missing"]`, so an extra-only result (Porkbun's
+      `check_dns_drift` returns `status: "drift"` when there's no missing
+      but some extra) fell through to "ok" silently. Fixed: `sync` now
+      surfaces the same `dns_status`/`extra` vocabulary `status` uses
+      (literally "drift", not new sync-specific wording) instead of
+      collapsing it into "ok". New test:
+      `test_extra_only_reports_drift_not_ok` in `tests/test_sync.py`.
+      293 tests passing. Verified live against `002373.xyz` again after
+      the fix — now correctly shows `drift` with the extra CNAME listed.
+      Not yet committed.
 - [ ] **QoL: `mimeo create` with no domain args prints Click's terse
       "Missing argument" error instead of full help.** User: "If you're
       going to tell me to run --help, just run help. IOW if you're just

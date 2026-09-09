@@ -260,6 +260,19 @@ front-door verbs than it started with. See DEC-021.
               ~22-23 name `dns.py`/`fix.py` directly) and multiple stale
               command sections — left entirely for 5D, it needs a
               structural rewrite, not a find/replace.
+        - [x] **Bug found via live testing against `002373.xyz`** (real
+              extra CNAME drift, see CONTEXT.md): `sync --dry-run` reported
+              `ok` for a domain `status` correctly reported as `DNS:
+              drift`. Cause: `_sync_domain` only checked
+              `drift["missing"]`, never `drift["status"]`/`drift["extra"]`,
+              so an extra-only result fell through to "ok" silently. Bug
+              predates 5C (the DNS block wasn't touched by the merge) but
+              surfaced because 5C makes `sync` the natural next command
+              after `status` reports drift. Fixed: `sync` now reports the
+              same `dns_status`/`extra` terms `status` uses instead of
+              collapsing extra-only drift into "ok". See DEC-025's
+              "Bug found post-merge" note for full detail. Test:
+              `test_extra_only_reports_drift_not_ok`. 293 tests passing.
   - [ ] 5D: Registration cleanup
         - [ ] Read through `mimeo/cli/__init__.py`'s `main.add_command(...)`
               calls; confirm exactly 4 remain registered from this stage

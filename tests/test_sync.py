@@ -66,12 +66,13 @@ def _make_registrar(domains: list, ns_ok: bool = True) -> MagicMock:
     return registrar
 
 
-def _make_dns_provider(missing: list | None = None) -> MagicMock:
+def _make_dns_provider(missing: list | None = None, extra: list | None = None) -> MagicMock:
     dns_provider = MagicMock()
+    status = "missing" if missing else "drift" if extra else "ok"
     dns_provider.check_dns_drift.return_value = {
-        "status": "missing" if missing else "ok",
+        "status": status,
         "missing": missing or [],
-        "extra": [],
+        "extra": extra or [],
     }
     dns_provider.__enter__.return_value = dns_provider
     dns_provider.__exit__ = MagicMock(return_value=False)
@@ -123,6 +124,45 @@ class TestSyncActions:
         assert data[0]["actions"] == []
         assert data[0]["skipped"] is None
         mock_dns_provider.configure_dns.assert_not_called()
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_SYNC}.GitHubHost")
+    @patch(f"{_SYNC}.PorkbunRegistrar")
+    @patch(f"{_SYNC}.PorkbunDNSProvider")
+    def test_extra_only_reports_drift_not_ok(
+        self,
+        mock_dns_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """A domain with only extra (unmanaged) records reports dns_status
+        "drift", the same term mimeo status uses for this state -- not "ok".
+        Sync never deletes extras, so no action is taken either way."""
+        mock_config_load.return_value = mock_config
+        mock_registrar_class.return_value = _make_registrar(["drifty.com"])
+        mock_host_class.return_value = _make_host([{"name": "drifty.com"}])
+        mock_dns_provider = _make_dns_provider(
+            extra=[{"type": "CNAME", "name": "*", "content": "pixie.porkbun.com"}]
+        )
+        mock_dns_class.return_value = mock_dns_provider
+
+        result = runner.invoke(sync, ["drifty.com", "--dry-run", "--format", "json"])
+
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert data[0]["actions"] == []
+        assert data[0]["dns_status"] == "drift"
+        assert data[0]["extra"] == [
+            {"type": "CNAME", "name": "*", "content": "pixie.porkbun.com"}
+        ]
+        mock_dns_provider.configure_dns.assert_not_called()
+
+        text_result = runner.invoke(sync, ["drifty.com", "--dry-run"])
+        assert "drift" in text_result.output
+        assert "1 drifted" in text_result.output
 
     @patch("mimeo.config.Config.load")
     @patch(f"{_SYNC}.GitHubHost")

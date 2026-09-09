@@ -188,99 +188,76 @@ mimeo sync example.com another.lol
 mimeo sync example.com --reset-nameservers
 ```
 
-Sync will not create repositories (`mimeo create`), change content (`mimeo template apply`), delete DNS records it does not manage, touch nameservers without `--reset-nameservers`, or wait for DNS propagation (use `mimeo dns repair` for a single verified fix). A bare `mimeo sync` refuses to run: fleet-wide convergence requires the explicit `--all`.
+Sync will not create repositories (`mimeo create`), change content (`mimeo create --force`), or delete DNS records it does not manage, and it only touches nameservers with `--reset-nameservers`. A bare `mimeo sync` refuses to run: fleet-wide convergence requires the explicit `--all`.
 
-### `mimeo list`
+### `mimeo status --source github` (site inventory)
 
 Show all mimeo-managed sites (repos tagged with the `mimeo` topic):
 
 ```bash
 # Human-readable table
-mimeo list
+mimeo status --all --source github
 
 # JSON output
-mimeo list --format json
+mimeo status --all --source github --format json
 
 # CSV output
-mimeo list --format csv
+mimeo status --all --source github --format csv
 
 # Include GitHub Pages health status
-mimeo list --health
+mimeo status --all --source github --health
+
+# Include the template each site was created from
+mimeo status --all --source github --show-template
 ```
 
 Health status values: `healthy`, `fixable`, `cert_pending`, `no_cert`, `pages_error`.
-Output is sorted by severity (problems first).
+Output is sorted by severity (problems first) when `--health` is given.
 
-See [docs/LIST_COMMAND.md](./docs/LIST_COMMAND.md) for detailed format reference and scripting examples.
-
-### `mimeo dns check <domain> [<domain> ...]`
-
-Check DNS records and nameserver configuration for drift.
-
-```bash
-mimeo dns check example.com
-mimeo dns check site1.com site2.com --format json
-```
-
-### `mimeo dns repair <domain> [<domain> ...]`
-
-Re-apply expected DNS records.
-
-```bash
-mimeo dns repair example.com
-mimeo dns repair site1.com site2.com --reset-nameservers
-mimeo dns repair example.com --dry-run
-```
-
-### `mimeo template apply <domain> [<domain> ...]`
-
-Replace repository content with a different template.
-
-```bash
-mimeo template apply example.com --template eleventy-folio
-mimeo template apply example.com --dry-run
-```
-
-### `mimeo fix https [DOMAIN]...`
-
-Enable HTTPS enforcement on sites with approved SSL certificates.
-
-```bash
-mimeo fix https
-mimeo fix https example.com
-mimeo fix https --dry-run
-```
-
-### `mimeo registrar list`
+### `mimeo status --source porkbun` (registrar inventory)
 
 List all domains in the Porkbun account — regardless of whether mimeo manages them:
 
 ```bash
 # Human-readable table (domain, expiry, NS status)
-mimeo registrar list
+mimeo status --all --source porkbun
 
 # JSON output — pipeable
-mimeo registrar list --format json
+mimeo status --all --source porkbun --format json
 
 # CSV output
-mimeo registrar list --format csv
+mimeo status --all --source porkbun --format csv
 
 # Include DNS records per domain (doubles API calls)
-mimeo registrar list --with-dns
+mimeo status --all --source porkbun --with-dns
 
 # Adjust concurrency (default 5)
-mimeo registrar list --workers 10
+mimeo status --all --source porkbun --workers 10
 ```
 
 Output fields: `domain`, `tld`, `expires`, `auto_renew`, `ns_ok` (whether NS points to Porkbun), `nameservers`.
 
 ```bash
 # Check which domains are not pointing to Porkbun
-mimeo registrar list --format json | jq '.[] | select(.ns_ok == false) | .domain'
+mimeo status --all --source porkbun --format json | jq '.[] | select(.ns_ok == false) | .domain'
 
 # Export full domain inventory to CSV
-mimeo registrar list --format csv --with-dns > inventory.csv
+mimeo status --all --source porkbun --format csv --with-dns > inventory.csv
 ```
+
+### `mimeo status --source dns` (raw records / drift)
+
+Show live DNS records for named domains, or drift against what GitHub Pages expects:
+
+```bash
+# Raw live records
+mimeo status example.com --source dns
+
+# Drift only (missing/extra vs. expected)
+mimeo status example.com --source dns --problems
+```
+
+`--source dns` has no fleet-wide mode; it always takes explicit domain names. Repairing missing records and enabling HTTPS enforcement are both part of `mimeo sync` (see above). Replacing repository content with a different template is `mimeo create --force` (see above).
 
 ## Architecture overview
 
@@ -306,7 +283,7 @@ The tool uses provider abstractions (`Registrar`, `Host` ABCs) that allow adding
 uv sync --frozen && uv run pytest && uv run ruff check mimeo && uv run mypy mimeo
 ```
 
-233 tests. Linting and type checking are expected to be clean.
+294 tests. Linting and type checking are expected to be clean.
 
 ## Project structure
 
@@ -316,13 +293,11 @@ mimeo/
 │   ├── cli/
 │   │   ├── __init__.py                 # Command group registration
 │   │   ├── _processing.py              # Shared concurrent processing + output helpers
-│   │   ├── create.py                   # Create command
-│   │   ├── list_cmd.py                 # List command
-│   │   ├── doctor.py                   # Doctor command
-│   │   ├── registrar.py                # Registrar list command
-│   │   ├── dns.py                      # DNS check/repair commands
-│   │   ├── fix.py                      # Fix https command
-│   │   └── template.py                 # Template apply command
+│   │   ├── create.py                   # Create command (absorbs template apply)
+│   │   ├── status.py                   # Status command (absorbs list, registrar list,
+│   │   │                                  dns show, dns check)
+│   │   ├── sync.py                     # Sync command (absorbs dns repair, fix https)
+│   │   └── doctor.py                   # Doctor command
 │   ├── config.py                       # Config loading (~/.config/mimeo/config.toml)
 │   ├── exceptions.py                   # Exception hierarchy + exit codes
 │   ├── models.py                       # DNSRecord, NameserverCheckResult
@@ -339,7 +314,6 @@ mimeo/
 │   ├── README.md                       # Documentation index
 │   ├── ARCHITECTURE.md                 # Component map and workflow diagrams
 │   ├── TROUBLESHOOTING.md              # Failure diagnosis by category
-│   ├── LIST_COMMAND.md                 # list command reference
 │   ├── IMPLEMENTATION.md               # Phase tracker
 │   ├── DECISIONS.md                    # Architectural decisions
 │   └── chronicles/                     # Session history
@@ -352,7 +326,6 @@ mimeo/
 |:---------|:--------|
 | [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Component map, data flows, workflow diagrams |
 | [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) | Failure diagnosis and remediation |
-| [docs/LIST_COMMAND.md](./docs/LIST_COMMAND.md) | `list` command format reference and scripting |
 | [docs/DECISIONS.md](./docs/DECISIONS.md) | Architectural decision registry |
 | [docs/IMPLEMENTATION.md](./docs/IMPLEMENTATION.md) | Phase tracker and task status |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | Development setup, code style, PR process |

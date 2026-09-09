@@ -153,91 +153,162 @@ front-door verbs than it started with. See DEC-021.
       `porkbun.py` are untouched. Target surface:
       `create`, `status`, `sync`, `doctor`, `template lint` (lint gated
       separately, see 5E).
-  - [ ] 5A: `create` absorbs `template apply`
-        - [ ] Add `--force` (bool) and `--yes` (bool, skip confirm) to
+  - [x] 5A: `create` absorbs `template apply`
+        - [x] Add `--force` (bool) and `--yes` (bool, skip confirm) to
               `mimeo/cli/create.py`'s `create` command
-        - [ ] Wire `--force` to the existing `deploy_site(force=True)` path
+        - [x] Wire `--force` to the existing `deploy_site(force=True)` path
               (already used by `template apply`, `mimeo/cli/template.py:133`)
-        - [ ] Port `template apply`'s confirmation-prompt logic (skipped by
+        - [x] Port `template apply`'s confirmation-prompt logic (skipped by
               `--yes`) into `create`, gated on `--force`
-        - [ ] `--template` on `create` already exists and defaults to
+        - [x] `--template` on `create` already exists and defaults to
               `DEFAULT_TEMPLATE`; `template apply`'s `--template` was
               `required=True` — no behavior change needed, just drop the
               requirement when merging
-        - [ ] Delete `mimeo/cli/template.py`; remove its registration in
+        - [x] Delete `mimeo/cli/template.py`; remove its registration in
               `mimeo/cli/__init__.py`
-        - [ ] Relocate `template apply`'s tests (confirm prompt, DEC-022
+        - [x] Relocate `template apply`'s tests (confirm prompt, DEC-022
               rollback-on-failure case) onto `create --force` test cases
-        - [ ] Update `create`'s help text: state that `--force` replaces an
+              (DEC-022 rollback coverage already lived at the provider layer
+              in `tests/providers/host/test_github.py`, untouched; only the
+              two CLI-layer tests moved)
+        - [x] Update `create`'s help text: state that `--force` replaces an
               existing repo's content (same effect `template apply` had),
               and that the domain-substitution manifest (DEC-024, once
               implemented) reruns automatically on both plain `create` and
               `create --force`
-  - [ ] 5B: `status` absorbs `list`, `registrar list`, `dns show`, `dns check`
-        - [ ] Add `--source {github,porkbun,dns}` to `mimeo/cli/status.py`
-        - [ ] No `--source` = current full-join behavior (unchanged)
-        - [ ] `--source github` reproduces `list`'s output (repo name, url,
+  - [x] 5B: `status` absorbs `list`, `registrar list`, `dns show`, `dns check`
+        - [x] Add `--source {github,porkbun,dns}` to `mimeo/cli/status.py`
+        - [x] No `--source` = current full-join behavior (unchanged)
+        - [x] `--source github` reproduces `list`'s output (repo name, url,
               updated, optionally health/template columns per
               `list --health`/`--show-template`) — verify column parity
               before deleting `list_cmd.py`
-        - [ ] `--source porkbun` reproduces `registrar list` (domain,
+        - [x] `--source porkbun` reproduces `registrar list` (domain,
               expiry, optionally `--with-dns` records, which `status`
               already supports) — verify before deleting `registrar.py`
-        - [ ] `--source dns` reproduces `dns show` (raw live records, no
+        - [x] `--source dns` reproduces `dns show` (raw live records, no
               comparison) when used alone, and `dns check` (drift only,
               read-only) when combined with the existing `--problems` flag
               — verify both shapes before deleting `dns.py`'s `show`/`check`
-        - [ ] This is the stage most likely to reveal an output-shape gap
-              `status` doesn't already cover (e.g. `list --show-template`'s
-              TEMPLATE column via `get_template_repository()`). If a gap is
-              found, add it as a `status` column/flag rather than keeping
-              the old command
-        - [ ] Delete `mimeo/cli/list_cmd.py`; delete `registrar.py`'s `list`
-              command (check whether anything else in `registrar.py`
-              survives — if not, delete the file); delete `dns.py`'s `show`
-              and `check` (repair is handled in 5C — do not delete `dns.py`
-              until 5C is also done)
-        - [ ] Remove dead registrations in `mimeo/cli/__init__.py`
-        - [ ] Relocate all four commands' test coverage onto `status
-              --source X` equivalents — largest test-relocation surface of
-              the five sub-stages, budget accordingly
-  - [ ] 5C: `sync` absorbs `dns repair` and `fix https`
-        - [ ] **Before writing code**: read DEC-025's "Open question"
-              section in full. Check whether `sync --all`'s existing
-              HTTPS-enable step (`mimeo/cli/sync.py`, calls
-              `host.get_pages_health()` then
-              `host.enable_https_enforcement()`) already covers every case
-              `fix https`'s no-arg auto-discovery covers
-              (`mimeo/cli/fix.py`'s `_fix_one`, filters to
-              `health_status() == "fixable"` via `map_items`). If sync's
-              existing pass is already a superset, no new flag is needed
-              for discovery — say so explicitly in the DEC-025 update. If a
-              real gap exists, resolve per DEC-025's option (a)/(b) before
-              proceeding
-        - [ ] Add `--wait` (bool) to `sync`: after `configure_dns`, call
-              `dns_provider.verify_dns()` (10x/5s poll, same as
-              `dns repair` does today in `dns.py`)
-        - [ ] Confirm `sync`'s existing `--reset-nameservers` flag maps
+        - [x] Gap found and closed as planned: `list --show-template`'s
+              TEMPLATE column had no `status` equivalent. Added `--show-template`
+              to `status` itself (valid with `--source github` or the full
+              join), backed by the same `get_template_repository()` call.
+        - [x] Deleted `mimeo/cli/list_cmd.py` and `mimeo/cli/registrar.py`
+              (registrar.py had nothing left once `list` moved); deleted
+              `dns.py`'s `show` and `check` commands (repair stays for 5C)
+        - [x] Removed dead registrations in `mimeo/cli/__init__.py`
+              (`list_sites`, `dns.show`/`dns.check` implicitly via file
+              deletion, `registrar`/`registrar_list`)
+        - [x] Relocated all four commands' test coverage onto `status
+              --source X` equivalents in `tests/test_status.py` (three new
+              classes: `TestStatusSourceGithub`, `TestStatusSourcePorkbun`,
+              `TestStatusSourceDns`); removed `TestListCommand`,
+              `TestRegistrarListCommand`, and the `show`/`check` tests out
+              of `TestDnsCommands` in `tests/test_cli.py`. 296 tests passing
+              (up from 270), ruff/mypy clean.
+        - [ ] Not done this session: a live-account smoke test against a
+              real domain/repo (no Porkbun/GitHub credentials configured on
+              this machine — only the example config template exists at
+              `~/.config/mimeo/config.toml`). All verification here is
+              mock-based; DEC-026's bugs were found by live testing, so
+              treat this stage's `create`-adjacent paths as unverified
+              against a real account until someone runs it live.
+  - [x] 5C: `sync` absorbs `dns repair` and `fix https`
+        - [x] **Before writing code**: read DEC-025's "Open question"
+              section in full. Checked `sync --all`'s existing HTTPS-enable
+              step (`mimeo/cli/sync.py`'s `_sync_domain`, calls
+              `host.get_pages_health()` then `health_status() ==
+              "fixable"` then `host.enable_https_enforcement()`) against
+              `fix.py`'s `_fix_one`/discovery logic — confirmed identical
+              check, no gap. Option (a) held; DEC-025 updated accordingly.
+        - [x] Did **not** add `--wait`. Decided during implementation (not
+              part of the original checklist) to drop the propagation poll
+              entirely rather than recover it behind a flag, on the same
+              reasoning DEC-026 used to drop `create`'s `verify_dns` call:
+              it rarely observes real propagation and doesn't change
+              `sync`'s behavior either way; `mimeo status` covers
+              confirmation. DEC-025 and `sync`'s docstring updated to say
+              so explicitly.
+        - [x] Confirmed `sync`'s existing `--reset-nameservers` flag maps
               exactly onto `dns repair`'s nameserver-reset behavior (both
-              call `registrar.update_nameservers()`) — no new flag needed,
-              just confirm parity
-        - [ ] Delete `dns.py`'s `repair` command; if `show`/`check` were
-              already deleted in 5B, delete `dns.py` and its `dns` group
-              registration entirely
-        - [ ] Delete `mimeo/cli/fix.py`; remove its registration
-        - [ ] Relocate `dns repair`'s propagation-wait tests onto
-              `sync --wait`; relocate `fix https`'s discovery-mode and
-              dry-run tests onto `sync`'s equivalent path
-  - [ ] 5D: Registration cleanup
-        - [ ] Read through `mimeo/cli/__init__.py`'s `main.add_command(...)`
-              calls; confirm exactly 4 remain registered from this stage
-              (`create`, `status`, `sync`, `doctor`) plus whatever `template
-              lint` becomes in 5E
-        - [ ] Run full test suite (`uv run pytest`), `uv run mypy mimeo`,
-              `uv run ruff check mimeo`; all must pass clean before this
-              stage is considered done
-        - [ ] Update README.md's command reference section (currently lists
-              the 9-verb surface) to match the 5-verb surface
+              call `registrar.update_nameservers()`) — no new flag needed.
+        - [x] Deleted `mimeo/cli/dns.py` entirely (only `repair` remained
+              after 5B deleted `show`/`check`) and its `dns` group
+              registration in `mimeo/cli/__init__.py`.
+        - [x] Deleted `mimeo/cli/fix.py`; removed its registration.
+        - [x] No test relocation needed: `tests/test_sync.py`'s existing
+              coverage (`test_all_targets_fleet_union`,
+              `test_fixable_https_enabled`, `test_missing_dns_applied`,
+              `test_reset_nameservers_flag`, `test_dry_run_makes_no_changes`)
+              already exercised every case `TestFixHttpsCommand`/
+              `TestDnsCommands` in `tests/test_cli.py` covered — those two
+              classes were deleted outright, no new tests written. 292
+              tests passing, ruff/mypy clean.
+        - [x] Updated `create.py`'s "Use 'mimeo dns repair'..." log message
+              and `sync.py`'s own docstring (which referenced `mimeo dns
+              repair` for propagation confirmation) to point at `sync`/
+              `status` instead.
+        - [x] Fixed direct breakage in `README.md` and
+              `docs/TROUBLESHOOTING.md` (command examples that named the
+              now-deleted `mimeo dns repair`/`mimeo fix https`). Did NOT do
+              a full pass on either file — both still reference other
+              already-absorbed commands (`mimeo list --health`, `template
+              apply`) from 5A/5B that predate this session; that's 5D's
+              "Update README.md" line, not scope creep to redo here.
+              `docs/ARCHITECTURE.md` still has a stale module map (lines
+              ~22-23 name `dns.py`/`fix.py` directly) and multiple stale
+              command sections — left entirely for 5D, it needs a
+              structural rewrite, not a find/replace.
+        - [x] **Bug found via live testing against `002373.xyz`** (real
+              extra CNAME drift, see CONTEXT.md): `sync --dry-run` reported
+              `ok` for a domain `status` correctly reported as `DNS:
+              drift`. Cause: `_sync_domain` only checked
+              `drift["missing"]`, never `drift["status"]`/`drift["extra"]`,
+              so an extra-only result fell through to "ok" silently. Bug
+              predates 5C (the DNS block wasn't touched by the merge) but
+              surfaced because 5C makes `sync` the natural next command
+              after `status` reports drift. Fixed: `sync` now reports the
+              same `dns_status`/`extra` terms `status` uses instead of
+              collapsing extra-only drift into "ok". See DEC-025's
+              "Bug found post-merge" note for full detail. Test:
+              `test_extra_only_reports_drift_not_ok`. 293 tests passing.
+  - [x] 5D: Registration cleanup
+        - [x] Read through `mimeo/cli/__init__.py`'s `main.add_command(...)`
+              calls; confirmed exactly 4 registered (`create`, `status`,
+              `sync`, `doctor`) — already correct from 5A/5B/5C, no change
+              needed.
+        - [x] Full test suite, mypy, ruff all pass clean: 294 tests passing,
+              mypy clean (19 source files), ruff clean.
+        - [x] Updated README.md's command reference section to the 5-verb
+              surface: `mimeo list` section rewritten as `mimeo status
+              --source github`, `mimeo registrar list` section rewritten as
+              `mimeo status --source porkbun`, added a `mimeo status
+              --source dns` section (raw records / drift, no prior README
+              section existed for it). Updated project-structure file list
+              and test count (233 -> 294).
+        - [x] Rewrote `docs/ARCHITECTURE.md` structurally: component map,
+              provider abstraction diagram, and command-workflow sections
+              now reflect the 5-verb surface. Replaced the four separate
+              List/DNS-check/DNS-repair/Fix-HTTPS/Template-apply workflow
+              sections with Create/Status/Sync workflow sections matching
+              current `create.py`/`status.py`/`sync.py` behavior (including
+              `--source`, `--problems`, `--with-dns`, `--show-template`,
+              `--reset-nameservers`, the extra-only-drift reporting fix from
+              5C, and the dropped propagation poll).
+        - [x] Deleted `docs/LIST_COMMAND.md` (documented the fully-deleted
+              `mimeo list` command; not in the original checklist but found
+              during the doc sweep — confirmed with user before deleting).
+              Removed its two README references (Documentation table,
+              project-structure file list).
+        - [x] Fixed three stale `docs/TROUBLESHOOTING.md` refs found during
+              the sweep: two `mimeo list --health` -> `mimeo status --all
+              --source github --health`, one `mimeo dns repair` -> `mimeo
+              sync`.
+        - [x] Swept `docs/DECISIONS.md` for stale refs: none needed fixing —
+              its mentions of `template apply`/`dns repair`/`list`/etc. are
+              historical decision-record entries describing the surface as
+              it existed at the time, which is correct for a decision log.
   - [ ] 5E: `template lint TEMPLATE` (new command, gated separately)
         - [ ] Do not start until DEC-024's manifest schema and format
               handlers (`js-key`, `string-replace`, `yaml-frontmatter-key`)

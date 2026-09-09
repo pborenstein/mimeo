@@ -30,6 +30,7 @@ def _text(rows: List[Dict[str, Any]]) -> None:
     changed = 0
     skipped = 0
     errors = 0
+    drifted = 0
     for row in rows:
         click.echo(f"  {row['domain']:<{domain_w}}  ", nl=False)
         if row.get("error"):
@@ -41,14 +42,24 @@ def _text(rows: List[Dict[str, Any]]) -> None:
         elif row["actions"]:
             changed += 1
             click.secho(", ".join(row["actions"]), fg="cyan")
+        elif row.get("dns_status") == "drift":
+            drifted += 1
+            click.secho("drift", fg="yellow", nl=False)
+            click.echo(" (extra DNS record(s) present; sync does not remove records it does not manage)")
+            for rec in row.get("extra", []):
+                click.secho(
+                    f"      extra:   {rec['type']} {rec['name']} -> {rec['content']}",
+                    fg="yellow",
+                )
         else:
             click.secho("ok", fg="green")
 
     click.echo()
     color = "green" if errors == 0 else "yellow"
+    already_ok = len(rows) - changed - skipped - errors - drifted
     click.secho(
         f"{len(rows)} domain(s): {changed} changed, "
-        f"{len(rows) - changed - skipped - errors} already ok, "
+        f"{already_ok} already ok, {drifted} drifted, "
         f"{skipped} skipped, {errors} errors",
         fg=color,
     )
@@ -116,12 +127,12 @@ def sync(
     \b
     What sync will NOT do:
       - create repositories (use: mimeo create)
-      - change site content (use: mimeo template apply)
+      - change site content (use: mimeo create --force)
       - delete DNS records it does not manage (extra records are
         reported by mimeo status but left alone)
       - touch nameservers unless --reset-nameservers is given
       - wait for DNS propagation (run mimeo status afterwards to
-        confirm, or mimeo dns repair for a single verified fix)
+        confirm)
 
     \b
     Examples:
@@ -182,6 +193,8 @@ def sync(
                     "actions": [],
                     "skipped": None,
                     "error": None,
+                    "dns_status": "ok",
+                    "extra": [],
                 }
 
                 if domain not in registered:
@@ -213,6 +226,12 @@ def sync(
                         row["actions"].append(
                             f"{would}apply {len(drift['missing'])} missing DNS record(s)"
                         )
+                    elif drift["status"] == "drift":
+                        # Extra records only -- sync does not delete records
+                        # it does not manage. Report the same "drift" status
+                        # mimeo status uses, rather than reporting "ok".
+                        row["dns_status"] = "drift"
+                        row["extra"] = drift["extra"]
 
                     health = host.get_pages_health(f"{owner}/{domain}")
                     if health_status(health) == "fixable":
@@ -247,12 +266,15 @@ def sync(
         def _csv_rows(row: Dict[str, Any]) -> List[Dict[str, Any]]:
             flat = dict(row)
             flat["actions"] = "|".join(row["actions"])
+            flat["extra"] = "|".join(
+                f"{rec['type']} {rec['name']} -> {rec['content']}" for rec in row.get("extra", [])
+            )
             return [flat]
 
         render_results(
             results,
             output_format,
-            csv_fields=["domain", "actions", "skipped", "error"],
+            csv_fields=["domain", "actions", "dns_status", "extra", "skipped", "error"],
             csv_rows=_csv_rows,
             text=_text,
         )

@@ -1,21 +1,22 @@
 ---
 phase: 8
 phase_name: Consolidation
-updated: 2026-09-08
-last_commit: 2e8580b
+updated: 2026-09-09
+last_commit: e75fe6b
 ---
 
 ## Current Focus
 
-Worked through GLM 5.3's `docs/CODE_REVIEW.md`. Fixed BUG 1, 2, 3, 5 and
-most of the dead-code table (`verify_dns` removed entirely, `HTTPClient`
-collapsed to one `_request` helper with dead ctor params dropped, stale
-`config.py` comment fixed). `default_registrar`/`default_host` (D2) and
-`ProviderError` deliberately left open — see `docs/CODE_REVIEW.md`'s
-dead-code table for why.
+Wrote `docs/SUBDOMAINS.md`: a proposed design for hosting sites on
+subdomains (`mimeo create service.example.com`). Design only, no code.
+Structured as "what needs to happen" — six changes, implementation detail
+in an appendix table.
 
 ## Active Tasks
 
+- [ ] **Subdomain sites**: design complete; resolve the four open
+      decisions in SUBDOMAINS.md (repo naming, zone-resolution source,
+      `ignore_domains` semantics, apex freeze) before scheduling.
 - [ ] **Stage 6**: `template lint`. Blocked on DEC-024 implementation.
 - [ ] **Track B**: Stage 4 E2E test lane, blocked on test account/org.
 - [ ] **Backlog**: BUG 4/6/7 and the error-semantics refactor
@@ -29,17 +30,17 @@ Stage 6 blocked on DEC-024 implementation. Everything else unblocked.
 
 ## Context
 
-- 289 tests passing (was 296; -7 from deleting `verify_dns`-only tests),
-  mypy clean, ruff unchanged from baseline (5 pre-existing errors,
-  untouched files).
-- `docs/CODE_REVIEW.md` updated inline (FIXED/REMOVED/left-open markers
-  per finding) instead of a separate checklist — read it directly for
-  current bug/dead-code status.
-- BUG 1's fix matches on Porkbun's `"Domain not found"` message text,
-  confirmed against this repo's own test fixtures, not a live API call —
-  re-verify if `domain_exists` misclassifies again.
+- Core design insight: "domain" currently means site hostname, DNS zone,
+  and fleet join key at once — true only for apex domains. Subdomains
+  split the three and make zones one-to-many with sites.
+- Today `create` on a subdomain refuses cleanly at the ownership check
+  (Porkbun's API is zone-scoped); nothing partial is created.
+- Hosting side and Porkbun API plumbing already speak the right language;
+  the work is the hostname/zone split, DNS desired state, drift scoping,
+  and the status/sync joins. Two-pass staging in the doc.
 
 ## Next Session
 
-Committed as `2e8580b`. Either start BUG 4/6/7 + error-semantics refactor
-(recommendation #2), or DEC-024 to unblock Stage 6.
+Committed as `e75fe6b`. Either ratify SUBDOMAINS.md's open decisions and
+schedule the work, or start BUG 4/6/7 + error-semantics refactor, or
+DEC-024 to unblock Stage 6.

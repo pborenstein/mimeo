@@ -270,12 +270,11 @@ def create(
     replace an existing repository's content with a different template
     instead. WARNING: --force deletes the existing repository and recreates
     it from the template -- all existing content, issues, and history will
-    be lost. DNS records are not modified. The domain-substitution manifest
-    (DEC-024, once implemented) reruns automatically on both plain create
-    and create --force.
+    be lost. DNS records are not modified.
 
     Multiple domains are processed concurrently for faster provisioning.
 
+    \b
     Examples:
         mimeo create example.com
         mimeo create site1.com site2.com site3.com

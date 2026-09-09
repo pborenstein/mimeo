@@ -576,3 +576,15 @@ bugs' root causes.
 **Decisions**: None new -- both were pre-scoped backlog items from CONTEXT.md, no new tradeoffs surfaced.
 
 **Files**: `mimeo/cli/create.py`, `mimeo/cli/status.py`, `tests/test_cli.py`, `tests/test_status.py`, `docs/CONTEXT.md`.
+
+## Entry 51: Fixed create's mangled Examples block; merged Stage 5 to main (2026-09-09)
+
+**What**: Cleaned up `create`'s `--help` docstring -- the Examples block was missing Click's `\b` no-rewrap marker, so all seven example lines were getting mashed into one run-on paragraph (surfaced by the previous session's new no-args-prints-help behavior, which made the mangled text visible in a new place). Also dropped an internal DEC-024 citation from the user-facing docstring -- decision-doc references have no place in --help text. Then merged `stage-5a-create-absorbs-template-apply` into `main` as an explicit merge commit (`--no-ff`, not a fast-forward) per user request, completing all of Stage 5 (5A-5D).
+
+**Why**: User caught the formatting bug by inspection of the rendered help output. The merge needed `--no-ff` specifically because the branch was a clean fast-forward of main (0 behind) -- a plain `git merge` would have fast-forwarded silently with no merge commit, which the user explicitly did not want.
+
+**How**: Added the missing `\b` marker (same pattern already used correctly in status.py and sync.py). Verified `--help` output line-by-line after the fix. Confirmed the DEC-024 reference existed nowhere else (README, tests). Full validation pass (296 tests, mypy, ruff) re-run on `main` post-merge to confirm the merge itself introduced no regressions.
+
+**Decisions**: DEC-025 status updated to Complete and merged (`56d75bd`); Stage 5E remains open, blocked on DEC-024.
+
+**Files**: `mimeo/cli/create.py`. Merge commit `56d75bd` on `main` (12 commits: d4debf2..be515b0).

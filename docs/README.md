@@ -6,20 +6,20 @@ Navigation index for all Mimeo documentation files.
 
 | Document | Audience | Purpose |
 |:---------|:---------|:--------|
-| [../README.md](../README.md) | All | Quick start, command reference, installation |
+| [../README.md](../README.md) | All | Quick start, command reference |
+| [INSTALLATION.md](INSTALLATION.md) | All | Prerequisites, install, configuration |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Developers | Component map, data flows, ASCII workflow diagrams |
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Operators | Failure diagnosis and remediation by category |
-| [LIST_COMMAND.md](LIST_COMMAND.md) | Operators | `mimeo list` format reference and scripting examples |
 | [IMPLEMENTATION.md](IMPLEMENTATION.md) | Contributors | Phase tracker, current tasks, completed work |
-| [DECISIONS.md](DECISIONS.md) | Contributors | Architectural decision registry (DEC-001 through DEC-020) |
+| [DECISIONS.md](DECISIONS.md) | Contributors | Architectural decision registry (DEC-001 through DEC-026) |
 | [CONTEXT.md](CONTEXT.md) | Contributors | Current session state, active tasks, blockers |
 
 ## Contributor Entry Points
 
 **Starting a session:**
 
-1. Read [IMPLEMENTATION.md](IMPLEMENTATION.md) for current phase and open tasks
-2. Read [CONTEXT.md](CONTEXT.md) for recent session state
+1. Read [CONTEXT.md](CONTEXT.md) for recent session state
+2. Read [IMPLEMENTATION.md](IMPLEMENTATION.md) for current phase and open tasks
 3. Check [DECISIONS.md](DECISIONS.md) for any relevant prior decisions
 
 **Understanding the codebase:**
@@ -41,7 +41,7 @@ Navigation index for all Mimeo documentation files.
 
 ## Phase Status
 
-Current phase: **Phase 7 — CLI Redesign**
+Current phase: **Phase 8 — Consolidation**
 
 | Phase | Status |
 |:------|:-------|
@@ -52,6 +52,7 @@ Current phase: **Phase 7 — CLI Redesign**
 | Phase 4: Content Generation | Complete |
 | Phase 5: CLI Integration | Complete |
 | Phase 6: Hardening | Complete |
-| Phase 7: CLI Redesign | In progress |
+| Phase 7: CLI Redesign | Complete |
+| Phase 8: Consolidation | In progress |
 
 See [IMPLEMENTATION.md](IMPLEMENTATION.md) for detailed task breakdown.

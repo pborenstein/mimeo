@@ -2,7 +2,7 @@
 phase: 8
 phase_name: Consolidation
 updated: 2026-09-08
-last_commit: pending (see Next Session)
+last_commit: 2e8580b
 ---
 
 ## Current Focus
@@ -41,6 +41,5 @@ Stage 6 blocked on DEC-024 implementation. Everything else unblocked.
 
 ## Next Session
 
-Not yet committed — commit this session's fixes first. Then either start
-BUG 4/6/7 + error-semantics refactor (recommendation #2), or DEC-024 to
-unblock Stage 6.
+Committed as `2e8580b`. Either start BUG 4/6/7 + error-semantics refactor
+(recommendation #2), or DEC-024 to unblock Stage 6.

@@ -402,13 +402,26 @@ class GitHubHost(Host):
     def _delete_file(self, repo_full_name: str, path: str) -> None:
         """Delete a single file from a repository, if it exists.
 
+        generate-from-template can return before GitHub finishes populating
+        the new repo's file tree (same race _customize_default_template
+        works around) -- a fresh repo's contents lookup can 404 with
+        "repository is empty" even when the file will exist moments later.
+        Retry the existence check before concluding the file is genuinely
+        absent, or a real file silently survives the strip.
+
         Args:
             repo_full_name: Full repository name (owner/repo)
             path: Path to the file within the repository
         """
-        try:
-            file_data = self._gh_api(f"repos/{repo_full_name}/contents/{path}")
-        except HostError:
+        file_data = None
+        for attempt in range(5):
+            try:
+                file_data = self._gh_api(f"repos/{repo_full_name}/contents/{path}")
+                break
+            except HostError:
+                if attempt < 4:
+                    time.sleep(2)
+        if file_data is None:
             return  # File doesn't exist -- nothing to strip
 
         try:
@@ -431,13 +444,24 @@ class GitHubHost(Host):
         without this directory, or a transient API failure, should not fail
         the deploy.
 
+        Retries the listing call for the same reason _delete_file does --
+        generate-from-template can return before the repo's file tree is
+        populated, and a fresh repo's contents lookup can 404 even when the
+        directory will exist moments later.
+
         Args:
             repo_full_name: Full repository name (owner/repo)
             path: Path to the directory within the repository
         """
-        try:
-            entries = self._gh_api(f"repos/{repo_full_name}/contents/{path}")
-        except HostError:
+        entries = None
+        for attempt in range(5):
+            try:
+                entries = self._gh_api(f"repos/{repo_full_name}/contents/{path}")
+                break
+            except HostError:
+                if attempt < 4:
+                    time.sleep(2)
+        if entries is None:
             return  # Directory doesn't exist -- nothing to strip
 
         # A single-file path would return a dict, not a list; only

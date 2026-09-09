@@ -449,13 +449,38 @@ class TestGitHubHost:
 
     def test_strip_template_dev_files_missing_paths_are_noop(self, host: GitHubHost) -> None:
         """Test that a template without README.md/docs/ is left untouched."""
-        with patch.object(host, "_gh_api") as mock_api:
+        with patch.object(host, "_gh_api") as mock_api, \
+                patch("mimeo.providers.host.github.time.sleep"):
             mock_api.side_effect = HostError("Not Found")
 
             host._strip_template_dev_files("testorg/example.com")
 
-            # Only the two existence-checking reads should have been attempted.
-            assert mock_api.call_count == 2
+            # Each path's existence check retries 5x before giving up.
+            assert mock_api.call_count == 10
+
+    def test_delete_file_retries_transient_repo_empty_404(self, host: GitHubHost) -> None:
+        """A fresh repo's contents lookup can 404 before generate-from-template
+        finishes populating the tree (same race _customize_default_template
+        works around). _delete_file must retry rather than concluding the
+        file doesn't exist and silently leaving it in place."""
+        with patch.object(host, "_gh_api") as mock_api, \
+                patch("mimeo.providers.host.github.time.sleep") as mock_sleep:
+            mock_api.side_effect = [
+                HostError("This repository is empty"),  # not populated yet
+                HostError("This repository is empty"),  # still not populated
+                {"content": "", "sha": "readme-sha"},  # now it exists
+                {},  # delete succeeds
+            ]
+
+            host._delete_file("testorg/example.com", "README.md")
+
+            assert mock_api.call_count == 4
+            mock_api.assert_called_with(
+                "repos/testorg/example.com/contents/README.md",
+                method="DELETE",
+                data={"message": "Remove template development file: README.md", "sha": "readme-sha"},
+            )
+            assert mock_sleep.call_count == 2
 
     def test_delete_file_best_effort_on_delete_failure(self, host: GitHubHost) -> None:
         """Test that a failed delete does not raise -- stripping is best-effort."""

@@ -665,3 +665,15 @@ removal, not an architectural choice.
 **Decisions**: None.
 
 **Files**: `docs/chronicles/phase-{5,6,7,8}-*.md` (repair commit `29192be`); `~/.zcode/skills/session-wrapup/SKILL.md` (not a repo file).
+
+## Entry 56: Implemented DEC-024 template substitution manifest (2026-09-09)
+
+**What**: Implemented the DEC-024 manifest end to end: new `mimeo/providers/host/template_manifest.py` (strict `parse_manifest()`, `apply_substitutions()`, three format handlers), `GitHubHost` wiring (fetch-and-validate before any mutation, dev-path strip via manifest `dev_paths` or defaults, always-strip the manifest itself), and the deletion of `_customize_default_template` + `TEMPLATE_DEV_PATHS` -- no template-specific knowledge left in mimeo source. 333 tests passing (was 296), mypy clean, ruff at baseline.
+
+**Why**: DEC-024's schema was ratified this session after surveying the real template files (`~/projects/mimeo-sites/TEMPLATES`, now 10 templates). The survey settled three open calls (DEC-024 addendum): `js-key` kept with a loosened unique-leaf resolution rule (a match-only alternative lost on evidence -- three orobia.* domains, demo brands, and `author@example.com` all coexist in the config files); mimeo.lol's letter-spaced `<h1>` fixed template-side with CSS (`17d308f`, user's commit); manifest carries `version`.
+
+**How**: Handlers are pure functions, unit-tested against near-verbatim copies of the real files (tech-blog `metadata.js` with comments/nesting/`process.env`/placeholder email, pamphlet's `addPlugin` options object, pandoc-simple frontmatter). js-key scans line-wise with quote/comment masking and brace-depth tracking; ambiguity, non-string leaves, unbalanced braces, and unterminated strings all fail loud. Default strip list gained `CLAUDE.md` per user call. Invalid manifests abort before the repo existence check (test-proven). All verification mock-based -- live `create` run still owed once a template ships a manifest.
+
+**Decisions**: DEC-024 (addendum + status flipped to implemented)
+
+**Files**: `mimeo/providers/host/template_manifest.py` (new), `mimeo/providers/host/github.py`, `tests/providers/host/test_template_manifest.py` (new), `tests/providers/host/test_github.py`, `docs/{DECISIONS,IMPLEMENTATION,ARCHITECTURE,CODE_REVIEW}.md` (commit `13583f7`)

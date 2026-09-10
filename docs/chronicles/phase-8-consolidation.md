@@ -677,3 +677,15 @@ removal, not an architectural choice.
 **Decisions**: DEC-024 (addendum + status flipped to implemented)
 
 **Files**: `mimeo/providers/host/template_manifest.py` (new), `mimeo/providers/host/github.py`, `tests/providers/host/test_template_manifest.py` (new), `tests/providers/host/test_github.py`, `docs/{DECISIONS,IMPLEMENTATION,ARCHITECTURE,CODE_REVIEW}.md` (commit `13583f7`)
+
+## Entry 57: Template manifests rolled out to all ten templates; DEC-024 live-verified (2026-09-10)
+
+**What**: Wrote and validated `mimeo.template.json` for all ten tepiton templates (three string-replace/frontmatter, seven eleventy js-key), cleaned the eleventy family's dead identity data, committed and pushed all ten template repos plus the mimeo doc fix. User live-verified the whole path: `mimeo create bluegazebo.dev --template mimeo.lol` and `mimeo create tepiton.com --force` both landed the substitution correctly.
+
+**Why**: The mimeo-side DEC-024 work (Entry 56) needed real manifests to be live-testable. A full survey of the eleventy family before writing them found the templates wrong in ways that argued for fixing rather than papering over: `author.url`/`author.email` read by no layout (only leaked into Atom feeds via whole-object pass-through), `feed.id` a leftover from the old feed.njk shape, two stale `notreally.config.js` copies, pamphlet's feed base hardcoded instead of derived, and three different real `orobia.*` domains plus demo brands as placeholders.
+
+**How**: Cleanup first (trim dead keys, delete stale files, pamphlet `base: metadata.url`, normalize placeholders), which collapsed every eleventy manifest to one `js-key url` entry — plus an `about.md` string-replace for the three literary templates' "served from" line. Each manifest validated with mimeo's real parser against the real files; end-to-end proof built tech-blog with a substituted `url` and confirmed propagation to canonical/og/feed/sitemap. Two incident notes: an E2E `git checkout` briefly clobbered tech-blog's uncommitted trims (caught in the pre-commit survey, re-applied, rebuilt); string-replace's re-application semantics clarified in the DEC-024 addendum after validation exposed the subtlety (mimeo `5b19189`). pandoc-simple rebased onto a moved remote and its manifest re-validated against the changed frontmatter.
+
+**Decisions**: DEC-024 (status flipped to Complete)
+
+**Files**: mimeo-sites TEMPLATES/* (all ten repos, committed+pushed 2026-09-09/10); `docs/{DECISIONS,IMPLEMENTATION}.md` (this commit)

@@ -9,17 +9,18 @@ from typing import Any, Dict
 from mimeo.exceptions import HostError
 from mimeo.models import DNSRecord
 from mimeo.providers.base import DeployResult, Host
+from mimeo.providers.host.template_manifest import (
+    DEFAULT_DEV_PATHS,
+    MANIFEST_FILENAME,
+    Substitution,
+    TemplateManifest,
+    apply_substitutions,
+    parse_manifest,
+)
 from mimeo.utils.retry import retry_with_jitter
 
 TEMPLATE_ORG = "tepiton"
 DEFAULT_TEMPLATE = "mimeo.lol"
-
-# Paths that exist in template repos for template *development* only
-# (authoring notes, contribution docs) and must never be published as
-# part of a generated site. Matched against the repo root: an exact
-# name strips a single file, a name ending in "/" strips that whole
-# directory.
-TEMPLATE_DEV_PATHS = ["README.md", "docs/"]
 
 GITHUB_PAGES_IPS = [
     "185.199.108.153",
@@ -275,6 +276,10 @@ class GitHubHost(Host):
         Raises:
             HostError: If repository creation fails
         """
+        # Validate the template's manifest (if any) before touching anything,
+        # so a broken manifest fails the deploy ahead of any repo mutation.
+        manifest = self._fetch_template_manifest(template_repo)
+
         # Check if repository already exists
         repo_existed = False
         try:
@@ -325,75 +330,139 @@ class GitHubHost(Host):
         if repo_existed:
             self._delete_stale_pages_artifacts(str(full_name))
         self._set_repository_topics(str(full_name), ["mimeo", "landing-page", "github-pages"])
-        self._strip_template_dev_files(str(full_name))
+        self._strip_template_dev_files(
+            str(full_name), manifest.dev_paths if manifest else DEFAULT_DEV_PATHS
+        )
 
-        if template_repo == DEFAULT_TEMPLATE and repo_name != DEFAULT_TEMPLATE:
-            self._customize_default_template(str(full_name), repo_name)
+        if manifest:
+            # The manifest itself is template-authoring metadata; it rides
+            # along with every generate and must not be published.
+            self._delete_file(str(full_name), MANIFEST_FILENAME)
+            self._apply_template_manifest(str(full_name), repo_name, manifest)
 
         return str(full_name), True, repo_existed
 
-    def _customize_default_template(self, repo_full_name: str, domain: str) -> None:
-        """Rewrite the default template's hardcoded domain name to the target domain.
+    def _fetch_template_manifest(self, template_repo: str) -> TemplateManifest | None:
+        """Fetch and validate a template repo's mimeo.template.json (DEC-024).
 
-        mimeo.lol is itself a live site, so its index.html hardcodes
-        "mimeo.lol" in <title> and as letter-spaced text ("m i m e o . l o l")
-        in <h1>. Read the generated file, substitute both forms in memory,
-        and write it back so the deployed page reflects the actual domain.
+        The manifest is read from the template repo itself -- fully
+        populated, so the empty-repo race that affects generated repos does
+        not apply -- and validated in full, so an invalid manifest surfaces
+        before any repository is created or mutated. A missing manifest is
+        not an error: None means the template declares no substitutions and
+        gets default dev-path stripping only.
 
-        generate-from-template can return before GitHub finishes populating
-        the new repo's file tree, so the first read may 404 with "repository
-        is empty" -- retry the read a few times before giving up.
+        Args:
+            template_repo: Template repository name (without org prefix)
+
+        Returns:
+            The parsed manifest, or None if the template ships none
+
+        Raises:
+            HostError: If the manifest exists but is unreadable or invalid
+        """
+        try:
+            file_data = self._gh_api(
+                f"repos/{TEMPLATE_ORG}/{template_repo}/contents/{MANIFEST_FILENAME}"
+            )
+        except HostError as e:
+            if "404" in str(e):
+                return None
+            raise
+        if not isinstance(file_data, dict) or "content" not in file_data:
+            raise HostError(
+                f"{MANIFEST_FILENAME} in {TEMPLATE_ORG}/{template_repo} is not a readable file"
+            )
+        raw = base64.b64decode(file_data["content"]).decode("utf-8")
+        return parse_manifest(raw)
+
+    def _apply_template_manifest(
+        self, repo_full_name: str, domain: str, manifest: TemplateManifest
+    ) -> None:
+        """Apply a template manifest's substitutions to a generated repo.
+
+        Entries are grouped by file so each file is read and written once.
+        A substitution that produces no change skips the write, keeping
+        re-runs idempotent. Failures are loud per DEC-024: a missing target
+        file, an unresolvable key, or an absent match raises rather than
+        silently skipping.
 
         Args:
             repo_full_name: Full repository name (owner/repo)
-            domain: Domain name to substitute in for the template name
+            domain: Domain name to substitute into the values
+            manifest: The template's parsed manifest
 
         Raises:
-            HostError: If index.html can't be read or written
+            HostError: If any substitution cannot be read or applied
+        """
+        by_file: Dict[str, list[Substitution]] = {}
+        for sub in manifest.substitutions:
+            by_file.setdefault(sub.file, []).append(sub)
+
+        for path, subs in by_file.items():
+            file_data = self._read_file_with_retry(repo_full_name, path)
+            content = base64.b64decode(file_data["content"]).decode("utf-8")
+            updated = apply_substitutions(content, subs, domain)
+            if updated == content:
+                continue
+            self._gh_api(
+                f"repos/{repo_full_name}/contents/{path}",
+                method="PUT",
+                data={
+                    "message": f"Apply template manifest for {domain}",
+                    "content": base64.b64encode(updated.encode("utf-8")).decode("ascii"),
+                    "sha": file_data["sha"],
+                },
+            )
+
+    def _read_file_with_retry(self, repo_full_name: str, path: str) -> Dict[str, Any]:
+        """Read a file's Contents API payload, retrying the empty-repo race.
+
+        generate-from-template can return before GitHub finishes populating
+        the new repo's file tree, so the first read may 404 with "repository
+        is empty" -- retry the read a few times before giving up. Unlike
+        the dev-file strip (best-effort by design), a substitution target
+        that stays unreadable is a hard error.
+
+        Args:
+            repo_full_name: Full repository name (owner/repo)
+            path: Path to the file within the repository
+
+        Returns:
+            The Contents API payload for the file
+
+        Raises:
+            HostError: If the file cannot be read after retries
         """
         file_data = None
         last_error: HostError | None = None
         for attempt in range(5):
             try:
-                file_data = self._gh_api(f"repos/{repo_full_name}/contents/index.html")
+                file_data = self._gh_api(f"repos/{repo_full_name}/contents/{path}")
                 break
             except HostError as e:
                 last_error = e
                 if attempt < 4:
                     time.sleep(2)
         if file_data is None:
-            raise HostError(f"Could not read index.html from {repo_full_name}: {last_error}")
+            raise HostError(f"Could not read {path} from {repo_full_name}: {last_error}")
+        return file_data
 
-        content = base64.b64decode(file_data["content"]).decode("utf-8")
-        updated = content.replace(" ".join(DEFAULT_TEMPLATE), " ".join(domain)).replace(
-            DEFAULT_TEMPLATE, domain
-        )
-
-        if updated == content:
-            return
-
-        self._gh_api(
-            f"repos/{repo_full_name}/contents/index.html",
-            method="PUT",
-            data={
-                "message": f"Customize template for {domain}",
-                "content": base64.b64encode(updated.encode("utf-8")).decode("ascii"),
-                "sha": file_data["sha"],
-            },
-        )
-
-    def _strip_template_dev_files(self, repo_full_name: str) -> None:
+    def _strip_template_dev_files(self, repo_full_name: str, dev_paths: list[str]) -> None:
         """Delete template-development-only files/dirs from a generated repo.
 
-        Templates carry authoring docs (README.md, docs/) meant for people
-        maintaining the template itself, not for the sites generated from
-        it. Those files are not site content and must not be published.
-        Best-effort: a failure here should not fail the whole deploy.
+        Templates carry authoring docs meant for people maintaining the
+        template itself, not for the sites generated from it. Those files
+        are not site content and must not be published. The paths come from
+        the template manifest when it declares dev_paths, else the defaults
+        (README.md, docs/, CLAUDE.md). Best-effort: a failure here should
+        not fail the whole deploy.
 
         Args:
             repo_full_name: Full repository name (owner/repo)
+            dev_paths: Paths to strip; a trailing "/" means a directory
         """
-        for path in TEMPLATE_DEV_PATHS:
+        for path in dev_paths:
             if path.endswith("/"):
                 self._delete_directory(repo_full_name, path.rstrip("/"))
             else:
@@ -403,11 +472,11 @@ class GitHubHost(Host):
         """Delete a single file from a repository, if it exists.
 
         generate-from-template can return before GitHub finishes populating
-        the new repo's file tree (same race _customize_default_template
-        works around) -- a fresh repo's contents lookup can 404 with
-        "repository is empty" even when the file will exist moments later.
-        Retry the existence check before concluding the file is genuinely
-        absent, or a real file silently survives the strip.
+        the new repo's file tree (the same race the manifest-substitution
+        read path works around) -- a fresh repo's contents lookup can 404
+        with "repository is empty" even when the file will exist moments
+        later. Retry the existence check before concluding the file is
+        genuinely absent, or a real file silently survives the strip.
 
         Args:
             repo_full_name: Full repository name (owner/repo)

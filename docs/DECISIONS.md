@@ -455,7 +455,7 @@ progress."
 
 ### DEC-024: Template Substitution Scoped to Site's Own Domain, via Per-Template Manifest (2026-09-08)
 
-**Status**: Active (Phase 8)
+**Status**: Implemented in mimeo (Phase 8, 2026-09-09) — `mimeo/providers/host/template_manifest.py` plus `GitHubHost` wiring, per the schema addendum below. The templates' own `mimeo.template.json` files are pending follow-up work in mimeo-sites (mimeo.lol first); until a template ships one it deploys exactly as before, except mimeo.lol, which loses its hardcoded customization until its manifest lands (accepted window).
 
 **Context**: `_customize_default_template` rewrites `mimeo.lol` -> `{domain}` in `index.html`, hardcoded to that one template, because `mimeo.lol` is itself a live site whose HTML hardcodes its own name. The open Phase 8 task ("template parameterization: pick a design shape") had drifted in scope during discussion toward general template authoring — bios, social handles, page copy, deciding what counts as "generic" identity (the concern behind Entry 43's mimeo-sites scrub). Re-examining mimeo's own identity shift (DEC-021: "fleet manager for domain-to-GitHub-Pages sites," not a site generator) surfaced that authoring judgment is a different tool's job; the piece that is legitimately mimeo's is narrow: when `foo.com` is deployed from a template, the template's boilerplate self-reference (its own name in `<title>`, `metadata.js`'s `url:`, frontmatter `title:`) should read `foo.com`, not the template's name. A survey of all 8 tepiton templates (extending Entry 42) found this single fact lives in three incompatible file formats: hardcoded HTML string (mimeo.lol, laptopistan.com), a JS object key (`content/_data/metadata.js` `url:`, used by the 5 eleventy-* templates), and YAML frontmatter (`index.md` `title:`, pandoc-simple).
 
@@ -470,7 +470,34 @@ progress."
 - mimeo-side per-template registry (mimeo hardcodes "for template X, the value lives at path Y"): What exists today for mimeo.lol, just generalized. Rejected because every new template requires a mimeo code change and release — the manifest's whole point is that a non-eleventy, non-mimeo-authored template costs mimeo nothing to support.
 - Expand scope to general template parameterization (author name, social links, arbitrary branding fields): Rejected per scope decision 1 above — no mechanical substitution scheme turns "does this bio read as sufficiently generic" into a declared key/value; that's authoring judgment, done once per template, not once per domain.
 
-**Consequences**: `_customize_default_template` is replaced by a manifest-driven dispatcher with three format handlers, used for every template that ships a manifest instead of only `mimeo.lol`. `laptopistan.com`'s hardcoded-HTML case becomes a manifest entry instead of a second special case in mimeo's code. Not yet implemented — the manifest schema and three handlers are the next Phase 8 task; existing templates (mimeo.lol first, since it's already relied on) need a `mimeo.template.json` added.
+**Consequences**: `_customize_default_template` is replaced by a manifest-driven dispatcher with three format handlers, used for every template that ships a manifest instead of only `mimeo.lol`. `laptopistan.com`'s hardcoded-HTML case becomes a manifest entry instead of a second special case in mimeo's code. The schema and handlers were implemented 2026-09-09 (see the addendum below, which ratifies the concrete schema and loosens the `js-key` resolution rule); existing templates (mimeo.lol first, since it's already relied on) still need a `mimeo.template.json` added, which is mimeo-sites work.
+
+**Addendum (2026-09-09): schema ratified; three open calls resolved.** A survey against the actual template files (`~/projects/mimeo-sites/TEMPLATES` — now 10 templates; `eleventy-product` and `eleventy-service` postdate the original survey of 8) settled the questions the decision left open:
+
+1. **`js-key` kept, with a loosened resolution rule.** The original spec ("dotted-path key into a JS `export default {...}` object") does not cover pamphlet, whose self-reference lives in an `addPlugin(feedPlugin, {...})` options object in `eleventy.config.js`, not an `export default`. The handler instead resolves a dotted path against *any* object literal in the file: unkeyed braces (`export default {`, `return {`, function bodies, call arguments) are path-transparent; keyed openers (`author: {`) extend the path. The path must resolve to exactly one string-literal leaf — zero matches, multiple matches, or a non-string leaf are hard errors. A match-based alternative (drop `js-key`; string-replace the placeholder host) was considered and rejected on evidence: the templates' placeholders are three different `orobia.*` real-looking domains, per-template demo brands (`northlight.example.com`, `harborlight.example.com`), and `example.com` — mixed within single files — and `author@example.com` sits on a neighboring line of `metadata.js`, one careless host-substring pattern away from being rewritten. Set-by-key is indifferent to the current value, which is the point.
+2. **Letter-spaced `<h1>` fixed in the template, not the schema.** mimeo.lol's `<h1>m i m e o . l o l</h1>` was the one value a `{domain}`-only grammar could not express. The template now ships plain `<h1>mimeo.lol</h1>` with CSS `letter-spacing` (mimeo-sites `17d308f`), so one `string-replace` entry covers both `<title>` and `<h1>` and the value grammar stays `{domain}`-only. No `{domain_spaced}` token.
+3. **The manifest carries `version`.** Manifests live in template repos outside mimeo's release cadence; a future format change should fail with "unsupported manifest version" rather than field-level mysteries.
+
+Ratified schema (`mimeo.template.json`, at the template repo root):
+
+```json
+{
+  "version": 1,
+  "dev_paths": ["README.md", "docs/", "CLAUDE.md"],
+  "substitutions": [
+    {"file": "index.html", "format": "string-replace",
+     "match": "mimeo.lol", "value": "{domain}"},
+    {"file": "content/_data/metadata.js", "format": "js-key",
+     "key": "url", "value": "https://{domain}/"},
+    {"file": "index.md", "format": "yaml-frontmatter-key",
+     "key": "title", "value": "{domain}"}
+  ]
+}
+```
+
+Rules: `version` is required and must be `1`. `substitutions` is required and non-empty; each entry declares `file` (repo-relative path), `format` (`string-replace` | `js-key` | `yaml-frontmatter-key`), `value` (the literal token `{domain}` is the only templating; any other `{...}` in a value is a validation error), and `match` (string-replace) or `key` (the other two) per format — the wrong field for a format, an unknown field, or an unknown format is an error. `dev_paths` is optional: absent, the default `["README.md", "docs/", "CLAUDE.md"]` applies; present, it *replaces* the default entirely (no merging). A trailing `/` means a directory, matching `TEMPLATE_DEV_PATHS`' existing convention. The manifest file itself is always stripped from generated repos.
+
+Semantics: `string-replace` does a literal (non-regex) replace of all occurrences; match absent from the file is an error, while a replace that yields the original content is a no-op (re-runs stay idempotent). `js-key` and `yaml-frontmatter-key` are set-by-key — they overwrite the value regardless of what is there, which makes them robust to whatever placeholder a template currently carries. All failures are loud: an unparseable manifest, an unresolvable key, a missing target file, or an unsupported version fails the deploy (`HostError`) rather than silently skipping — a declared manifest that quietly no-ops is exactly the misleading-outcome class the code review flags. Validation runs at fetch time, before any repository is created or mutated. The manifest is fetched from the *template* repo (fully populated, no empty-repo race); substitutions apply to the generated repo after the dev-file strip, carrying over `_customize_default_template`'s 5x2s read retry and grouping entries by file so one file is read and written once. Best-effort remains confined to the dev-path strip; substitution failures are fatal.
 
 ---
 

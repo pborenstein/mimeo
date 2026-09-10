@@ -384,13 +384,16 @@ paths, drift math, normalization, retry behavior all have direct tests.
    `_rename_repository` / `enable_https_enforcement` / `retry.py` /
    `_processing.py`; route unexpected exceptions to `EXIT_GENERAL` (BUG 4).
    Unblocks a proper fix for BUG 7. **Not started.**
-3. **Land DEC-024 -- and give the manifest `TEMPLATE_DEV_PATHS` too**.
-   `TEMPLATE_DEV_PATHS = ["README.md", "docs/"]` (`github.py` ~line 22) is
-   the same class of template-specific knowledge as `mimeo.lol`'s hardcoded
-   title: per-template fact encoded in mimeo's source. The
-   `mimeo.template.json` manifest being designed is the natural home for
-   both, and Stage 6's `template lint` then validates both. **Not started;
-   this is Stage 6's actual blocker (DEC-024).**
+3. ~~**Land DEC-024 -- and give the manifest `TEMPLATE_DEV_PATHS` too**.~~
+   **Done 2026-09-09.** `TEMPLATE_DEV_PATHS = ["README.md", "docs/"]`
+   (`github.py` ~line 22) was the same class of template-specific knowledge
+   as `mimeo.lol`'s hardcoded title: per-template fact encoded in mimeo's
+   source. Both now live in the `mimeo.template.json` manifest
+   (`template_manifest.py`, DEC-024 + addendum): dev-paths via
+   `dev_paths` (defaults `README.md`/`docs/`/`CLAUDE.md`, overridable per
+   template), substitution via three format handlers. Templates' own
+   manifests are pending in mimeo-sites; Stage 6 (`template lint`) is
+   gated on the first real manifest landing.
 4. ~~**Cut the dead surface** (table above); `verify_dns`'s ABC slot is the
    one that taxes the future most.~~ **Mostly done 2026-09-08** -- `verify_dns`,
    `--stop-on-error`, `HTTPClient`'s dead ctor params and get/put/delete

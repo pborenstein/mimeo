@@ -1,12 +1,19 @@
 """Tests for GitHub Pages host provider."""
 
 import base64
+import json
 from unittest.mock import Mock, patch
 
 import pytest
 
 from mimeo.exceptions import HostError
 from mimeo.providers.host.github import DEFAULT_TEMPLATE, TEMPLATE_ORG, GitHubHost, health_status
+from mimeo.providers.host.template_manifest import (
+    DEFAULT_DEV_PATHS,
+    MANIFEST_FILENAME,
+    Substitution,
+    TemplateManifest,
+)
 
 
 class TestGitHubHost:
@@ -135,42 +142,47 @@ class TestGitHubHost:
         """Test creating a new repository from a template."""
         with patch.object(host, "_gh_api") as mock_api:
             with patch.object(host, "_set_repository_topics") as mock_topics:
-                with patch.object(host, "_customize_default_template"):
-                    with patch.object(host, "_strip_template_dev_files"):
-                        mock_api.side_effect = [
-                            HostError("Not Found"),  # repo existence check
-                            {"is_template": True},  # template repo is_template check
-                            {"full_name": "testorg/example.com"},  # template generate
-                            {"full_name": "testorg/example.com"},  # _wait_for_repo poll
-                        ]
+                with patch.object(host, "_strip_template_dev_files") as mock_strip:
+                    mock_api.side_effect = [
+                        HostError("gh: Not Found (HTTP 404)"),  # template has no manifest
+                        HostError("Not Found"),  # repo existence check
+                        {"is_template": True},  # template repo is_template check
+                        {"full_name": "testorg/example.com"},  # template generate
+                        {"full_name": "testorg/example.com"},  # _wait_for_repo poll
+                    ]
 
-                        full_name, created, existed = host._create_from_template(
-                            "example.com", "testorg"
-                        )
+                    full_name, created, existed = host._create_from_template(
+                        "example.com", "testorg"
+                    )
 
-                assert full_name == "testorg/example.com"
-                assert created is True
-                assert existed is False
-                generate_call = mock_api.call_args_list[2]
-                assert generate_call[0][0] == f"repos/{TEMPLATE_ORG}/{DEFAULT_TEMPLATE}/generate"
-                assert generate_call[1]["method"] == "POST"
-                assert generate_call[1]["data"]["owner"] == "testorg"
-                assert generate_call[1]["data"]["name"] == "example.com"
-                mock_topics.assert_called_once_with(
-                    "testorg/example.com", ["mimeo", "landing-page", "github-pages"]
-                )
+                    assert full_name == "testorg/example.com"
+                    assert created is True
+                    assert existed is False
+                    generate_call = mock_api.call_args_list[3]
+                    assert generate_call[0][0] == f"repos/{TEMPLATE_ORG}/{DEFAULT_TEMPLATE}/generate"
+                    assert generate_call[1]["method"] == "POST"
+                    assert generate_call[1]["data"]["owner"] == "testorg"
+                    assert generate_call[1]["data"]["name"] == "example.com"
+                    mock_topics.assert_called_once_with(
+                        "testorg/example.com", ["mimeo", "landing-page", "github-pages"]
+                    )
+                    # No manifest: the default dev paths apply.
+                    mock_strip.assert_called_once_with("testorg/example.com", DEFAULT_DEV_PATHS)
 
     def test_create_from_template_existing_repo(self, host: GitHubHost) -> None:
         """Test that existing repos are returned without calling template API."""
         with patch.object(host, "_gh_api") as mock_api:
-            mock_api.return_value = {"full_name": "testorg/example.com"}
+            mock_api.side_effect = [
+                HostError("gh: Not Found (HTTP 404)"),  # template has no manifest
+                {"full_name": "testorg/example.com"},  # repo existence check
+            ]
 
             full_name, created, existed = host._create_from_template("example.com", "testorg")
 
             assert full_name == "testorg/example.com"
             assert created is False
             assert existed is True
-            assert mock_api.call_count == 1  # only the existence check
+            assert mock_api.call_count == 2  # manifest fetch + existence check only
 
     def test_create_from_template_force_renames_then_deletes_old_repo(
         self, host: GitHubHost
@@ -179,35 +191,35 @@ class TestGitHubHost:
         only after the new repo is successfully generated."""
         with patch.object(host, "_gh_api") as mock_api:
             with patch.object(host, "_set_repository_topics"):
-                with patch.object(host, "_customize_default_template"):
-                    with patch.object(host, "_strip_template_dev_files"):
-                        with patch.object(host, "_rename_repository") as mock_rename:
-                            with patch.object(host, "_delete_repository") as mock_delete:
-                                with patch.object(host, "_delete_stale_pages_artifacts"):
-                                    with patch("time.time", return_value=1000):
-                                        mock_api.side_effect = [
-                                            {"full_name": "testorg/example.com"},  # existence check
-                                            {"is_template": True},  # is_template check
-                                            {"full_name": "testorg/example.com"},  # generate
-                                            {"full_name": "testorg/example.com"},  # _wait_for_repo
-                                        ]
+                with patch.object(host, "_strip_template_dev_files"):
+                    with patch.object(host, "_rename_repository") as mock_rename:
+                        with patch.object(host, "_delete_repository") as mock_delete:
+                            with patch.object(host, "_delete_stale_pages_artifacts"):
+                                with patch("time.time", return_value=1000):
+                                    mock_api.side_effect = [
+                                        HostError("gh: Not Found (HTTP 404)"),  # no manifest
+                                        {"full_name": "testorg/example.com"},  # existence check
+                                        {"is_template": True},  # is_template check
+                                        {"full_name": "testorg/example.com"},  # generate
+                                        {"full_name": "testorg/example.com"},  # _wait_for_repo
+                                    ]
 
-                                        full_name, created, existed = host._create_from_template(
-                                            "example.com", "testorg", force=True
-                                        )
-
-                                    assert full_name == "testorg/example.com"
-                                    assert created is True
-                                    assert existed is True
-
-                                    # Old repo renamed out of the way before generate was attempted.
-                                    mock_rename.assert_called_once_with(
-                                        "testorg/example.com", "example.com-mimeo-replaced-1000"
+                                    full_name, created, existed = host._create_from_template(
+                                        "example.com", "testorg", force=True
                                     )
-                                    # Old (renamed) repo deleted only after generate succeeded.
-                                    mock_delete.assert_called_once_with(
-                                        "testorg/example.com-mimeo-replaced-1000"
-                                    )
+
+                                assert full_name == "testorg/example.com"
+                                assert created is True
+                                assert existed is True
+
+                                # Old repo renamed out of the way before generate was attempted.
+                                mock_rename.assert_called_once_with(
+                                    "testorg/example.com", "example.com-mimeo-replaced-1000"
+                                )
+                                # Old (renamed) repo deleted only after generate succeeded.
+                                mock_delete.assert_called_once_with(
+                                    "testorg/example.com-mimeo-replaced-1000"
+                                )
 
     def test_create_from_template_force_rolls_back_on_generate_failure(
         self, host: GitHubHost
@@ -219,6 +231,7 @@ class TestGitHubHost:
                 with patch.object(host, "_delete_repository") as mock_delete:
                     with patch("time.time", return_value=1000):
                         mock_api.side_effect = [
+                            HostError("gh: Not Found (HTTP 404)"),  # no manifest
                             {"full_name": "testorg/example.com"},  # existence check
                             {"is_template": True},  # is_template check
                             HostError("Not Found"),  # generate fails (e.g. 404)
@@ -245,6 +258,7 @@ class TestGitHubHost:
             with patch.object(host, "_set_repository_topics"):
                 with patch.object(host, "_strip_template_dev_files"):
                     mock_api.side_effect = [
+                        HostError("gh: Not Found (HTTP 404)"),  # template has no manifest
                         HostError("Not Found"),  # repo existence check
                         {"is_template": True},  # template repo is_template check
                         {"full_name": "testorg/example.com"},  # template generate
@@ -255,14 +269,15 @@ class TestGitHubHost:
                         "example.com", "testorg", template_repo="pandoc-simple"
                     )
 
-                    generate_call = mock_api.call_args_list[2]
+                    generate_call = mock_api.call_args_list[3]
                     assert generate_call[0][0] == f"repos/{TEMPLATE_ORG}/pandoc-simple/generate"
 
     def test_create_from_template_missing_full_name(self, host: GitHubHost) -> None:
         """Test HostError raised when template API response has no full_name."""
         with patch.object(host, "_gh_api") as mock_api:
             mock_api.side_effect = [
-                HostError("Not Found"),
+                HostError("gh: Not Found (HTTP 404)"),  # no manifest
+                HostError("Not Found"),  # repo existence check
                 {"is_template": True},  # template repo is_template check
                 {},  # no full_name
             ]
@@ -297,35 +312,107 @@ class TestGitHubHost:
 
             assert mock_api.call_count == 1  # read only, no PATCH
 
-    def test_customize_default_template_replaces_title_and_heading(self, host: GitHubHost) -> None:
-        """Test the real mimeo.lol content: plain title, letter-spaced heading."""
-        content = "<title>mimeo.lol</title>\n\t\t<h1>m i m e o . l o l</h1>\n"
-        encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
+    def test_fetch_template_manifest_parses_valid_manifest(self, host: GitHubHost) -> None:
+        """A valid manifest is fetched from the template repo, decoded, and parsed."""
+        raw = json.dumps(
+            {
+                "version": 1,
+                "substitutions": [
+                    {
+                        "file": "index.html",
+                        "format": "string-replace",
+                        "match": "mimeo.lol",
+                        "value": "{domain}",
+                    },
+                ],
+            }
+        )
+        encoded = base64.b64encode(raw.encode("utf-8")).decode("ascii")
+
+        with patch.object(host, "_gh_api") as mock_api:
+            mock_api.return_value = {"content": encoded, "sha": "manifest-sha"}
+
+            manifest = host._fetch_template_manifest("mimeo.lol")
+
+        assert manifest is not None
+        assert manifest.dev_paths == DEFAULT_DEV_PATHS
+        assert manifest.substitutions[0].match == "mimeo.lol"
+        mock_api.assert_called_once_with(
+            f"repos/{TEMPLATE_ORG}/mimeo.lol/contents/{MANIFEST_FILENAME}"
+        )
+
+    def test_fetch_template_manifest_absent_returns_none(self, host: GitHubHost) -> None:
+        """A template without a manifest is not an error -- None means defaults apply."""
+        with patch.object(host, "_gh_api") as mock_api:
+            mock_api.side_effect = HostError("gh: Not Found (HTTP 404)")
+
+            assert host._fetch_template_manifest("pandoc-simple") is None
+
+    def test_fetch_template_manifest_invalid_fails_loud(self, host: GitHubHost) -> None:
+        """An unparseable manifest raises rather than being treated as absent."""
+        encoded = base64.b64encode(b"{not json").decode("ascii")
+
+        with patch.object(host, "_gh_api") as mock_api:
+            mock_api.return_value = {"content": encoded, "sha": "manifest-sha"}
+
+            with pytest.raises(HostError) as exc_info:
+                host._fetch_template_manifest("mimeo.lol")
+
+            assert "not valid JSON" in str(exc_info.value)
+
+    def test_apply_template_manifest_replaces_and_writes_once(
+        self, host: GitHubHost
+    ) -> None:
+        """Entries are grouped by file: one read, one write per file."""
+        html = "<title>mimeo.lol</title>\n<h1>mimeo.lol</h1>\n"
+        encoded = base64.b64encode(html.encode("utf-8")).decode("ascii")
+        manifest = TemplateManifest(
+            dev_paths=list(DEFAULT_DEV_PATHS),
+            substitutions=[
+                Substitution(
+                    file="index.html",
+                    format="string-replace",
+                    match="mimeo.lol",
+                    value="{domain}",
+                ),
+            ],
+        )
 
         with patch.object(host, "_gh_api") as mock_api:
             mock_api.side_effect = [
-                {"content": encoded, "sha": "abc123"},  # index.html read
+                {"content": encoded, "sha": "sha1"},  # index.html read
                 {},  # index.html write
             ]
 
-            host._customize_default_template("testorg/tantamount.rodeo", "tantamount.rodeo")
+            host._apply_template_manifest(
+                "testorg/tantamount.rodeo", "tantamount.rodeo", manifest
+            )
 
-            get_call, put_call = mock_api.call_args_list
-            assert get_call[0][0] == "repos/testorg/tantamount.rodeo/contents/index.html"
+            read_call, put_call = mock_api.call_args_list
+            assert read_call[0][0] == "repos/testorg/tantamount.rodeo/contents/index.html"
             assert put_call[0][0] == "repos/testorg/tantamount.rodeo/contents/index.html"
             assert put_call[1]["method"] == "PUT"
-            put_data = put_call[1]["data"]
-            assert put_data["sha"] == "abc123"
-            decoded = base64.b64decode(put_data["content"]).decode("utf-8")
-            assert "tantamount.rodeo" in decoded
-            assert "t a n t a m o u n t . r o d e o" in decoded
-            assert "mimeo.lol" not in decoded
-            assert "m i m e o . l o l" not in decoded
+            assert put_call[1]["data"]["sha"] == "sha1"
+            decoded = base64.b64decode(put_call[1]["data"]["content"]).decode("utf-8")
+            assert decoded == (
+                "<title>tantamount.rodeo</title>\n<h1>tantamount.rodeo</h1>\n"
+            )
 
-    def test_customize_default_template_retries_on_empty_repo(self, host: GitHubHost) -> None:
-        """Test that a 'repository is empty' 404 right after generate is retried."""
-        content = "<title>mimeo.lol</title><h1>m i m e o . l o l</h1>"
-        encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
+    def test_apply_template_manifest_retries_on_empty_repo(self, host: GitHubHost) -> None:
+        """A 'repository is empty' 404 right after generate is retried, not fatal."""
+        html = "<title>mimeo.lol</title><h1>mimeo.lol</h1>"
+        encoded = base64.b64encode(html.encode("utf-8")).decode("ascii")
+        manifest = TemplateManifest(
+            dev_paths=[],
+            substitutions=[
+                Substitution(
+                    file="index.html",
+                    format="string-replace",
+                    match="mimeo.lol",
+                    value="{domain}",
+                ),
+            ],
+        )
 
         with patch.object(host, "_gh_api") as mock_api:
             with patch("mimeo.providers.host.github.time.sleep") as mock_sleep:
@@ -336,88 +423,124 @@ class TestGitHubHost:
                     {},
                 ]
 
-                host._customize_default_template("testorg/example.com", "example.com")
+                host._apply_template_manifest("testorg/example.com", "example.com", manifest)
 
                 assert mock_api.call_count == 4
                 assert mock_sleep.call_count == 2
 
-    def test_customize_default_template_raises_if_never_readable(self, host: GitHubHost) -> None:
-        """Test that a persistent read failure raises rather than being silently dropped."""
+    def test_apply_template_manifest_raises_if_never_readable(self, host: GitHubHost) -> None:
+        """A target that stays unreadable is a hard error, not a silent skip."""
+        manifest = TemplateManifest(
+            dev_paths=[],
+            substitutions=[
+                Substitution(
+                    file="index.html",
+                    format="string-replace",
+                    match="mimeo.lol",
+                    value="{domain}",
+                ),
+            ],
+        )
+
         with patch.object(host, "_gh_api") as mock_api:
             with patch("mimeo.providers.host.github.time.sleep"):
                 mock_api.side_effect = HostError("This repository is empty.")
 
                 with pytest.raises(HostError):
-                    host._customize_default_template("testorg/example.com", "example.com")
+                    host._apply_template_manifest(
+                        "testorg/example.com", "example.com", manifest
+                    )
 
-    def test_customize_default_template_skips_write_when_no_match(self, host: GitHubHost) -> None:
-        """Test that no write happens when the content has already been customized."""
-        content = "<title>already-custom.com</title>"
-        encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
+    def test_apply_template_manifest_self_deploy_is_noop(self, host: GitHubHost) -> None:
+        """Deploying a template to its own domain changes nothing (no write).
+
+        Supersedes the old repo_name != DEFAULT_TEMPLATE gate: mimeo.lol
+        deployed to mimeo.lol renders match == replacement, the no-op guard
+        skips the write, and the template's own repo is never rewritten.
+        """
+        html = "<title>mimeo.lol</title><h1>mimeo.lol</h1>"
+        encoded = base64.b64encode(html.encode("utf-8")).decode("ascii")
+        manifest = TemplateManifest(
+            dev_paths=[],
+            substitutions=[
+                Substitution(
+                    file="index.html",
+                    format="string-replace",
+                    match="mimeo.lol",
+                    value="{domain}",
+                ),
+            ],
+        )
 
         with patch.object(host, "_gh_api") as mock_api:
             mock_api.return_value = {"content": encoded, "sha": "abc123"}
 
-            host._customize_default_template("testorg/example.com", "example.com")
+            host._apply_template_manifest("testorg/mimeo.lol", "mimeo.lol", manifest)
 
             assert mock_api.call_count == 1  # read only, no write
 
-    def test_create_from_template_customizes_default_template(self, host: GitHubHost) -> None:
-        """Test that _create_from_template triggers customization for the default template."""
-        with patch.object(host, "_set_repository_topics"):
-            with patch.object(host, "_strip_template_dev_files"):
-                with patch.object(host, "_customize_default_template") as mock_customize:
-                    with patch.object(host, "_gh_api") as mock_api:
-                        mock_api.side_effect = [
-                            HostError("Not Found"),  # repo existence check
-                            {"is_template": True},  # template repo is_template check
-                            {"full_name": "testorg/example.com"},  # template generate
-                            {"full_name": "testorg/example.com"},  # _wait_for_repo poll
-                        ]
+    def test_create_from_template_applies_manifest(self, host: GitHubHost) -> None:
+        """A present manifest drives dev-path stripping and substitution."""
+        raw = json.dumps(
+            {
+                "version": 1,
+                "dev_paths": ["NOTES.md"],
+                "substitutions": [
+                    {
+                        "file": "index.html",
+                        "format": "string-replace",
+                        "match": "mimeo.lol",
+                        "value": "{domain}",
+                    },
+                ],
+            }
+        )
+        encoded = base64.b64encode(raw.encode("utf-8")).decode("ascii")
 
-                        host._create_from_template("example.com", "testorg")
+        with patch.object(host, "_gh_api") as mock_api:
+            with patch.object(host, "_set_repository_topics"):
+                with patch.object(host, "_strip_template_dev_files") as mock_strip:
+                    with patch.object(host, "_delete_file") as mock_delete:
+                        with patch.object(host, "_apply_template_manifest") as mock_apply:
+                            mock_api.side_effect = [
+                                {"content": encoded},  # manifest fetch
+                                HostError("Not Found"),  # repo existence check
+                                {"is_template": True},  # is_template check
+                                {"full_name": "testorg/example.com"},  # generate
+                                {"full_name": "testorg/example.com"},  # _wait_for_repo
+                            ]
 
-                        mock_customize.assert_called_once_with("testorg/example.com", "example.com")
+                            host._create_from_template("example.com", "testorg")
 
-    def test_create_from_template_skips_customization_for_other_templates(
+                            manifest = mock_apply.call_args[0][2]
+                            assert manifest is not None
+                            assert manifest.dev_paths == ["NOTES.md"]
+                            mock_apply.assert_called_once_with(
+                                "testorg/example.com", "example.com", manifest
+                            )
+                            mock_strip.assert_called_once_with(
+                                "testorg/example.com", ["NOTES.md"]
+                            )
+                            # The manifest itself is authoring metadata: always stripped.
+                            mock_delete.assert_called_once_with(
+                                "testorg/example.com", MANIFEST_FILENAME
+                            )
+
+    def test_create_from_template_invalid_manifest_fails_before_mutation(
         self, host: GitHubHost
     ) -> None:
-        """Test that non-default templates are not customized."""
-        with patch.object(host, "_set_repository_topics"):
-            with patch.object(host, "_strip_template_dev_files"):
-                with patch.object(host, "_customize_default_template") as mock_customize:
-                    with patch.object(host, "_gh_api") as mock_api:
-                        mock_api.side_effect = [
-                            HostError("Not Found"),  # repo existence check
-                            {"is_template": True},  # template repo is_template check
-                            {"full_name": "testorg/example.com"},  # template generate
-                            {"full_name": "testorg/example.com"},  # _wait_for_repo poll
-                        ]
+        """An invalid manifest aborts before the existence check -- no partial work."""
+        raw = json.dumps({"version": 2, "substitutions": []})
+        encoded = base64.b64encode(raw.encode("utf-8")).decode("ascii")
 
-                        host._create_from_template(
-                            "example.com", "testorg", template_repo="pandoc-simple"
-                        )
+        with patch.object(host, "_gh_api") as mock_api:
+            mock_api.side_effect = [{"content": encoded}]  # manifest fetch
 
-                        mock_customize.assert_not_called()
+            with pytest.raises(HostError) as exc_info:
+                host._create_from_template("example.com", "testorg")
 
-    def test_create_from_template_skips_customization_when_domain_is_template_name(
-        self, host: GitHubHost
-    ) -> None:
-        """Test that mimeo.lol's own repo is never rewritten by its own template."""
-        with patch.object(host, "_set_repository_topics"):
-            with patch.object(host, "_strip_template_dev_files"):
-                with patch.object(host, "_customize_default_template") as mock_customize:
-                    with patch.object(host, "_gh_api") as mock_api:
-                        mock_api.side_effect = [
-                            HostError("Not Found"),  # repo existence check
-                            {"is_template": True},  # template repo is_template check
-                            {"full_name": f"testorg/{DEFAULT_TEMPLATE}"},  # template generate
-                            {"full_name": f"testorg/{DEFAULT_TEMPLATE}"},  # _wait_for_repo poll
-                        ]
-
-                        host._create_from_template(DEFAULT_TEMPLATE, "testorg")
-
-                        mock_customize.assert_not_called()
+            assert "unsupported version" in str(exc_info.value)
+            assert mock_api.call_count == 1  # manifest fetch only, nothing else touched
 
     def test_strip_template_dev_files_deletes_readme_and_docs(self, host: GitHubHost) -> None:
         """Test that README.md and every file under docs/ are deleted."""
@@ -438,7 +561,7 @@ class TestGitHubHost:
                 {},  # docs/guides/setup.md delete
             ]
 
-            host._strip_template_dev_files("testorg/example.com")
+            host._strip_template_dev_files("testorg/example.com", ["README.md", "docs/"])
 
             calls = [c[0][0] for c in mock_api.call_args_list]
             assert "repos/testorg/example.com/contents/README.md" in calls
@@ -453,16 +576,16 @@ class TestGitHubHost:
                 patch("mimeo.providers.host.github.time.sleep"):
             mock_api.side_effect = HostError("Not Found")
 
-            host._strip_template_dev_files("testorg/example.com")
+            host._strip_template_dev_files("testorg/example.com", ["README.md", "docs/"])
 
             # Each path's existence check retries 5x before giving up.
             assert mock_api.call_count == 10
 
     def test_delete_file_retries_transient_repo_empty_404(self, host: GitHubHost) -> None:
         """A fresh repo's contents lookup can 404 before generate-from-template
-        finishes populating the tree (same race _customize_default_template
-        works around). _delete_file must retry rather than concluding the
-        file doesn't exist and silently leaving it in place."""
+        finishes populating the tree (the same race the manifest-substitution
+        read path works around). _delete_file must retry rather than
+        concluding the file doesn't exist and silently leaving it in place."""
         with patch.object(host, "_gh_api") as mock_api, \
                 patch("mimeo.providers.host.github.time.sleep") as mock_sleep:
             mock_api.side_effect = [
@@ -670,26 +793,26 @@ class TestGitHubHost:
         """Test that _create_from_template sets mimeo topics on new repos."""
         with patch.object(host, "_gh_api") as mock_api:
             with patch.object(host, "_set_repository_topics") as mock_topics:
-                with patch.object(host, "_customize_default_template"):
-                    with patch.object(host, "_strip_template_dev_files"):
-                        mock_api.side_effect = [
-                            HostError("Not found"),  # repo existence check
-                            {"is_template": True},  # template repo is_template check
-                            {"full_name": "testorg/test-repo"},  # template generate
-                            {"full_name": "testorg/test-repo"},  # _wait_for_repo poll
-                        ]
+                with patch.object(host, "_strip_template_dev_files"):
+                    mock_api.side_effect = [
+                        HostError("gh: Not Found (HTTP 404)"),  # no manifest
+                        HostError("Not found"),  # repo existence check
+                        {"is_template": True},  # template repo is_template check
+                        {"full_name": "testorg/test-repo"},  # template generate
+                        {"full_name": "testorg/test-repo"},  # _wait_for_repo poll
+                    ]
 
-                        full_name, created, existed = host._create_from_template(
-                            "test-repo", "testorg"
-                        )
+                    full_name, created, existed = host._create_from_template(
+                        "test-repo", "testorg"
+                    )
 
-                assert full_name == "testorg/test-repo"
-                assert created is True
-                assert existed is False
-                mock_topics.assert_called_once_with(
-                    "testorg/test-repo",
-                    ["mimeo", "landing-page", "github-pages"],
-                )
+        assert full_name == "testorg/test-repo"
+        assert created is True
+        assert existed is False
+        mock_topics.assert_called_once_with(
+            "testorg/test-repo",
+            ["mimeo", "landing-page", "github-pages"],
+        )
 
     def test_get_pages_health_healthy(self, host: GitHubHost) -> None:
         """Test get_pages_health returns healthy data when Pages is fully configured."""

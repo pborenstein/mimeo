@@ -113,7 +113,8 @@ front-door verbs than it started with. See DEC-021.
         substitutions, format one of `js-key` / `string-replace` /
         `yaml-frontmatter-key`. Replaces `_customize_default_template`
         (currently `mimeo.lol`-only) with one dispatcher; templates with no
-        manifest are skipped, not errored. Not yet implemented — see Entry 44
+        manifest are skipped, not errored. Implemented 2026-09-09 — see the
+        DEC-024 stage section below and Entry 56
   - [ ] Scope boundary clarified (Entry 44): mimeo only stamps the site's own
         domain into its one declared self-reference point (title/metadata
         url). Template authoring — bios, copy, deciding what "generic"
@@ -311,14 +312,55 @@ front-door verbs than it started with. See DEC-021.
               its mentions of `template apply`/`dns repair`/`list`/etc. are
               historical decision-record entries describing the surface as
               it existed at the time, which is correct for a decision log.
+- [x] DEC-024 implementation: template manifest (2026-09-09). Schema
+      ratified in DEC-024's addendum after surveying the real template
+      files; read the addendum before touching this code.
+  - [x] New module `mimeo/providers/host/template_manifest.py`:
+        `parse_manifest()` (strict validation — unknown fields/formats/
+        tokens, per-format key-vs-match rules, duplicate detection),
+        `apply_substitutions()`, and the three handlers — `string-replace`
+        (literal, all occurrences, absent match is loud), `js-key`
+        (loosey-goosey: dotted path to a unique string-literal leaf
+        through any object literal; unkeyed braces are path-transparent;
+        ambiguity and non-string leaves are loud), `yaml-frontmatter-key`
+        (set-by-key, top-level only). `DEFAULT_DEV_PATHS` =
+        `["README.md", "docs/", "CLAUDE.md"]` — adds CLAUDE.md to the
+        old hardcoded list per user call.
+  - [x] `GitHubHost` wiring: `_fetch_template_manifest` (template-repo
+        fetch, 404 -> None = no manifest, invalid -> HostError before any
+        mutation), `_apply_template_manifest` (grouped by file, one
+        read/write per file, no-op guard preserved), `_read_file_with_retry`
+        (5x2s empty-repo race carried over), `_strip_template_dev_files`
+        now takes dev_paths (manifest override or defaults); the manifest
+        file itself is always stripped from generated repos.
+        `_customize_default_template` and `TEMPLATE_DEV_PATHS` deleted —
+        no template-specific knowledge left in mimeo source.
+  - [x] Tests: `tests/providers/host/test_template_manifest.py` (42
+        cases; fixtures mirror real template files — tech-blog's
+        metadata.js with comments/nesting/process.env/placeholder email,
+        pamphlet's addPlugin options object, pandoc-simple frontmatter,
+        laptopistan/mimeo.lol HTML); `test_github.py` updated — manifest
+        fetch/apply/integration, self-deploy no-op (supersedes the old
+        repo-name gate), invalid-manifest-fails-before-mutation. 333
+        tests passing (up from 296), mypy clean, ruff unchanged from
+        baseline (same 5 pre-existing errors).
+  - [x] Docs: DEC-024 addendum + status, ARCHITECTURE.md component map
+        and create-workflow note updated.
+  - [ ] Follow-up outside this repo (mimeo-sites): add
+        `mimeo.template.json` to each template — mimeo.lol first (its
+        CSS letter-spacing fix, mimeo-sites `17d308f`, reduced it to one
+        string-replace entry). Until a template ships a manifest it
+        deploys exactly as before (defaults stripped, no substitution);
+        mimeo.lol specifically loses its hardcoded customization until
+        its manifest lands (accepted window per user call).
 - [ ] Stage 6: `template lint TEMPLATE` (new command, validates DEC-024's
       manifest schema). Split out from Stage 5's "5E" — this is new
       functionality gated on DEC-024, not part of the verb-collapse work.
-  - [ ] Do not start until DEC-024's manifest schema and format
-        handlers (`js-key`, `string-replace`, `yaml-frontmatter-key`)
-        are implemented and `mimeo.template.json` exists on at least
-        one real template — this command validates that schema, so
-        it has nothing to check against until DEC-024 lands
+  - [ ] Do not start until `mimeo.template.json` exists on at least one
+        real template — the schema and format handlers are implemented
+        (see above), but this command checks manifests against the actual
+        template repo, so it has nothing meaningful to lint until a real
+        manifest exists (mimeo-sites follow-up)
   - [ ] Read-only: given a template name, fetch `mimeo.template.json`
         from the template repo if present; validate each
         substitution entry's `format` is a known value, `file`

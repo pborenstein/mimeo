@@ -66,15 +66,24 @@ mimeo/
 │   │                     verify_dns: poll with dnspython
 │   │
 │   └── host/
-│       └── github.py   GitHub Pages provider
-│                         gh CLI for API calls and git authentication
-│                         GITHUB_PAGES_IPS constant (185.199.108-111.153)
-│                         TEMPLATE_ORG = "tepiton", DEFAULT_TEMPLATE = "mimeo.lol"
-│                         Repository creation from template via GitHub API
-│                         Pages enable, custom domain, HTTPS enforcement
-│                         health_status() classifier
-│                         get_pages_health(), list_mimeo_repositories(),
-│                         get_template_repository()
+│       ├── github.py   GitHub Pages provider
+│       │                 gh CLI for API calls and git authentication
+│       │                 GITHUB_PAGES_IPS constant (185.199.108-111.153)
+│       │                 TEMPLATE_ORG = "tepiton", DEFAULT_TEMPLATE = "mimeo.lol"
+│       │                 Repository creation from template via GitHub API
+│       │                 Pages enable, custom domain, HTTPS enforcement
+│       │                 health_status() classifier
+│       │                 get_pages_health(), list_mimeo_repositories(),
+│       │                 get_template_repository()
+│       │                 _fetch_template_manifest / _apply_template_manifest:
+│       │                 deploy-time manifest read + substitution (below)
+│       └── template_manifest.py  DEC-024 manifest: parse_manifest(),
+│                         apply_substitutions(), DEFAULT_DEV_PATHS
+│                         Three format handlers: string-replace,
+│                         js-key (loosey-goosey dotted-path to a unique
+│                         string-literal leaf), yaml-frontmatter-key
+│                         All failures loud (HostError); strip of dev-only
+│                         paths stays best-effort
 │
 └── utils/
     ├── http.py         HTTP client
@@ -182,7 +191,7 @@ Report result: url, https_pending, dns_pending
   (no propagation poll -- run 'mimeo status' to confirm)
 ```
 
-`--force` replaces an existing repository's content from the template; without it, an existing repo is left unchanged and DNS configuration is skipped (nothing new to point at). The domain-substitution manifest (DEC-024, once implemented) reruns automatically on both plain `create` and `create --force`.
+`--force` replaces an existing repository's content from the template; without it, an existing repo is left unchanged and DNS configuration is skipped (nothing new to point at). The domain-substitution manifest (DEC-024) reruns automatically on both plain `create` and `create --force`: a template shipping `mimeo.template.json` has its declared self-reference points rewritten to the deployed domain, with failures surfaced loudly rather than skipped.
 
 ### Concurrency
 

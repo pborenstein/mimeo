@@ -346,21 +346,28 @@ front-door verbs than it started with. See DEC-021.
         baseline (same 5 pre-existing errors).
   - [x] Docs: DEC-024 addendum + status, ARCHITECTURE.md component map
         and create-workflow note updated.
-  - [ ] Follow-up outside this repo (mimeo-sites): add
-        `mimeo.template.json` to each template — mimeo.lol first (its
-        CSS letter-spacing fix, mimeo-sites `17d308f`, reduced it to one
-        string-replace entry). Until a template ships a manifest it
-        deploys exactly as before (defaults stripped, no substitution);
-        mimeo.lol specifically loses its hardcoded customization until
-        its manifest lands (accepted window per user call).
+  - [x] Follow-up outside this repo (mimeo-sites): add
+        `mimeo.template.json` to every template — done 2026-09-09/10,
+        all ten repos pushed. mimeo.lol/laptopistan.com: one
+        string-replace entry. pandoc-simple: yaml-frontmatter-key on
+        `title:`. Each eleventy template: js-key `url` (plus an
+        about.md string-replace for chapbook/folio/pamphlet). The
+        eleventy rollout also drove a template cleanup — deleted
+        `author.url`/`author.email`/`feed.id` (read by nothing, only
+        leaked into Atom feeds), deleted two stale `notreally.config.js`
+        copies, made pamphlet's feed base derive from `metadata.url`,
+        normalized all `url:` placeholders to `https://example.com/`.
+        All templates build clean post-cleanup. Live-verified end to
+        end by the user: `mimeo create bluegazebo.dev --template
+        mimeo.lol` and `mimeo create tepiton.com --force`.
 - [ ] Stage 6: `template lint TEMPLATE` (new command, validates DEC-024's
       manifest schema). Split out from Stage 5's "5E" — this is new
       functionality gated on DEC-024, not part of the verb-collapse work.
-  - [ ] Do not start until `mimeo.template.json` exists on at least one
-        real template — the schema and format handlers are implemented
-        (see above), but this command checks manifests against the actual
-        template repo, so it has nothing meaningful to lint until a real
-        manifest exists (mimeo-sites follow-up)
+  - [ ] Gating resolved 2026-09-10: schema/handlers implemented and all
+        ten templates now ship real manifests — unblocked. pandoc-simple's
+        manifest was re-validated after a remote-side index.md cleanup
+        changed the frontmatter title, the kind of drift `template lint`
+        exists to catch
   - [ ] Read-only: given a template name, fetch `mimeo.template.json`
         from the template repo if present; validate each
         substitution entry's `format` is a known value, `file`

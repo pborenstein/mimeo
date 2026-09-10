@@ -7,16 +7,13 @@ last_commit: 272db0c
 
 ## Current Focus
 
-DEC-024 is complete end to end: manifest implementation in mimeo
-(`13583f7`, Entry 56), all ten tepiton templates shipping validated
-manifests, live-verified by the user on fresh create and `--force`
-(Entry 57). Every template repo and this repo are pushed.
+DEC-024 is complete end to end (Entry 57, all repos pushed). The
+follow-on Stage 6 (`template lint`) was evaluated this session and
+dropped — deploy-time validation already fails loud, so a standalone
+linter wasn't worth a new command (Entry 58, docs-only session).
 
 ## Active Tasks
 
-- [ ] **Stage 6**: `template lint` — unblocked (all ten templates ship
-      real manifests). pandoc-simple's remote-side frontmatter drift is
-      the motivating example.
 - [ ] **Track B**: Stage 4 E2E test lane, blocked on test account/org.
 - [ ] **Backlog**: BUG 4/6/7 and the error-semantics refactor
       (`docs/CODE_REVIEW.md` rec #2) — not started.
@@ -40,10 +37,14 @@ Track B blocked on a test account/org. Everything else unblocked.
   `notreally.config.js`; pamphlet's feed base derives from metadata.url.
   All ten templates build clean; nothing references the deleted keys.
 - Known template nit, not fixed: double slash in tech-blog canonical
-  URLs (`https://example.com//posts/...`) — pre-existing, mimeo-sites.
+      URLs (`https://example.com//posts/...`) — pre-existing, mimeo-sites.
+- Stage 6 (`template lint`) dropped 2026-09-10: deploy-time manifest
+      validation already aborts loudly and names the failing entry, so
+      lint only bought earlier drift discovery. Full rationale in
+      IMPLEMENTATION.md's Stage 6 note.
 
 ## Next Session
 
-Stage 6 (`template lint`) is the natural pick — freshly unblocked with
-real manifests to lint. Otherwise rec #2 (error semantics) or the
-SUBDOMAINS.md decisions.
+The open picks are rec #2 (error-semantics refactor, CODE_REVIEW.md)
+and the four SUBDOMAINS.md decisions; BUG 4/6/7 and D2 sit behind
+them. Track B stays blocked on a test account/org.

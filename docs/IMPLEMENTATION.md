@@ -360,25 +360,17 @@ front-door verbs than it started with. See DEC-021.
         All templates build clean post-cleanup. Live-verified end to
         end by the user: `mimeo create bluegazebo.dev --template
         mimeo.lol` and `mimeo create tepiton.com --force`.
-- [ ] Stage 6: `template lint TEMPLATE` (new command, validates DEC-024's
-      manifest schema). Split out from Stage 5's "5E" — this is new
-      functionality gated on DEC-024, not part of the verb-collapse work.
-  - [ ] Gating resolved 2026-09-10: schema/handlers implemented and all
-        ten templates now ship real manifests — unblocked. pandoc-simple's
-        manifest was re-validated after a remote-side index.md cleanup
-        changed the frontmatter title, the kind of drift `template lint`
-        exists to catch
-  - [ ] Read-only: given a template name, fetch `mimeo.template.json`
-        from the template repo if present; validate each
-        substitution entry's `format` is a known value, `file`
-        resolves to a real path in the template repo, and
-        `key`/`match` is present per format's requirements
-  - [ ] No domain argument, no writes, no calls to
-        `deploy_site`/`configure_dns`/anything mutating
-  - [ ] Report pass/fail per substitution entry with specifics (which
-        file, which field, what was wrong) — this is a template
-        author's debugging tool, error messages should name the exact
-        manifest entry at fault
+- [x] Stage 6: `template lint TEMPLATE` — **dropped 2026-09-10** before
+      any work started, juice not worth the squeeze. Deploy-time
+      validation already aborts loudly on a bad manifest and names the
+      failing entry (DEC-024, Entry 56), so lint would only buy earlier
+      discovery of template/manifest drift; the fleet is ten templates
+      with one maintainer, and the one drift incident to date
+      (pandoc-simple's remote-side frontmatter cleanup, Entry 57) was
+      caught by routine re-validation. The full design (read-only, no
+      domain argument, per-entry pass/fail report naming the manifest
+      entry at fault) is preserved in git history; revisit if templates
+      gain outside contributors or the fleet grows.
 - [x] Code review fix pass (GLM 5.3's `docs/CODE_REVIEW.md`, 2026-09-08)
   - [x] Fixed BUG 1 (`domain_exists` conflated "not owned" with "API
         broken" — now only Porkbun's actual "Domain not found" response

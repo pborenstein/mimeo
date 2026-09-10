@@ -689,3 +689,15 @@ removal, not an architectural choice.
 **Decisions**: DEC-024 (status flipped to Complete)
 
 **Files**: mimeo-sites TEMPLATES/* (all ten repos, committed+pushed 2026-09-09/10); `docs/{DECISIONS,IMPLEMENTATION}.md` (this commit)
+
+## Entry 58: Stage 6 (`template lint`) dropped before any work started (2026-09-10)
+
+**What**: Dropped Stage 6 (`template lint TEMPLATE`). Docs-only session — no code written. Also a session pickup and a walkthrough of the pandoc-simple frontmatter drift incident that had been lint's motivating example.
+
+**Why**: Walking through the actual incident showed the juice isn't worth the squeeze. DEC-024's deploy-time validation already aborts loudly on a bad manifest and names the failing entry before any repository is created, so lint would only buy *earlier* discovery of template/manifest drift. The fleet is ten templates with one maintainer, and the one drift incident to date (pandoc-simple's remote-side frontmatter cleanup, Entry 57) was caught by routine re-validation during the manifest rollout anyway.
+
+**How**: Marked Stage 6 dropped in IMPLEMENTATION.md with the full rationale and a revisit condition (templates gaining outside contributors, or fleet growth; the read-only/per-entry-report design is recoverable from git history). Corrected DEC-025's two lint references (status note and collapse-list item 5), which still described lint as pending. CONTEXT.md's task list and Next Session repointed at the error-semantics refactor (CODE_REVIEW.md rec #2) and the SUBDOMAINS.md decisions.
+
+**Decisions**: none new — a stage cancellation recorded in IMPLEMENTATION.md; DEC-025 text corrected (no semantic change)
+
+**Files**: `docs/{CONTEXT,IMPLEMENTATION,DECISIONS}.md` (this commit)

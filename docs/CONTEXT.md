@@ -2,45 +2,48 @@
 phase: 8
 phase_name: Consolidation
 updated: 2026-09-09
-last_commit: f73e05d
+last_commit: fa0c02e
 ---
 
 ## Current Focus
 
-Subdomain-sites design written and committed (`e75fe6b`, see Entry 54).
-Then repaired the chronicles: four phase files had out-of-order entries
-and a duplicate Entry 53, fixed in `29192be` (Entry 55). The wrap-up
-skill's numbering recipe hardened to max-across-all-matches.
+DEC-024 implemented and committed (`13583f7`, Entry 56): manifest-driven
+template substitution replaces the mimeo.lol hardcode. Schema ratified in
+DEC-024's addendum. mimeo-side work is done; the templates' own manifests
+are the remaining piece, and they live in mimeo-sites, not here.
 
 ## Active Tasks
 
-- [ ] **Subdomain sites**: design complete; resolve the four open
-      decisions in SUBDOMAINS.md (repo naming, zone-resolution source,
-      `ignore_domains` semantics, apex freeze) before scheduling.
-- [ ] **Stage 6**: `template lint`. Blocked on DEC-024 implementation.
+- [ ] **mimeo-sites follow-up**: add `mimeo.template.json` to each of the
+      10 templates. mimeo.lol first: one `string-replace` entry
+      (`match: "mimeo.lol"`), enabled by its CSS letter-spacing fix.
+- [ ] **Stage 6**: `template lint` — now gated only on a real manifest
+      existing on a template (schema/handlers are done).
 - [ ] **Track B**: Stage 4 E2E test lane, blocked on test account/org.
 - [ ] **Backlog**: BUG 4/6/7 and the error-semantics refactor
-      (`docs/CODE_REVIEW.md` recommendation #2) — not started.
+      (`docs/CODE_REVIEW.md` rec #2) — not started.
 - [ ] **Backlog**: D2 (`default_registrar`/`default_host`) — decide
       factory vs. removal.
+- [ ] **Subdomain sites**: four open decisions in SUBDOMAINS.md.
 
 ## Blockers
 
-Stage 6 blocked on DEC-024 implementation. Everything else unblocked.
+Stage 6 blocked on the first real manifest landing (mimeo-sites). The rest
+unblocked.
 
 ## Context
 
-- Chronicles are now sorted ascending per file; next entry number is 55+1.
-  Entries 49-52 are dated 09-09 but their commits are 09-08 evening —
-  left alone, confirm intent before "fixing".
-- Subdomain design core: "domain" means hostname + zone + join key at
-  once; subdomains split them and make zones one-to-many with sites.
-  Today `create` on a subdomain refuses cleanly at the ownership check.
-- 289 tests passing, mypy clean, ruff unchanged from baseline (5
-  pre-existing errors, untouched files). No code changed this session.
+- Manifest schema (DEC-024 addendum): `version` (=1), optional `dev_paths`
+  (replaces defaults `README.md`/`docs/`/`CLAUDE.md` wholesale), non-empty
+  `substitutions`, `{domain}`-only templating, all failures loud.
+- `js-key` is loosey-goosey: dotted path to a unique string-literal leaf
+  through any object literal; set-by-key, indifferent to placeholders.
+- mimeo.lol deploys are uncustomized until its manifest lands (accepted
+  window); verification is mock-based — live-`create` once a manifest exists.
+- 333 tests passing, mypy clean, ruff at the pre-existing 5-error baseline.
 
 ## Next Session
 
-Either ratify SUBDOMAINS.md's open decisions and schedule the work, or
-start BUG 4/6/7 + error-semantics refactor, or DEC-024 to unblock
-Stage 6.
+Either write mimeo.lol's manifest in mimeo-sites and live-smoke-test
+`create`, or start CODE_REVIEW rec #2 (error-semantics refactor), or
+tackle the SUBDOMAINS.md decisions.

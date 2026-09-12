@@ -1,30 +1,29 @@
 ---
 phase: 8
 phase_name: Consolidation
-updated: 2026-09-11
-last_commit: d64d1fb
+updated: 2026-09-12
+last_commit: 74f438a
 ---
 
 ## Current Focus
 
-Two template-side rounds this session, no mimeo code: branding
-centralization in product/service with `email` parameterized (Entry 59),
-then package.json identity fixes in the literary three (Entry 60) —
-all seven eleventy templates now carry honest package metadata.
+Error-path QoL session (Entry 61, DEC-027/028): structured gh status
+codes end to end (rec #2 + BUG 4 + BUG 7 closed), create output honest
+(created / already-existed / failed) and narrated in parallel runs.
+Branding work declared complete at Entry 59 — no port to the remaining
+five templates. Subdomain sites closed: the eleventy templates working
+was the answer.
 
 ## Active Tasks
 
-- [ ] **Port the branding pattern to the other five eleventy
-      templates** (prose-blog, tech-blog, chapbook, folio, pamphlet)
-      — user deferred; literary three carry the about.md
-      string-replace wrinkle; decide whether blogs/chapbooks want a
-      site-wide email at all.
+- [ ] **BUG 6**: missing-`schema_version` warning invisible to CLI users
+      (`DeprecationWarning` hidden outside `__main__`) — print to stderr
+      or drop the check. Small.
+- [ ] **D2**: `default_registrar`/`default_host` — provider factory vs.
+      config-field removal.
 - [ ] **Track B**: Stage 4 E2E test lane, blocked on test account/org.
-- [ ] **Backlog**: BUG 4/6/7 and the error-semantics refactor
-      (`docs/CODE_REVIEW.md` rec #2) — not started.
-- [ ] **Backlog**: D2 (`default_registrar`/`default_host`) — decide
-      factory vs. removal.
-- [ ] **Subdomain sites**: four open decisions in SUBDOMAINS.md.
+- [ ] **Backlog**: rec #6 long-termers — Pages IPs from
+      `api.github.com/meta`, gentler create-only-missing `sync` path (D1).
 
 ## Blockers
 
@@ -32,19 +31,16 @@ Track B blocked on a test account/org. Everything else unblocked.
 
 ## Context
 
-- Design stance (Entry 60): template package.json ships as-is; its
-      identity fields are inert in a site, so sites do nothing.
-      Stopping rule for parameterization creep: only what the site's
-      build or visitors consume (url/email pass; package identity
-      fails).
-- package-lock.json mirrors the root package name/version — keep in
-      sync when renaming, or `npm ci` can fail on the Pages deploy.
-- Instance tepiton/002370.xyz predates the prose fix: hand-edit its
-      about.md or `--force` + re-apply metadata.
-- Prose trick: `markdownTemplateEngine: "njk"` lets `{{ metadata.title
-      }}` rebrand .md bodies; frontmatter can't interpolate.
+- Exit-code contract (DEC-027): only confirmed-transient exits 5;
+  definitive provider failures and unexpected exceptions exit 1.
+- Tests constructing 404/422-meaning `HostError`s must pass
+  `status_code=` explicitly — parsing lives in `_run_gh_command`.
+- Already-existed create no-op keeps exit 0 with a warn recap (DEC-028);
+  user accepted honest text over a nonzero code.
+- mimeo-sites (separate repo): user updated the templates' pages.yml so
+  URLs work with or without a custom domain; not chronicled here.
 
 ## Next Session
 
-Port the branding pattern to the remaining five eleventy templates,
-or pick up rec #2 (error semantics) / the SUBDOMAINS.md decisions.
+BUG 6 is the quick win; otherwise the D2 factory-vs-removal decision or
+the rec #6 long-termers.

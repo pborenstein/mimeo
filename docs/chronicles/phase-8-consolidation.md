@@ -713,3 +713,15 @@ removal, not an architectural choice.
 **Decisions**: DEC-024 (addendum: `email` is in-scope self-reference, same category as `url`)
 
 **Files**: mimeo-sites TEMPLATES/eleventy-service (`fd7a898`, `37efa18`), TEMPLATES/eleventy-product (`38e9f1a`, `e469461`); this repo docs only (this commit)
+
+## Entry 60: Template package.json identity fixed in the literary three (2026-09-11)
+
+**What**: chapbook/folio/pamphlet `package.json` now tell the truth: names = repo names (were upstream-starter names), folio's inherited `9.0.0` → `1.0.0`, folio's placeholder `author`/`repository`/`funding`/`bugs`/`homepage` (`your-org` URLs, `youremailaddress@example.com`) deleted, pamphlet's empty `author` dropped. Lockfiles kept in sync — they mirror the root package name, and a mismatch can fail `npm ci` on the Pages deploy. Verified with the deploy steps themselves: `npm ci` + `npm run build` locally, green Actions on all three. (chapbook `223aa42`, folio `aad334b`, pamphlet `abc24ab`.)
+
+**Why**: Survey of all seven eleventy templates found the four newer ones already clean and the literary three never scrubbed of upstream-starter identity. Since `mimeo create` ships the template's package.json to the generated site, the placeholder fields landed in site repos — the same wrong-self-reference class as the Harborlight prose (Entry 59), at near-zero visibility.
+
+**How**: Design first: package.json identity fields are inert in a generated site (Pages runs `npm ci` + build, reading scripts/deps/engines; nothing displays name/repository/author), so the fix is consistency-with-the-template and *nothing for the site to do*. Stopping rule against template-parameterization creep, worth keeping: parameterize only what the site's build or its visitors consume — `url` and `email` pass that test, package identity fails it. User scoped the fix minimal (no description rewrites, no `private: true`). One incident note: rewriting the lock via JSON re-serialization churned the whole file; redone surgically as string replacement of exactly the name/version lines.
+
+**Decisions**: none new — design stance recorded here: template package.json ships as-is, sites inherit it unchanged
+
+**Files**: mimeo-sites TEMPLATES/eleventy-{chapbook,folio,pamphlet}/package.json + package-lock.json (commits above); this repo docs only (this commit)

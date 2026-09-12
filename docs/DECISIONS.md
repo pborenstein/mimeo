@@ -553,6 +553,34 @@ A fourth, related fix landed in the same session at the provider layer (`mimeo/p
 
 ---
 
+### DEC-027: Error Meaning Comes from Structured Status Codes, Not stderr Keywords (2026-09-12)
+
+**Status**: Active (Phase 8) — implements `docs/CODE_REVIEW.md` rec #2; closes BUG 4 and BUG 7.
+
+**Context**: Every GitHub operation is a `gh` subprocess, and failure meaning was recovered by substring-matching gh's stderr in four separate places: `"422"` for rename conflicts, `"404"` for template-manifest absence, `"certificate does not exist"` for HTTPS enforcement, and two gradually diverging transient-keyword tuples in `retry.py` and `_processing.py`. It worked because it was validated against live gh output once, but it is brittle across gh versions, and the damage was already visible in incidents: a 400 "Invalid cname" exited 5 ("transient"), inviting automation to retry a permanent failure; a `KeyError` from a provider response-shape change printed `[provider]` and exited 5 (BUG 4); `get_pages_health` mapped *any* `HostError` to `pages_configured: False`, so a network blip during a fleet sweep painted healthy sites as broken in `status` (BUG 7).
+
+**Decision**: `HostError` carries a `status_code` (mirroring `APIError`), parsed from gh's `(HTTP NNN)` stderr in exactly one place (`_run_gh_command` in `github.py`); `_gh_api` preserves it through re-wrapping. All consumers branch on the code: `_rename_repository` (422 = retry once), the template-manifest fetch (404 = absent), the Pages GET probe and `get_pages_health` (404 = "no Pages"; anything else propagates), `retry_with_jitter` (`_RETRYABLE_STATUS_CODES` when a code exists), and `_categorize_error` (429 → exit 4, 5xx → 5, 401/403 → 3, any other code → exit 1 "provider", unexpected exception types → exit 1 "error" — the BUG 4 fix). Message keywords remain only as a fallback for code-less errors (network-level gh failures), via one shared tuple in `retry.py`. `enable_https_enforcement`'s "certificate does not exist" message check stays deliberately: it distinguishes *within* a status code, which structure cannot help.
+
+**Alternatives considered**: Typed error subclasses per failure mode instead of a status code (rejected — heavier than needed; code + message covers every current call site); keep keyword matching and only fix the exit-code map (rejected — leaves the brittleness the review flagged as the root-cause shape behind BUGs 1 and 7).
+
+**Consequences**: Exit-code contract change: only confirmed-transient failures exit 5; definitive provider failures (400/404/422, "gh not installed") exit 1. DEC-026's "ownership refusal exits 5" consequence is now exit 1 (`RegistrarError` with no code, unmatched) — DEC-026's behavior otherwise unchanged. `status` reports health-check failures as domain error rows ("couldn't check") instead of red SITE cells. Tests constructing 404-meaning `HostError`s must pass `status_code=404` explicitly — the parser lives in `_run_gh_command`, not the exception constructor.
+
+---
+
+### DEC-028: `create` Reports Created / Already-Existed / Failed as Distinct Outcomes (2026-09-12)
+
+**Status**: Active (Phase 8).
+
+**Context**: `create`'s recap equated "no error" with "created": a domain whose repo already existed (repo left unchanged, DNS skipped per DEC-026) was counted in "Successfully created: N/N domains" under a green check. Multi-domain runs suppress step logs, so the recap was the only view — `create a.com b.com` against two existing repos claimed "Created 2/2 domains" while creating nothing. Parallel runs also printed nothing between the `--force` confirmation and the recap (slow gh-bound deploys; silence reads as a hang), and "DNS: Propagation pending" rendered for repos whose DNS was *skipped*, not pending.
+
+**Decision**: The result dict carries `created` / `repo_existed` / `dns_skipped` from the deploy. The headline counts only actual creations ("Created 0/2 domains (2 already existed)", "(N failed)" appended when present); the check glyph is reserved for creations; already-existed domains get a yellow warn block with the `--force` guidance; DNS lines state their reason ("not configured (repository already existed)" / "(--skip-dns)" / "pending nameserver fix (run 'mimeo sync')"); `--force` replacements say "Replaced existing repository". Parallel text runs print "Creating \<domain\>..." as each worker starts and one outcome line (check/warn/cross) as each completes. `--format csv` gains `created`/`repo_existed`/`dns_skipped` columns. The already-existed no-op keeps exit 0: nothing failed and the site is in its correct state — converged, like `mkdir -p` (flagged to the user during the session; honest text preferred over a nonzero code).
+
+**Alternatives considered**: Nonzero exit for the no-op (rejected — breaks ensure-sites-exist scripting; the warn recap makes the no-op unmissable); full step logs in parallel mode (rejected — interleaved multi-thread logs are unreadable; start/outcome lines give liveness without the noise).
+
+**Consequences**: Scripts parsing recap text or CSV see the trichotomy; exit-code consumers are unaffected (0 unchanged for success and no-op). Single-domain, `--sequential`, and dry-run output shapes are unchanged apart from the honest headline and DNS lines. Suite pins "Created 2/2" absent in both-existed runs and the progress lines present in parallel runs.
+
+---
+
 ## Superseded/Deprecated
 
 [No superseded decisions yet]

@@ -394,13 +394,30 @@ front-door verbs than it started with. See DEC-021.
         node per the review's own framing
   - [x] `docs/CODE_REVIEW.md` updated inline (FIXED/REMOVED/left-open
         markers per finding) rather than tracked in a separate checklist
-- [ ] Subdomain sites (`mimeo create service.example.com`) — proposed,
-      design only, not scheduled. Full design in `docs/SUBDOMAINS.md`:
-      six required changes, four open decisions, two-pass staging. Core
-      shift: split "site hostname" from "DNS zone" so one zone can hold
-      many sites (drift scoping, record conflicts, and the status/sync
-      joins all follow from that). No code written. Resolve the open
-      decisions before scheduling implementation.
+- [x] Error-path QoL + rec #2 pass (2026-09-12, Entry 61, DEC-027/028)
+  - [x] Output cleanup: failures print once (one-line stderr trailer,
+        not per-row `[category]` lines); `====SUMMARY====` banner and the
+        false "Successfully created: 0/1 domain(s)" headline removed;
+        sigils became check/warn/cross glyphs; redundant "GitHub CLI
+        command failed:" prefix dropped from gh errors
+  - [x] Structured error semantics (rec #2): `HostError.status_code`
+        parsed from gh stderr in one place; rename-422, manifest-404,
+        Pages probe, `get_pages_health`, retry, and `_categorize_error`
+        branch on codes, keywords demoted to code-less fallback
+  - [x] BUG 4 fixed (unexpected exceptions exit 1/"error", not
+        5/"provider"; definitive provider failures exit 1); BUG 7 fixed
+        (`get_pages_health`: only 404 means "no Pages", other failures
+        propagate as "couldn't check")
+  - [x] Honest `create` recap (DEC-028): created / already-existed /
+        failed trichotomy, DNS skip reasons rendered, parallel runs
+        narrate per-domain start/outcome instead of going silent
+  - [ ] BUG 6 remains (missing-`schema_version` warning invisible to CLI
+        users — `DeprecationWarning` is hidden outside `__main__`); small
+        fix: stderr line or drop the check
+- [x] Subdomain sites (`mimeo create service.example.com`) — closed
+      2026-09-12 without implementation: getting the eleventy templates
+      working was the answer. Full design preserved in
+      `docs/SUBDOMAINS.md` if ever revived.
 
 ---
 

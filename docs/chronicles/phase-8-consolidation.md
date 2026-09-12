@@ -725,3 +725,15 @@ removal, not an architectural choice.
 **Decisions**: none new — design stance recorded here: template package.json ships as-is, sites inherit it unchanged
 
 **Files**: mimeo-sites TEMPLATES/eleventy-{chapbook,folio,pamphlet}/package.json + package-lock.json (commits above); this repo docs only (this commit)
+
+## Entry 61: Error-path QoL -- structured gh status codes, honest output (2026-09-12)
+
+**What**: Three-round pass on mimeo's error/output UX, all in mimeo code. (1) Output cleanup: each failure prints once (inline or recap, plus a one-line stderr trailer "N of M domains failed"), the `====SUMMARY====` banner and the false "Successfully created: 0/1 domain(s)" headline are gone, sigils ok/xx/!! became check/warn/cross glyphs, and the redundant "GitHub CLI command failed:" prefix dropped from gh errors. (2) CODE_REVIEW rec #2 plus BUG 4 and BUG 7: `HostError` carries `status_code` parsed from gh's "(HTTP N)" stderr in exactly one place; rename-422, manifest-404, Pages probe, and `get_pages_health` branch on codes; retry and `_categorize_error` are code-first with keyword fallback only when no code; unexpected exceptions exit 1/"error" instead of 5/"provider"; `get_pages_health` maps only genuine 404 to "no Pages", other failures propagate as "couldn't check". (3) create recap honesty and parallel feedback: the recap counts only actual creations, already-existed domains get warn blocks with --force guidance (visible in multi-domain runs where step logs are suppressed), DNS skip reasons render distinctly, and parallel runs print "Creating X..." plus a one-line outcome per domain instead of going silent after the --force confirm.
+
+**Why**: Two live incidents drove it. `gh: Invalid cname (HTTP 400)` printed three times in three formats under a banner claiming "Successfully created: 0/1", while exiting 5 told automation it was transient. Then `create clarkegeagan.com clarkegeagan.org` reported "Created 2/2 domains" for two repos that already existed -- the recap equated "no error" with "created" -- and `create --force` on the same pair sat silent after the y confirm, indistinguishable from a hang.
+
+**How**: User-driven QoL session with design sign-off (glyph sigils and the one-line stderr trailer chosen from mockups; BUG 7 folded into rec #2's scope). The exit-code contract change is deliberate: only confirmed-transient exits 5, definitive provider failures exit 1. `enable_https_enforcement`'s "certificate does not exist" check stays message-based on purpose (it distinguishes within a status code). The already-existed no-op keeps exit 0 -- converged-state semantics, flagged to the user, who accepted honest text over a nonzero code. One keyword-match site beyond the review's three was found and converted: the template-manifest 404 check.
+
+**Decisions**: DEC-027 (structured error semantics + exit-code taxonomy), DEC-028 (create outcome reporting: created / already-existed / failed)
+
+**Files**: mimeo/exceptions.py, mimeo/cli/{create,_processing}.py, mimeo/providers/host/github.py, mimeo/utils/retry.py + tests (d9a6020, suite 354 green); docs updates in this commit

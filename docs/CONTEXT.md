@@ -1,19 +1,23 @@
 ---
 phase: 8
 phase_name: Consolidation
-updated: 2026-09-10
-last_commit: cb1fe3a
+updated: 2026-09-11
+last_commit: 9461ca5
 ---
 
 ## Current Focus
 
-DEC-024 is complete end to end (Entry 57, all repos pushed). The
-follow-on Stage 6 (`template lint`) was evaluated this session and
-dropped — deploy-time validation already fails loud, so a standalone
-linter wasn't worth a new command (Entry 58, docs-only session).
+Template-branding session (Entry 59): eleventy-product and
+eleventy-service centralize branding in metadata.js, and their
+manifests substitute `email` (`hello@{domain}`) alongside `url`.
+No mimeo code changed; DEC-024 addendum records the email scope call.
 
 ## Active Tasks
 
+- [ ] **Port the branding pattern to the other five eleventy
+      templates** (prose-blog, tech-blog, chapbook, folio, pamphlet)
+      — user deferred; the literary three carry the about.md
+      string-replace wrinkle.
 - [ ] **Track B**: Stage 4 E2E test lane, blocked on test account/org.
 - [ ] **Backlog**: BUG 4/6/7 and the error-semantics refactor
       (`docs/CODE_REVIEW.md` rec #2) — not started.
@@ -27,24 +31,17 @@ Track B blocked on a test account/org. Everything else unblocked.
 
 ## Context
 
-- All eleventy manifests are one `js-key url` entry (plus about.md
-  string-replace for chapbook/folio/pamphlet) — the template cleanup
-  left `metadata.js`'s `url` as the single site-identity key.
-- String-replace consumes its match, so it can't re-apply; safe because
-  substitution only ever runs on a freshly generated tree (DEC-024
-  addendum, `5b19189`).
-- Template cleanup deleted author.email/url, feed.id, stale
-  `notreally.config.js`; pamphlet's feed base derives from metadata.url.
-  All ten templates build clean; nothing references the deleted keys.
-- Known template nit, not fixed: double slash in tech-blog canonical
-      URLs (`https://example.com//posts/...`) — pre-existing, mimeo-sites.
-- Stage 6 (`template lint`) dropped 2026-09-10: deploy-time manifest
-      validation already aborts loudly and names the failing entry, so
-      lint only bought earlier drift discovery. Full rationale in
-      IMPLEMENTATION.md's Stage 6 note.
+- Instance tepiton/002370.xyz (from eleventy-service, metadata edited
+      to Talking Dog Studio) predates the prose fix: its about.md
+      needs a hand edit or `--force` + metadata re-apply.
+- Prose trick: `markdownTemplateEngine: "njk"` lets `{{ metadata.title
+      }}` rebrand .md bodies; frontmatter data can't interpolate —
+      neutralize instead.
+- Stage 6 (`template lint`) dropped 2026-09-10 (Entry 58):
+      deploy-time validation already fails loud; DEC-025's lint
+      references corrected.
 
 ## Next Session
 
-The open picks are rec #2 (error-semantics refactor, CODE_REVIEW.md)
-and the four SUBDOMAINS.md decisions; BUG 4/6/7 and D2 sit behind
-them. Track B stays blocked on a test account/org.
+Port the branding pattern to the remaining five eleventy templates,
+or pick up rec #2 (error semantics) / the SUBDOMAINS.md decisions.

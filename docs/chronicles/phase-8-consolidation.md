@@ -701,3 +701,15 @@ removal, not an architectural choice.
 **Decisions**: none new — a stage cancellation recorded in IMPLEMENTATION.md; DEC-025 text corrected (no semantic change)
 
 **Files**: `docs/{CONTEXT,IMPLEMENTATION,DECISIONS}.md` (this commit)
+
+## Entry 59: Branding centralized in the two eleventy landing templates; email parameterized (2026-09-11)
+
+**What**: Docs-only for mimeo — all code work landed in mimeo-sites. eleventy-product and eleventy-service centralized branding in `content/_data/metadata.js` (name hoisted to a `const` so `description` follows it; `email`; a `brand` block of `[dark, light]` accent pairs), and their manifests gained a second substitution: `email` → `hello@{domain}`. Demo prose now follows the brand — .md bodies interpolate `{{ metadata.title }}`, frontmatter data is neutralized.
+
+**Why**: User survey found branding "all over the place": demo brand woven through prose, hardcoded `hello@brand.example.com` addresses, accent hex duplicated between `css/index.css` and `generate-icons.mjs` — made concrete by instance `tepiton/002370.xyz`, whose edited metadata still left "Harborlight" on its About page. Design followed DEC-024's split: the generated site becomes rebrandable from one file; mimeo extends only the mechanical domain self-reference (email — DEC-024 addendum).
+
+**How**: `base.njk` re-emits accent/link tokens from the `brand` block using index.css's exact selectors, later in source order (wins at equal specificity in all four theme contexts); contact falls back to `metadata.email` — service's section schema still fails the build if email is set nowhere, product's page cards gained `useSiteEmail: true`; `generate-icons.mjs` imports metadata for its accent (regenerated binaries byte-identical). Both manifests re-validated through mimeo's real parser, including after metadata.js gained a backtick template literal. Prose interpolation works because `markdownTemplateEngine: "njk"`; frontmatter can't interpolate, so those strings were neutralized (also killed a cross-template palette bug: service shipped product's blue `#a7c4ff` link-hover). Both live-verified on tepiton.github.io. 002370.xyz predates the prose fix: hand-edit its about.md or `--force` + re-apply metadata.
+
+**Decisions**: DEC-024 (addendum: `email` is in-scope self-reference, same category as `url`)
+
+**Files**: mimeo-sites TEMPLATES/eleventy-service (`fd7a898`, `37efa18`), TEMPLATES/eleventy-product (`38e9f1a`, `e469461`); this repo docs only (this commit)

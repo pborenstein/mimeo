@@ -2,6 +2,7 @@
 
 import base64
 import json
+import re
 import subprocess
 import time
 from typing import Any, Dict
@@ -21,6 +22,10 @@ from mimeo.utils.retry import retry_with_jitter
 
 TEMPLATE_ORG = "tepiton"
 DEFAULT_TEMPLATE = "mimeo.lol"
+
+# gh prints API errors as e.g. "gh: Not Found (HTTP 404)" -- the single place
+# a status code is recovered from gh stderr is _run_gh_command.
+_HTTP_STATUS_RE = re.compile(r"HTTP (\d{3})")
 
 GITHUB_PAGES_IPS = [
     "185.199.108.153",
@@ -122,8 +127,16 @@ class GitHubHost(Host):
                     env=env,
                 )
                 if result.returncode != 0:
-                    error_msg = result.stderr.strip() or result.stdout.strip()
-                    raise HostError(f"GitHub CLI command failed: {error_msg}")
+                    error_msg = (
+                        result.stderr.strip()
+                        or result.stdout.strip()
+                        or f"gh exited with status {result.returncode} without error output"
+                    )
+                    code_match = _HTTP_STATUS_RE.search(error_msg)
+                    raise HostError(
+                        error_msg,
+                        status_code=int(code_match.group(1)) if code_match else None,
+                    )
                 return result.stdout.strip()
             except FileNotFoundError:
                 raise HostError("GitHub CLI (gh) is not installed")
@@ -163,7 +176,7 @@ class GitHubHost(Host):
         try:
             output = self._run_gh_command(args, input_data=input_json)
         except HostError as e:
-            raise HostError(f"{method} {endpoint}: {e}") from e
+            raise HostError(f"{method} {endpoint}: {e}", status_code=e.status_code) from e
 
         if not output:
             return {}
@@ -187,7 +200,9 @@ class GitHubHost(Host):
             output = self._run_gh_command(["api", "user", "--jq", ".login"])
             return output
         except HostError as e:
-            raise HostError(f"Failed to get authenticated user: {e}") from e
+            raise HostError(
+                f"Failed to get authenticated user: {e}", status_code=e.status_code
+            ) from e
 
     def _delete_repository(self, repo_full_name: str) -> None:
         """Delete a repository.
@@ -226,7 +241,7 @@ class GitHubHost(Host):
                 self._gh_api(f"repositories/{repo_id}", method="PATCH", data={"name": new_name})
                 return
             except HostError as e:
-                if attempt == 0 and "422" in str(e):
+                if attempt == 0 and e.status_code == 422:
                     time.sleep(3)
                     continue
                 raise
@@ -366,7 +381,7 @@ class GitHubHost(Host):
                 f"repos/{TEMPLATE_ORG}/{template_repo}/contents/{MANIFEST_FILENAME}"
             )
         except HostError as e:
-            if "404" in str(e):
+            if e.status_code == 404:
                 return None
             raise
         if not isinstance(file_data, dict) or "content" not in file_data:
@@ -630,9 +645,12 @@ class GitHubHost(Host):
             self._gh_api(f"repos/{repo_full_name}/pages")
             # Pages already enabled
             return
-        except HostError:
-            # Pages not enabled yet, continue to enable it
-            pass
+        except HostError as e:
+            # Only "not configured" (404) means Pages needs enabling; any
+            # other failure (auth, 5xx, network) must surface, not be masked
+            # by a POST that will likely fail the same way.
+            if e.status_code != 404:
+                raise
 
         # Enable GitHub Pages with GitHub Actions workflow deployment
         data = {
@@ -760,6 +778,10 @@ class GitHubHost(Host):
 
         Returns:
             Dict with keys: pages_configured, https_enforced, cert_state, pages_status
+
+        Raises:
+            HostError: If the health check itself fails for any reason other
+                than Pages not being configured (404)
         """
         try:
             data = self._gh_api(f"repos/{repo_full_name}/pages")
@@ -770,7 +792,12 @@ class GitHubHost(Host):
                 "cert_state": cert.get("state"),
                 "pages_status": data.get("status"),
             }
-        except HostError:
+        except HostError as e:
+            # Only a genuine 404 means Pages is not configured; any other
+            # failure is "couldn't check" and must propagate rather than be
+            # reported as a broken site.
+            if e.status_code != 404:
+                raise
             return {
                 "pages_configured": False,
                 "https_enforced": False,

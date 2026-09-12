@@ -144,19 +144,21 @@ Ordered by user impact, not severity of code damage.
   command-level handler. Do not "fix" `_status_github` without deciding its
   semantics first.
 
-### BUG 4: unexpected exceptions (programming errors) categorized as "transient"
+### BUG 4: unexpected exceptions (programming errors) categorized as "transient" -- FIXED (2026-09-12)
 
 - **Where**: `_categorize_error` fallthrough, `mimeo/cli/_processing.py`
-  ~line 129 (`return EXIT_TRANSIENT, "provider"`); also the command-level
-  `except Exception` handlers in `status` (~line 461) and `sync` (~line 283).
+  (~line 129 (`return EXIT_TRANSIENT, "provider"`)); also the command-level
+  `except Exception` handlers in `status` and `sync`.
 - **Claim**: a `KeyError` from a dict-shape change (e.g., Porkbun or GitHub
   API response changes a field name) prints `[provider] ...` and exits 5 --
   claiming a transient network condition. Misleads both users and any
   automation retrying on exit code 5.
-- **Fix**: unknown exception types should map to `EXIT_GENERAL` (1) with
-  category `"error"`; reserve `EXIT_TRANSIENT` for `NetworkError`/`APIError`
-  5xx/429 and the matched provider cases. `EXIT_GENERAL` currently has almost
-  no users (`load_config`'s catch-all only), which is itself a smell.
+- **Fix applied (2026-09-12)**: unknown exception types map to
+  `EXIT_GENERAL` (1) with category `"error"`; provider errors are classified
+  by structured `status_code` first (429/rate-limit, 5xx/transient,
+  401+403/auth, anything else `EXIT_GENERAL`/`provider`), with message
+  keywords consulted only when no code exists. `EXIT_TRANSIENT` is reserved
+  for confirmed-transient cases.
 
 ### BUG 5: `--stop-on-error` flag on `create` is accepted and ignored -- FIXED (2026-09-08)
 
@@ -181,26 +183,40 @@ Ordered by user impact, not severity of code damage.
   from gh CLI)" -- there is no gh fallback; `github_username` is a hard
   requirement (missing-config error at ~line 101).
 
-### BUG 7: `get_pages_health` cannot distinguish "no Pages" from "couldn't check"
+### BUG 7: `get_pages_health` cannot distinguish "no Pages" from "couldn't check" -- FIXED (2026-09-12)
 
-- **Where**: `GitHubHost.get_pages_health`, `mimeo/providers/host/github.py`
-  ~lines 695-710: any `HostError` returns `pages_configured: False`, which
-  `health_status` maps to `pages_error` (red `error` in `status`).
-- **Consequence**: a transient network blip during a fleet sweep paints
+- **Where**: `GitHubHost.get_pages_health`, `mimeo/providers/host/github.py`:
+  any `HostError` returned `pages_configured: False`, which `health_status`
+  mapped to `pages_error` (red `error` in `status`).
+- **Consequence**: a transient network blip during a fleet sweep painted
   healthy sites as broken -- exactly the false alarm a monitoring tool must
-  avoid, and it erodes trust in the SITE column.
-- **Fix**: let the caller distinguish. Minimal: propagate unexpected
-  `HostError`s and only map genuine 404 ("Pages not configured") to the
-  `pages_configured: False` shape. This requires structured status codes --
-  see the systemic section next; fixing this well is blocked on that.
+  avoid, and it eroded trust in the SITE column.
+- **Fix applied (2026-09-12)**: only a genuine 404 ("Pages not configured")
+  maps to the `pages_configured: False` shape; any other failure propagates,
+  so `status` reports the domain as an error row ("couldn't check") instead
+  of a red SITE column. The Pages GET probe in `_enable_github_pages` got
+  the same 404-only treatment.
 
 ---
 
-## Systemic weakness: error semantics via string matching over `gh` stderr
+## Systemic weakness: error semantics via string matching over `gh` stderr -- RESOLVED (2026-09-12)
 
-Every GitHub operation is a subprocess (`subprocess.run(["gh", ...])`), and
-the meaning of failures is recovered by substring-matching error text in
-three separate places:
+**Fix applied**: `HostError` carries a `status_code` (mirroring `APIError`),
+parsed from gh's `(HTTP <code>)` stderr in exactly one place
+(`_run_gh_command` in `github.py`); `_gh_api` preserves it through
+re-wrapping. Call sites branch on the code: `_rename_repository` (422
+conflict retry), the template-manifest fetch (404 = absent), the Pages GET
+probe and `get_pages_health` (404 = not configured), `retry.py`
+(`_RETRYABLE_STATUS_CODES` when a code exists), and `_categorize_error`
+(exit-code taxonomy). Message keywords remain only as a fallback for
+code-less errors (network-level gh failures) via one shared tuple in
+`retry.py`. The `enable_https_enforcement` "certificate does not exist"
+check stays message-based on purpose: it distinguishes *within* a status
+code, which structure cannot help.
+
+Original finding, kept for the record: every GitHub operation is a subprocess
+(`subprocess.run(["gh", ...])`), and the meaning of failures was recovered by
+substring-matching error text in three separate places:
 
 1. `"422" in str(e)` for rename conflicts -- `_rename_repository`,
    `github.py` ~line 228.
@@ -379,11 +395,14 @@ paths, drift math, normalization, retry behavior all have direct tests.
 1. ~~**Fix misleading-diagnosis bugs**: BUG 1 (`domain_exists` conflation),
    BUG 2 (`--force` help text), BUG 3 (missing `exit_on_errors`).~~ **Done
    2026-09-08.**
-2. **Structure the error path**: `status_code` on `HostError`, parse gh's
+2. ~~**Structure the error path**: `status_code` on `HostError`, parse gh's
    `HTTP <code>` in one place, replace keyword matching in
    `_rename_repository` / `enable_https_enforcement` / `retry.py` /
    `_processing.py`; route unexpected exceptions to `EXIT_GENERAL` (BUG 4).
-   Unblocks a proper fix for BUG 7. **Not started.**
+   Unblocks a proper fix for BUG 7.~~ **Done 2026-09-12**, including BUG 4
+   and BUG 7 (see their sections and the systemic weakness resolution
+   above). One extra keyword site found and converted beyond the original
+   three: the template-manifest 404 check.
 3. ~~**Land DEC-024 -- and give the manifest `TEMPLATE_DEV_PATHS` too**.~~
    **Done 2026-09-09.** `TEMPLATE_DEV_PATHS = ["README.md", "docs/"]`
    (`github.py` ~line 22) was the same class of template-specific knowledge

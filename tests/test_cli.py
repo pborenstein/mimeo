@@ -133,7 +133,7 @@ class TestCreateCommand:
         assert result.exit_code == 0
         assert "Configuring GitHub repository" in result.output
         assert "Configuring DNS records" in result.output
-        assert "Successfully created: 1/1 domain(s)" in result.output
+        assert "Created 1/1 domains" in result.output
         assert "https://example.com" in result.output
 
         mock_config_load.assert_called_once()
@@ -177,6 +177,52 @@ class TestCreateCommand:
         assert "Repository already exists" in result.output
         assert "skipping DNS configuration" in result.output
         mock_registrar.check_nameservers.assert_not_called()
+        # The recap must not claim a creation that did not happen
+        assert "Created 0/1 domains (1 already existed)" in result.output
+        assert "⚠ example.com" in result.output
+        assert "✓ example.com" not in result.output
+        assert "DNS: not configured (repository already existed)" in result.output
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_CREATE}.GitHubHost")
+    @patch(f"{_CREATE}.PorkbunRegistrar")
+    def test_create_recap_counts_only_actual_creations(
+        self,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """Both repos already existed: recap says 0 created, never 'Created 2/2'.
+
+        Multi-domain runs suppress the step logs, so the recap is the only
+        view -- it must carry the already-existed outcome on its own.
+        """
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.deploy_site.side_effect = lambda domain, **kw: DeployResult(
+            url=f"https://{domain}", repo_created=False, https_enabled=True, repo_existed=True
+        )
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        mock_registrar = MagicMock()
+        mock_registrar.domain_exists.return_value = True
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar_class.return_value = mock_registrar
+
+        result = runner.invoke(create, ["clarkegeagan.com", "clarkegeagan.org"])
+
+        assert result.exit_code == 0
+        assert "Created 0/2 domains (2 already existed)" in result.output
+        assert "Created 2/2" not in result.output
+        # two progress outcome lines + two recap blocks
+        assert result.output.count("already existed, left unchanged") == 2
+        assert result.output.count("Already exists, left unchanged") == 2
+        assert "✓" not in result.output
+        assert "DNS: not configured (repository already existed)" in result.output
 
     @patch("mimeo.config.Config.load")
     def test_create_config_error(self, mock_config_load: Any, runner: CliRunner) -> None:
@@ -213,7 +259,8 @@ class TestCreateCommand:
 
             result = runner.invoke(create, ["example.com"])
 
-        assert result.exit_code == 5
+        # Unmatched provider failure: definitive, not transient -- exits 1
+        assert result.exit_code == 1
         assert "GitHub API failed" in result.output
 
     @patch("mimeo.config.Config.load")
@@ -556,7 +603,7 @@ class TestCreateCommand:
         assert "site1.com" in result.output
         assert "site2.com" in result.output
         assert "site3.com" in result.output
-        assert "Successfully created: 3/3 domain(s)" in result.output
+        assert "Created 3/3 domains" in result.output
 
         assert mock_host.deploy_site.call_count == 3
         assert mock_dns_provider.configure_dns.call_count == 3
@@ -602,7 +649,73 @@ class TestCreateCommand:
         assert result.exit_code == 0
         assert "site1.com" in result.output
         assert "site2.com" in result.output
-        assert "Successfully created: 2/2 domain(s)" in result.output
+        assert "Created 2/2 domains" in result.output
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_CREATE}.GitHubHost")
+    @patch(f"{_CREATE}.PorkbunRegistrar")
+    @patch(f"{_CREATE}.PorkbunDNSProvider")
+    def test_create_parallel_reports_progress(
+        self,
+        mock_dns_provider_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+        mock_dns_records: List[DNSRecord],
+    ) -> None:
+        """Parallel runs announce each domain's start and outcome -- no silent gaps.
+
+        Step logs are suppressed for parallel runs, so without these lines a
+        multi-domain create prints nothing between start and recap.
+        """
+        mock_config_load.return_value = mock_config
+
+        def _deploy(domain: str, **kw: Any) -> Any:
+            if domain == "old.com":
+                return DeployResult(
+                    url=f"https://{domain}", repo_created=False, https_enabled=True, repo_existed=True
+                )
+            if domain == "bad.com":
+                raise HostError(
+                    "PUT repos/tepiton/bad.com/pages: gh: Invalid cname (HTTP 400)",
+                    status_code=400,
+                )
+            return DeployResult(
+                url=f"https://{domain}", repo_created=True, https_enabled=True, repo_existed=False
+            )
+
+        mock_host = MagicMock()
+        mock_host.deploy_site.side_effect = _deploy
+        mock_host.required_dns_records.return_value = mock_dns_records
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        mock_registrar = MagicMock()
+        mock_registrar.domain_exists.return_value = True
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=True, actual=[], expected=[]
+        )
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar_class.return_value = mock_registrar
+
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
+
+        result = runner.invoke(create, ["new.com", "old.com", "bad.com"])
+
+        # One "Creating" line per domain, emitted as each worker starts
+        assert "Creating new.com..." in result.output
+        assert "Creating old.com..." in result.output
+        assert "Creating bad.com..." in result.output
+        # One outcome line per domain, in whatever order they finish
+        assert "✓ new.com created" in result.output
+        assert "⚠ old.com: already existed, left unchanged" in result.output
+        assert "✗ bad.com: PUT repos/tepiton/bad.com/pages" in result.output
+        assert "Created 1/3 domains (1 already existed, 1 failed)" in result.output
+        assert result.exit_code == 6
 
 
 class TestCreateDomainOwnership:
@@ -636,6 +749,41 @@ class TestCreateDomainOwnership:
         assert result.exit_code != 0
         assert "not registered in this Porkbun account" in result.output
         mock_host.deploy_site.assert_not_called()
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_CREATE}.GitHubHost")
+    @patch(f"{_CREATE}.PorkbunRegistrar")
+    def test_create_failure_output_is_deduplicated(
+        self,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """Failure detail appears inline and once in the recap -- no banner, no third copy."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        mock_registrar = MagicMock()
+        mock_registrar.domain_exists.return_value = False
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar_class.return_value = mock_registrar
+
+        result = runner.invoke(create, ["not-mine.com"])
+
+        assert result.exit_code != 0
+        assert "SUMMARY" not in result.output
+        assert "Successfully created" not in result.output
+        assert "[provider]" not in result.output
+        assert "Created 0/1 domains" in result.output
+        # ownership failure raises before any inline step log: the recap is
+        # the single place the reason appears
+        assert result.output.count("not registered in this Porkbun account") == 1
+        assert "1 of 1 domains failed" in result.output
 
     @patch("mimeo.config.Config.load")
     @patch(f"{_CREATE}.GitHubHost")

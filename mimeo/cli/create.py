@@ -51,10 +51,15 @@ def _process_single_domain(
         "domain": domain,
         "error": None,
         "error_category": None,
+        "created": False,
+        "repo_existed": False,
         "url": None,
         "repo_url": None,
         "https_pending": False,
         "dns_pending": False,
+        # None = DNS was configured (or run was dry); otherwise why it was skipped:
+        # "repo-existed" | "skip-dns" | "ns-mismatch"
+        "dns_skipped": None,
     }
 
     log_format = get_log_format()
@@ -65,11 +70,11 @@ def _process_single_domain(
 
         if verbose and log_format == "text":
             if level == "error":
-                click.secho(f"  xx {message}", fg="red")
+                click.secho(f"  ✗ {message}", fg="red")
             elif level == "warning":
-                click.secho(f"  !! {message}", fg="yellow")
+                click.secho(f"  ⚠ {message}", fg="yellow")
             elif level == "success":
-                click.secho(f"  ok {message}", fg="green")
+                click.secho(f"  ✓ {message}", fg="green")
             else:
                 click.echo(f"  {message}")
 
@@ -127,6 +132,8 @@ def _process_single_domain(
             dns_records = host.required_dns_records(domain)
             result["url"] = deploy.url
             result["repo_url"] = f"https://github.com/{cfg.github_username}/{domain}"
+            result["created"] = deploy.repo_created
+            result["repo_existed"] = deploy.repo_existed
 
             if deploy.repo_created and deploy.repo_existed:
                 log(f"Repository replaced: {cfg.github_username}/{domain}", "success")
@@ -154,6 +161,7 @@ def _process_single_domain(
     if skip_dns:
         log("Skipping DNS configuration (--skip-dns)", "info")
         result["dns_pending"] = True
+        result["dns_skipped"] = "skip-dns"
         return result
 
     if not deploy.repo_created:
@@ -162,6 +170,7 @@ def _process_single_domain(
             "info",
         )
         result["dns_pending"] = True
+        result["dns_skipped"] = "repo-existed"
         return result
 
     # Configure DNS
@@ -177,6 +186,7 @@ def _process_single_domain(
                 )
                 log("Use 'mimeo sync' to fix DNS records once nameservers are correct", "warning")
                 result["dns_pending"] = True
+                result["dns_skipped"] = "ns-mismatch"
                 result["ns_mismatch"] = ns_result.actual
             else:
                 with PorkbunDNSProvider(cfg.porkbun_api_key, cfg.porkbun_secret) as dns:
@@ -326,6 +336,24 @@ def create(
             force=force,
         )
 
+    def _create_domain_with_progress(domain: str) -> Dict[str, Any]:
+        """Parallel runs suppress step logs; announce start and outcome instead.
+
+        Without this, a multi-domain run prints nothing between the
+        confirmation prompt and the recap -- indistinguishable from a hang.
+        """
+        click.echo(f"Creating {domain}...")
+        try:
+            result = _create_domain(domain)
+        except BaseException as exc:
+            click.secho(f"✗ {domain}: {exc}", fg="red")
+            raise
+        if result.get("repo_existed") and not result.get("created"):
+            click.secho(f"⚠ {domain}: already existed, left unchanged", fg="yellow")
+        else:
+            click.secho(f"✓ {domain} created", fg="green")
+        return result
+
     def _on_error(domain: str, exc: BaseException) -> Dict[str, Any]:
         _, category = _categorize_error(exc)
         return {
@@ -338,49 +366,68 @@ def create(
             "dns_pending": False,
         }
 
-    def _text(results: List[Dict[str, Any]]) -> None:
-        success_count = sum(1 for r in results if not r.get("error"))
-        total_count = len(results)
-        click.echo()
-        click.secho("=" * 60, fg="white", bold=True)
-        click.secho("SUMMARY", fg="white", bold=True)
-        click.secho("=" * 60, fg="white", bold=True)
-        click.echo()
-
+    def _headline(results: List[Dict[str, Any]]) -> tuple[str, str]:
+        """Honest one-line outcome: only actual creations count as created."""
+        total = len(results)
+        failed = sum(1 for r in results if r.get("error"))
+        created = sum(1 for r in results if not r.get("error") and r.get("created"))
+        existed = sum(
+            1
+            for r in results
+            if not r.get("error") and r.get("repo_existed") and not r.get("created")
+        )
         if dry_run:
-            click.secho(f"DRY RUN: Would process {total_count} domain(s)", fg="cyan")
-        else:
-            click.secho(
-                f"Successfully created: {success_count}/{total_count} domain(s)",
-                fg="green" if success_count == total_count else "yellow",
-            )
+            return f"DRY RUN: would process {total} domains", "cyan"
+        parts = []
+        if existed:
+            parts.append(f"{existed} already existed")
+        if failed:
+            parts.append(f"{failed} failed")
+        text = f"Created {created}/{total} domains" + (f" ({', '.join(parts)})" if parts else "")
+        color = "red" if failed == total else ("green" if not parts else "yellow")
+        return text, color
 
+    def _text(results: List[Dict[str, Any]]) -> None:
+        text, color = _headline(results)
+        click.echo()
+        click.secho(text, fg=color, bold=True)
         click.echo()
 
         for result in results:
             domain = result["domain"]
-            if not result.get("error"):
-                click.secho(f"ok {domain}", fg="green", bold=True)
+            if result.get("error"):
+                click.secho(f"✗ {domain}", fg="red", bold=True)
+                click.secho(f"  {result.get('error', 'Unknown error')}", fg="red")
+            else:
+                if result.get("repo_existed") and not result.get("created"):
+                    click.secho(f"⚠ {domain}", fg="yellow", bold=True)
+                    click.secho(
+                        "  Already exists, left unchanged"
+                        " (use 'mimeo create --force' to replace it)",
+                        fg="yellow",
+                    )
+                else:
+                    click.secho(f"✓ {domain}", fg="green", bold=True)
+                    if result.get("repo_existed"):
+                        click.echo("  Replaced existing repository")
                 if not dry_run:
                     click.echo(f"  URL: {result.get('url', 'N/A')}")
                     click.echo(f"  Repository: {result.get('repo_url', 'N/A')}")
                     if result.get("https_pending"):
                         click.secho("  HTTPS: Pending SSL certificate", fg="yellow")
-                    if result.get("dns_pending"):
+                    dns_reason = result.get("dns_skipped")
+                    if dns_reason == "repo-existed":
+                        click.secho("  DNS: not configured (repository already existed)", fg="yellow")
+                    elif dns_reason == "skip-dns":
+                        click.secho("  DNS: not configured (--skip-dns)", fg="yellow")
+                    elif dns_reason == "ns-mismatch":
+                        click.secho("  DNS: pending nameserver fix (run 'mimeo sync')", fg="yellow")
+                    elif result.get("dns_pending"):
                         click.secho("  DNS: Propagation pending", fg="yellow")
-            else:
-                click.secho(f"xx {domain}", fg="red", bold=True)
-                click.secho(f"  Error: {result.get('error', 'Unknown error')}", fg="red")
             click.echo()
 
     def _json_summary(results: List[Dict[str, Any]]) -> None:
-        success_count = sum(1 for r in results if not r.get("error"))
-        total_count = len(results)
-        summary_msg = (
-            f"DRY RUN: Would process {total_count} domain(s)"
-            if dry_run
-            else f"Completed: {success_count}/{total_count} succeeded"
-        )
+        summary_msg, _ = _headline(results)
         _emit("info", summary_msg)
         for result in results:
             level = "info" if not result.get("error") else "error"
@@ -392,7 +439,7 @@ def create(
 
     results = map_items(
         domains,
-        _create_domain,
+        _create_domain_with_progress if (not verbose and log_format == "text") else _create_domain,
         workers=workers,
         sequential=(dry_run or sequential or len(domains) == 1),
         on_error=_on_error,
@@ -404,7 +451,17 @@ def create(
         render_results(
             results,
             "text",
-            csv_fields=["domain", "url", "repo_url", "https_pending", "dns_pending", "error"],
+            csv_fields=[
+                "domain",
+                "created",
+                "repo_existed",
+                "url",
+                "repo_url",
+                "https_pending",
+                "dns_pending",
+                "dns_skipped",
+                "error",
+            ],
             text=_text,
         )
     exit_on_errors(results)

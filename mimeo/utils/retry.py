@@ -12,8 +12,10 @@ T = TypeVar("T")
 # Status codes that indicate a transient server-side condition
 _RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
-# Substrings in HostError messages that indicate transient gh CLI failures
-_TRANSIENT_HOST_KEYWORDS = ("502", "503", "500", "rate limit", "timeout")
+# Substrings in HostError messages that indicate transient gh CLI failures,
+# used only when no HTTP status code was recovered from gh stderr (e.g.
+# network-level failures). Shared with the CLI error categorizer.
+_TRANSIENT_HOST_KEYWORDS = ("500", "502", "503", "timeout", "connection", "rate limit")
 
 
 def _is_retryable(exc: BaseException) -> bool:
@@ -23,6 +25,8 @@ def _is_retryable(exc: BaseException) -> bool:
     if isinstance(exc, NetworkError):
         return True
     if isinstance(exc, HostError):
+        if exc.status_code is not None:
+            return exc.status_code in _RETRYABLE_STATUS_CODES
         msg = str(exc).lower()
         return any(kw in msg for kw in _TRANSIENT_HOST_KEYWORDS)
     return False

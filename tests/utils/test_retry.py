@@ -73,7 +73,7 @@ class TestRetryWithJitter:
         def fn():
             calls.append(1)
             if len(calls) == 1:
-                raise HostError("GitHub CLI command failed: 502 Bad Gateway")
+                raise HostError("gh: 502 Bad Gateway (HTTP 502)")
             return "ok"
 
         result = retry_with_jitter(fn, retries=2)
@@ -88,12 +88,53 @@ class TestRetryWithJitter:
         def fn():
             calls.append(1)
             if len(calls) == 1:
-                raise HostError("GitHub CLI command failed: API rate limit exceeded")
+                raise HostError("gh: API rate limit exceeded (HTTP 429)")
             return "ok"
 
         result = retry_with_jitter(fn, retries=2)
         assert result == "ok"
         assert mock_sleep.call_count == 1
+
+    @patch("mimeo.utils.retry.time.sleep")
+    def test_retries_on_host_error_with_retryable_status_code(self, mock_sleep) -> None:
+        """Retries on HostError carrying a retryable structured status code."""
+        calls = []
+
+        def fn():
+            calls.append(1)
+            if len(calls) == 1:
+                raise HostError("gh: Server Error (HTTP 502)", status_code=502)
+            return "ok"
+
+        result = retry_with_jitter(fn, retries=2)
+        assert result == "ok"
+        assert mock_sleep.call_count == 1
+
+    @patch("mimeo.utils.retry.time.sleep")
+    def test_does_not_retry_host_error_with_definitive_status_code(self, mock_sleep) -> None:
+        """A 404 HostError is definitive -- no retry."""
+        calls = []
+
+        def fn():
+            calls.append(1)
+            raise HostError("gh: Not Found (HTTP 404)", status_code=404)
+
+        with pytest.raises(HostError):
+            retry_with_jitter(fn, retries=2)
+        assert len(calls) == 1
+        mock_sleep.assert_not_called()
+
+    def test_status_code_takes_precedence_over_message_keywords(self) -> None:
+        """A definitive code wins even if the message mentions transient keywords."""
+        calls = []
+
+        def fn():
+            calls.append(1)
+            raise HostError("upstream said 502 but (HTTP 400)", status_code=400)
+
+        with pytest.raises(HostError):
+            retry_with_jitter(fn, retries=2)
+        assert len(calls) == 1
 
     @patch("mimeo.utils.retry.time.sleep")
     def test_does_not_retry_non_retryable_api_error(self, mock_sleep) -> None:

@@ -37,7 +37,15 @@ class RegistrarError(ProviderError):
 class HostError(ProviderError):
     """Raised when hosting provider operations fail."""
 
-    pass
+    def __init__(self, message: str, status_code: int | None = None) -> None:
+        """Initialize host error.
+
+        Args:
+            message: Error message
+            status_code: HTTP status code if applicable
+        """
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class DNSError(MimeoError):

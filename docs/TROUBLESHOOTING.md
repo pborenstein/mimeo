@@ -110,7 +110,7 @@ Follow the prompts. Choose HTTPS and authenticate via browser.
 **Symptoms:**
 
 - `mimeo doctor` reports `fail  workflow scope`
-- `HostError: GitHub CLI command failed: refusing to allow...` when pushing
+- `HostError: refusing to allow...` when pushing
 - Git push fails silently during `create`
 
 **Cause:** The GitHub Actions workflow file (`.github/workflows/static.yml`) requires the `workflow` scope to push. Standard `repo` scope is insufficient.
@@ -156,12 +156,12 @@ gh auth status
    gh workflow run static.yml --repo username/example.com
    ```
 
-### "GitHub CLI command failed: Not Found" during repository creation
+### "Not Found" during repository creation
 
 **Symptoms:**
 
 - Error during `create` referencing repository creation
-- `HostError: GitHub CLI command failed: Not Found`
+- `HostError: gh: Not Found (HTTP 404)`
 
 **Solutions:**
 
@@ -417,7 +417,7 @@ The only non-idempotent behavior is the content push — it is skipped if the re
 2. Verify Porkbun API status: https://porkbun.com
 3. The HTTP client retries automatically on 429, 500, 502, 503, 504 responses with exponential backoff. Persistent errors indicate a Porkbun outage or connectivity problem.
 
-### "GitHub CLI command failed" with rate limit message
+### Rate limit errors from gh ("rate limit" in the message)
 
 **Symptoms:**
 

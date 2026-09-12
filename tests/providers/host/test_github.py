@@ -79,7 +79,31 @@ class TestGitHubHost:
             )
             with pytest.raises(HostError) as exc_info:
                 host._run_gh_command(["api", "invalid"])
-            assert "API error" in str(exc_info.value)
+            assert str(exc_info.value) == "API error"
+
+    def test_run_gh_command_failure_parses_status_code(self, host: GitHubHost) -> None:
+        """gh stderr '(HTTP <code>)' is attached to the HostError."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(
+                returncode=1,
+                stdout="",
+                stderr="gh: Invalid cname (HTTP 400)\n",
+            )
+            with pytest.raises(HostError) as exc_info:
+                host._run_gh_command(["api", "repos/o/r/pages"])
+            assert exc_info.value.status_code == 400
+
+    def test_run_gh_command_failure_without_status_code(self, host: GitHubHost) -> None:
+        """Errors without an HTTP code leave status_code unset."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(
+                returncode=1,
+                stdout="",
+                stderr="connection refused\n",
+            )
+            with pytest.raises(HostError) as exc_info:
+                host._run_gh_command(["api", "user"])
+            assert exc_info.value.status_code is None
 
     def test_run_gh_command_with_token(self, host: GitHubHost) -> None:
         """Test gh command uses token from environment."""
@@ -102,6 +126,17 @@ class TestGitHubHost:
                 ["api", "user", "--method", "GET"],
                 input_data=None,
             )
+
+    def test_gh_api_failure_preserves_status_code(self, host: GitHubHost) -> None:
+        """_gh_api's re-wrapped HostError keeps the parsed status code."""
+        with patch.object(host, "_run_gh_command") as mock_cmd:
+            mock_cmd.side_effect = HostError("gh: Not Found (HTTP 404)", status_code=404)
+
+            with pytest.raises(HostError) as exc_info:
+                host._gh_api("repos/o/r/pages", method="PUT")
+
+            assert exc_info.value.status_code == 404
+            assert "PUT repos/o/r/pages" in str(exc_info.value)
 
     def test_gh_api_post_with_data(self, host: GitHubHost) -> None:
         """Test making a POST request with data via gh API."""
@@ -144,8 +179,8 @@ class TestGitHubHost:
             with patch.object(host, "_set_repository_topics") as mock_topics:
                 with patch.object(host, "_strip_template_dev_files") as mock_strip:
                     mock_api.side_effect = [
-                        HostError("gh: Not Found (HTTP 404)"),  # template has no manifest
-                        HostError("Not Found"),  # repo existence check
+                        HostError("gh: Not Found (HTTP 404)", status_code=404),  # template has no manifest
+                        HostError("Not Found", status_code=404),  # repo existence check
                         {"is_template": True},  # template repo is_template check
                         {"full_name": "testorg/example.com"},  # template generate
                         {"full_name": "testorg/example.com"},  # _wait_for_repo poll
@@ -173,7 +208,7 @@ class TestGitHubHost:
         """Test that existing repos are returned without calling template API."""
         with patch.object(host, "_gh_api") as mock_api:
             mock_api.side_effect = [
-                HostError("gh: Not Found (HTTP 404)"),  # template has no manifest
+                HostError("gh: Not Found (HTTP 404)", status_code=404),  # template has no manifest
                 {"full_name": "testorg/example.com"},  # repo existence check
             ]
 
@@ -197,7 +232,7 @@ class TestGitHubHost:
                             with patch.object(host, "_delete_stale_pages_artifacts"):
                                 with patch("time.time", return_value=1000):
                                     mock_api.side_effect = [
-                                        HostError("gh: Not Found (HTTP 404)"),  # no manifest
+                                        HostError("gh: Not Found (HTTP 404)", status_code=404),  # no manifest
                                         {"full_name": "testorg/example.com"},  # existence check
                                         {"is_template": True},  # is_template check
                                         {"full_name": "testorg/example.com"},  # generate
@@ -231,7 +266,7 @@ class TestGitHubHost:
                 with patch.object(host, "_delete_repository") as mock_delete:
                     with patch("time.time", return_value=1000):
                         mock_api.side_effect = [
-                            HostError("gh: Not Found (HTTP 404)"),  # no manifest
+                            HostError("gh: Not Found (HTTP 404)", status_code=404),  # no manifest
                             {"full_name": "testorg/example.com"},  # existence check
                             {"is_template": True},  # is_template check
                             HostError("Not Found"),  # generate fails (e.g. 404)
@@ -258,8 +293,8 @@ class TestGitHubHost:
             with patch.object(host, "_set_repository_topics"):
                 with patch.object(host, "_strip_template_dev_files"):
                     mock_api.side_effect = [
-                        HostError("gh: Not Found (HTTP 404)"),  # template has no manifest
-                        HostError("Not Found"),  # repo existence check
+                        HostError("gh: Not Found (HTTP 404)", status_code=404),  # template has no manifest
+                        HostError("Not Found", status_code=404),  # repo existence check
                         {"is_template": True},  # template repo is_template check
                         {"full_name": "testorg/example.com"},  # template generate
                         {"full_name": "testorg/example.com"},  # _wait_for_repo poll
@@ -276,8 +311,8 @@ class TestGitHubHost:
         """Test HostError raised when template API response has no full_name."""
         with patch.object(host, "_gh_api") as mock_api:
             mock_api.side_effect = [
-                HostError("gh: Not Found (HTTP 404)"),  # no manifest
-                HostError("Not Found"),  # repo existence check
+                HostError("gh: Not Found (HTTP 404)", status_code=404),  # no manifest
+                HostError("Not Found", status_code=404),  # repo existence check
                 {"is_template": True},  # template repo is_template check
                 {},  # no full_name
             ]
@@ -344,7 +379,7 @@ class TestGitHubHost:
     def test_fetch_template_manifest_absent_returns_none(self, host: GitHubHost) -> None:
         """A template without a manifest is not an error -- None means defaults apply."""
         with patch.object(host, "_gh_api") as mock_api:
-            mock_api.side_effect = HostError("gh: Not Found (HTTP 404)")
+            mock_api.side_effect = HostError("gh: Not Found (HTTP 404)", status_code=404)
 
             assert host._fetch_template_manifest("pandoc-simple") is None
 
@@ -504,7 +539,7 @@ class TestGitHubHost:
                         with patch.object(host, "_apply_template_manifest") as mock_apply:
                             mock_api.side_effect = [
                                 {"content": encoded},  # manifest fetch
-                                HostError("Not Found"),  # repo existence check
+                                HostError("Not Found", status_code=404),  # repo existence check
                                 {"is_template": True},  # is_template check
                                 {"full_name": "testorg/example.com"},  # generate
                                 {"full_name": "testorg/example.com"},  # _wait_for_repo
@@ -646,7 +681,7 @@ class TestGitHubHost:
             # First call checks if Pages exists (raises error = not enabled)
             # Second call enables Pages
             mock_api.side_effect = [
-                HostError("Not Found"),
+                HostError("Not Found", status_code=404),
                 {"status": "built"},
             ]
 
@@ -667,6 +702,47 @@ class TestGitHubHost:
 
             # Only one call to check if Pages exists
             assert mock_api.call_count == 1
+
+    def test_enable_github_pages_probe_failure_raises(self, host: GitHubHost) -> None:
+        """Only a 404 probe means Pages needs enabling; other errors raise."""
+        with patch.object(host, "_gh_api") as mock_api:
+            mock_api.side_effect = HostError("gh: Server Error (HTTP 502)", status_code=502)
+
+            with pytest.raises(HostError):
+                host._enable_github_pages("testorg/example.com")
+
+            # Never fell through to the enable POST
+            assert mock_api.call_count == 1
+
+    def test_rename_repository_retries_once_on_422(self, host: GitHubHost) -> None:
+        """A 422 conflicting-operation error is retried once, then succeeds."""
+        with patch.object(host, "_gh_api") as mock_api, \
+                patch("mimeo.providers.host.github.time.sleep") as mock_sleep:
+            mock_api.side_effect = [
+                {"id": 123},  # repo lookup
+                HostError("gh: Conflict (HTTP 422)", status_code=422),  # first attempt
+                {"ok": True},  # retry succeeds
+            ]
+
+            host._rename_repository("testorg/old", "new")
+
+            assert mock_api.call_count == 3
+            mock_sleep.assert_called_once_with(3)
+
+    def test_rename_repository_other_errors_raise_immediately(self, host: GitHubHost) -> None:
+        """Non-422 rename failures are not retried."""
+        with patch.object(host, "_gh_api") as mock_api, \
+                patch("mimeo.providers.host.github.time.sleep") as mock_sleep:
+            mock_api.side_effect = [
+                {"id": 123},  # repo lookup
+                HostError("gh: Not Found (HTTP 404)", status_code=404),
+            ]
+
+            with pytest.raises(HostError):
+                host._rename_repository("testorg/old", "new")
+
+            assert mock_api.call_count == 2
+            mock_sleep.assert_not_called()
 
     def test_set_custom_domain(self, host: GitHubHost) -> None:
         """Test setting custom domain for GitHub Pages."""
@@ -795,8 +871,8 @@ class TestGitHubHost:
             with patch.object(host, "_set_repository_topics") as mock_topics:
                 with patch.object(host, "_strip_template_dev_files"):
                     mock_api.side_effect = [
-                        HostError("gh: Not Found (HTTP 404)"),  # no manifest
-                        HostError("Not found"),  # repo existence check
+                        HostError("gh: Not Found (HTTP 404)", status_code=404),  # no manifest
+                        HostError("Not found", status_code=404),  # repo existence check
                         {"is_template": True},  # template repo is_template check
                         {"full_name": "testorg/test-repo"},  # template generate
                         {"full_name": "testorg/test-repo"},  # _wait_for_repo poll
@@ -844,15 +920,23 @@ class TestGitHubHost:
             assert result["cert_state"] is None
 
     def test_get_pages_health_pages_error(self, host: GitHubHost) -> None:
-        """Test get_pages_health when Pages API returns an error (404 or similar)."""
+        """Test get_pages_health when Pages is not configured (404)."""
         with patch.object(host, "_gh_api") as mock_api:
-            mock_api.side_effect = HostError("Not Found")
+            mock_api.side_effect = HostError("Not Found", status_code=404)
             result = host.get_pages_health("testorg/example.com")
 
             assert result["pages_configured"] is False
             assert result["https_enforced"] is False
             assert result["cert_state"] is None
             assert result["pages_status"] is None
+
+    def test_get_pages_health_check_failure_raises(self, host: GitHubHost) -> None:
+        """A failed health check (non-404) propagates instead of reporting no Pages."""
+        with patch.object(host, "_gh_api") as mock_api:
+            mock_api.side_effect = HostError("gh: Server Error (HTTP 502)", status_code=502)
+
+            with pytest.raises(HostError):
+                host.get_pages_health("testorg/example.com")
 
     def test_required_dns_records(self, host: GitHubHost) -> None:
         """required_dns_records returns 4 A records + 1 CNAME."""

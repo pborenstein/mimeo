@@ -23,6 +23,7 @@ from ..exceptions import (
     NetworkError,
     RegistrarError,
 )
+from ..utils.retry import _TRANSIENT_HOST_KEYWORDS
 
 # Set by main() group before subcommands run
 _log_format: str = "text"
@@ -90,11 +91,17 @@ _AUTH_KEYWORDS = (
     "bad credentials",
 )
 _RATE_LIMIT_KEYWORDS = ("rate limit", "429")
-_TRANSIENT_KEYWORDS = ("502", "503", "500", "timeout", "connection")
+_TRANSIENT_STATUS_CODES = (500, 502, 503, 504)
 
 
 def _categorize_error(exc: BaseException) -> tuple[int, str]:
     """Return (exit_code, category_label) for an exception.
+
+    Provider failures are classified by structured HTTP status code first;
+    message keywords are consulted only when no code is available. Only
+    confirmed-transient failures map to EXIT_TRANSIENT, and unexpected
+    exception types (programming errors) map to EXIT_GENERAL with category
+    "error" rather than masquerading as transient.
 
     Args:
         exc: The exception to categorize
@@ -110,23 +117,34 @@ def _categorize_error(exc: BaseException) -> tuple[int, str]:
     if isinstance(exc, APIError):
         if exc.status_code == 429 or any(k in msg for k in _RATE_LIMIT_KEYWORDS):
             return EXIT_RATE_LIMIT, "rate-limit"
-        if exc.status_code in (500, 502, 503, 504):
+        if exc.status_code in _TRANSIENT_STATUS_CODES:
             return EXIT_TRANSIENT, "transient"
-        if any(k in msg for k in _AUTH_KEYWORDS):
+        if exc.status_code in (401, 403) or any(k in msg for k in _AUTH_KEYWORDS):
             return EXIT_AUTH, "auth"
+        return EXIT_GENERAL, "provider"
 
     if isinstance(exc, NetworkError):
         return EXIT_TRANSIENT, "transient"
 
     if isinstance(exc, (HostError, RegistrarError)):
+        code = getattr(exc, "status_code", None)
+        if code is not None:
+            if code == 429:
+                return EXIT_RATE_LIMIT, "rate-limit"
+            if code in _TRANSIENT_STATUS_CODES:
+                return EXIT_TRANSIENT, "transient"
+            if code in (401, 403):
+                return EXIT_AUTH, "auth"
+            return EXIT_GENERAL, "provider"
         if any(k in msg for k in _AUTH_KEYWORDS):
             return EXIT_AUTH, "auth"
         if any(k in msg for k in _RATE_LIMIT_KEYWORDS):
             return EXIT_RATE_LIMIT, "rate-limit"
-        if any(k in msg for k in _TRANSIENT_KEYWORDS):
+        if any(k in msg for k in _TRANSIENT_HOST_KEYWORDS):
             return EXIT_TRANSIENT, "transient"
+        return EXIT_GENERAL, "provider"
 
-    return EXIT_TRANSIENT, "provider"
+    return EXIT_GENERAL, "error"
 
 
 def load_config(config_path: Any) -> Any:
@@ -155,7 +173,8 @@ _CATEGORY_TO_CODE = {
     "auth": EXIT_AUTH,
     "rate-limit": EXIT_RATE_LIMIT,
     "transient": EXIT_TRANSIENT,
-    "provider": EXIT_TRANSIENT,
+    "provider": EXIT_GENERAL,
+    "error": EXIT_GENERAL,
     "partial": EXIT_PARTIAL,
 }
 
@@ -243,29 +262,24 @@ def render_results(
 
 
 def exit_on_errors(results: List[Dict[str, Any]]) -> None:
-    """Report error-carrying rows to stderr and exit by failure taxonomy.
+    """Print a one-line failure trailer to stderr and exit by failure taxonomy.
 
-    For commands whose result rows use an "error" field (map_items style)
-    rather than a "success" flag. No-op when every row is clean. Exits
-    EXIT_PARTIAL when some rows succeeded, or by the failed rows' error
-    category when every row failed.
+    Per-domain error detail belongs to each command's own renderer; this
+    helper only signals the failure count (stdout may be redirected) and
+    picks the exit code. The failure category stays encoded in the exit
+    code. No-op when every row is clean. Exits EXIT_PARTIAL when some rows
+    succeeded, or by the failed rows' error category when every row failed.
     """
     failed = [r for r in results if r.get("error")]
     if not failed:
         return
-    for r in failed:
-        label = r.get("domain") or r.get("name") or "?"
-        category = r.get("error_category") or "provider"
-        click.secho(f"[{category}] {label}: {r['error']}", fg="red", err=True)
+    trailer = f"{len(failed)} of {len(results)} domains failed"
     if len(failed) < len(results):
-        click.secho(
-            f"warning: {len(failed)}/{len(results)} items failed; results are partial",
-            fg="yellow",
-            err=True,
-        )
+        click.secho(trailer, fg="yellow", err=True)
         sys.exit(EXIT_PARTIAL)
+    click.secho(trailer, fg="red", err=True)
     codes = [
-        _CATEGORY_TO_CODE.get(r.get("error_category") or "transient", EXIT_TRANSIENT)
+        _CATEGORY_TO_CODE.get(r.get("error_category") or "provider", EXIT_GENERAL)
         for r in failed
     ]
     sys.exit(min(codes))

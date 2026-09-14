@@ -1,18 +1,16 @@
 ---
 phase: 8
 phase_name: Consolidation
-updated: 2026-09-12
-last_commit: 74f438a
+updated: 2026-09-14
+last_commit: a821659
 ---
 
 ## Current Focus
 
-Error-path QoL session (Entry 61, DEC-027/028): structured gh status
-codes end to end (rec #2 + BUG 4 + BUG 7 closed), create output honest
-(created / already-existed / failed) and narrated in parallel runs.
-Branding work declared complete at Entry 59 — no port to the remaining
-five templates. Subdomain sites closed: the eleventy templates working
-was the answer.
+Template-side session wrapped (Entry 62): laptopistan follows the OS
+color scheme (no toggle), and the template catalog now lives on the org
+site at tepiton.com (user folded list.md into index.md, deployed). No
+mimeo code this round; repo is clean at the Entry 61 code commit.
 
 ## Active Tasks
 
@@ -35,10 +33,11 @@ Track B blocked on a test account/org. Everything else unblocked.
   definitive provider failures and unexpected exceptions exit 1.
 - Tests constructing 404/422-meaning `HostError`s must pass
   `status_code=` explicitly — parsing lives in `_run_gh_command`.
-- Already-existed create no-op keeps exit 0 with a warn recap (DEC-028);
-  user accepted honest text over a nonzero code.
-- mimeo-sites (separate repo): user updated the templates' pages.yml so
-  URLs work with or without a custom domain; not chronicled here.
+- Already-existed create no-op keeps exit 0 with a warn recap (DEC-028).
+- mimeo-sites: TEMPLATES/CLAUDE.md is stale on the mimeo.lol template's
+  repo (says tepiton/mimeo.lol; the repo is `tepiton/mimeo`).
+- Template demos: project Pages redirect under tepiton.com/<repo>; the
+  mimeo.lol template's demo serves at mimeo.lol.
 
 ## Next Session
 

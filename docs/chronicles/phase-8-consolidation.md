@@ -737,3 +737,15 @@ removal, not an architectural choice.
 **Decisions**: DEC-027 (structured error semantics + exit-code taxonomy), DEC-028 (create outcome reporting: created / already-existed / failed)
 
 **Files**: mimeo/exceptions.py, mimeo/cli/{create,_processing}.py, mimeo/providers/host/github.py, mimeo/utils/retry.py + tests (d9a6020, suite 354 green); docs updates in this commit
+
+## Entry 62: laptopistan system dark/light; tepiton.com template catalog (2026-09-13)
+
+**What**: Two template-side items, no mimeo code. (1) laptopistan now follows the OS color scheme with no toggle: the five color literals became CSS custom properties on `:root` with one `prefers-color-scheme: dark` override, plus `color-scheme: light dark`. Dark is the design inverted (#111/#eee, #9a9a9a dim); light is the old palette unchanged; the #ec3013 selection accent is shared by both. Zero JS, no flash of wrong theme. Verified in a real browser both ways (system-driven dark branch confirmed via computed styles, light previewed by applying the `:root` defaults). (2) tepiton.github.io (the org Pages site at tepiton.com, pandoc-built) gained a template catalog: a ten-template table -- name linked to repo, live example, description fetched verbatim from each GitHub repo -- plus a pandoc build line in its pages.yml. The user then folded the list into index.md and iterated on styling; deployed and green.
+
+**Why**: User asked for system-following theming with no toggle, then for a template list at the org site with GitHub-sourced descriptions. Facts surfaced while building it: all ten templates have Pages enabled, project pages redirect under the org's custom domain (tepiton.com/\<repo\>), and the mimeo.lol template's demo serves at mimeo.lol itself.
+
+**How**: CSS variables + one media query; catalog links verified against the Pages API before writing. One known-stale doc left unfixed: TEMPLATES/CLAUDE.md says the mimeo.lol template's repo is tepiton/mimeo.lol, but the repo is actually `tepiton/mimeo`.
+
+**Decisions**: none new -- design stance recorded here: no toggle, the OS setting is the single source of truth for laptopistan's theme.
+
+**Files**: TEMPLATES/laptopistan/index.html (4233437, user-committed); tepiton.github.io (list.md superseded into index.md, user commits through the 09-14 deploys); this repo docs only (this commit)

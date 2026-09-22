@@ -2,15 +2,21 @@
 
 import os
 import tomllib
-import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
+
+import click
 
 from mimeo.exceptions import ConfigurationError
 from mimeo.providers.host.github import DEFAULT_TEMPLATE, TEMPLATE_ORG
 
 CURRENT_SCHEMA_VERSION = 1
+
+
+def _notice(message: str) -> None:
+    """Print a config notice to stderr, visible to CLI users."""
+    click.secho(message, fg="yellow", err=True)
 
 
 @dataclass
@@ -20,8 +26,6 @@ class Config:
     porkbun_api_key: str
     porkbun_secret: str
     github_username: str
-    default_registrar: str = "porkbun"
-    default_host: str = "github"
     template_org: str = TEMPLATE_ORG
     default_template: str = DEFAULT_TEMPLATE
     ignore_domains: list[str] = field(default_factory=list)
@@ -55,26 +59,24 @@ class Config:
         except Exception as e:
             raise ConfigurationError(f"Failed to parse config file {config_path}: {e}")
 
-        # Validate schema version
+        # Validate schema version. Notices print to stderr directly:
+        # warnings.warn is invisible to CLI users (DeprecationWarning is
+        # filtered outside __main__), which defeated the point (BUG 6).
         schema_version = data.get("schema_version")
         if schema_version is None:
-            warnings.warn(
+            _notice(
                 f"Config file {config_path} has no schema_version. "
-                f"Add 'schema_version = {CURRENT_SCHEMA_VERSION}' to suppress this warning.",
-                DeprecationWarning,
-                stacklevel=2,
+                f"Add 'schema_version = {CURRENT_SCHEMA_VERSION}' to suppress this notice."
             )
         elif not isinstance(schema_version, int) or schema_version < 1:
             raise ConfigurationError(
                 f"Invalid schema_version in {config_path}: must be a positive integer"
             )
         elif schema_version > CURRENT_SCHEMA_VERSION:
-            warnings.warn(
+            _notice(
                 f"Config file {config_path} uses schema_version {schema_version}, "
-                f"but this version of mimeo only understands schema_version {CURRENT_SCHEMA_VERSION}. "
-                f"Some settings may be ignored.",
-                UserWarning,
-                stacklevel=2,
+                f"but this version of mimeo only understands schema_version "
+                f"{CURRENT_SCHEMA_VERSION}. Some settings may be ignored."
             )
 
         # Extract configuration with environment variable overrides
@@ -139,8 +141,6 @@ class Config:
             porkbun_api_key=porkbun_api_key,
             porkbun_secret=porkbun_secret,
             github_username=github_username,
-            default_registrar=defaults_config.get("registrar", "porkbun"),
-            default_host=defaults_config.get("host", "github"),
             template_org=template_org or TEMPLATE_ORG,
             default_template=default_template or DEFAULT_TEMPLATE,
             ignore_domains=[d.lower() for d in ignore_domains],

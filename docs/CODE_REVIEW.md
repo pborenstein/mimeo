@@ -170,7 +170,7 @@ Ordered by user impact, not severity of code damage.
   DEC-025 treated dead surface. Also removed its mentions from `README.md`
   and `docs/TROUBLESHOOTING.md` (no test referenced it).
 
-### BUG 6: missing-`schema_version` warning is invisible to actual users
+### BUG 6: missing-`schema_version` warning is invisible to actual users -- FIXED (2026-09-21)
 
 - **Where**: `Config.load`, `mimeo/config.py` ~lines 58-63 uses
   `warnings.warn(..., DeprecationWarning)`.
@@ -182,6 +182,10 @@ Ordered by user impact, not severity of code damage.
   comment at ~line 90: "GitHub username (use default_org from config, or get
   from gh CLI)" -- there is no gh fallback; `github_username` is a hard
   requirement (missing-config error at ~line 101).
+- **FIXED (2026-09-21)**: both schema notices (missing and future version)
+  now print to stderr via `click.secho` (`_notice` helper in `config.py`) --
+  yellow, no `warnings` machinery. Tests assert on captured stderr
+  (`capsys`) instead of `pytest.warns`.
 
 ### BUG 7: `get_pages_health` cannot distinguish "no Pages" from "couldn't check" -- FIXED (2026-09-12)
 
@@ -282,7 +286,7 @@ just fetched (double fetch).
 `/dns/create` per record needs no delete first). Keep delete-then-recreate
 for `create`'s first-provision case, where clearing conflicts is the point.
 
-### D2: provider pluggability is advertised but not wired
+### D2: provider pluggability is advertised but not wired -- RESOLVED (2026-09-21, fields removed)
 
 `Config` loads and keeps `default_registrar` / `default_host`
 (`mimeo/config.py` ~lines 121-122), but every command instantiates
@@ -291,6 +295,11 @@ fields suggest a provider factory that does not exist. Either wire one (a
 simple dict lookup keyed on those fields) or drop the fields -- a config
 option that does nothing is worse than no option, because it implies
 support.
+
+**RESOLVED (2026-09-21)**: fields removed (DEC-030). Leftover
+`[defaults] registrar`/`host` keys in existing config files are silently
+ignored; a factory can be introduced when a second provider actually
+exists. Related `verify_dns` was already removed 2026-09-08.
 
 Related: `DNSProvider.verify_dns` is an *abstract* method (`base.py`
 ~line 67) that no production code calls anymore (both callers dropped in
@@ -338,7 +347,7 @@ nameserver-mismatch failures, which are not config problems.
 | `--stop-on-error` | `create.py` | **REMOVED (2026-09-08)**. See BUG 5. |
 | `HTTPClient.get/put/delete` | `mimeo/utils/http.py` | **PARTIALLY ADDRESSED (2026-09-08)**. Kept the public `get`/`put`/`delete` methods (still exercised by real, working tests in `tests/utils/test_http.py` -- not just dead surface), but collapsed all four verbs onto one `_request(method, ...)` helper, removing the ~90-line duplication. `post` remains the only one called by production code (`_PorkbunClient`). |
 | `max_retries`/`backoff_factor` params | `http.py` `__init__` | **REMOVED (2026-09-08)**. Dropped both dead constructor params; updated `tests/utils/test_http.py::test_initialization` to match. Nothing external imported this class, and nothing passed these params in production code. |
-| `default_registrar`/`default_host` | `config.py` | D2. **Deliberately left open** -- this is documented, user-facing config surface (`config.toml.example`'s `[defaults]` section, covered by `tests/test_config.py`), and the fix requires a real decision (wire a provider factory vs. drop the fields), not mechanical sweeping. Revisit as its own task. |
+| `default_registrar`/`default_host` | `config.py` | D2. **REMOVED (2026-09-21, DEC-030)** -- the factory-vs-removal call went to removal: one registrar and one host exist, so a factory is a dict with one entry; the fields implied pluggability that was never wired. Stale `[defaults] registrar`/`host` keys in user configs are ignored. |
 | `ProviderError` | `exceptions.py` | **Left as-is** -- it's the real parent of `RegistrarError`/`HostError`, not literally unreachable code; the review's own text frames this as a taxonomy-grew-ahead-of-use note, not a removal recommendation. |
 | stale comment "or get from gh CLI" | `config.py` ~line 90 | **FIXED (2026-09-08)**. Comment now says the GitHub username is required with no `gh` CLI fallback. The `warnings.warn(..., DeprecationWarning)` visibility problem itself (BUG 6) is unfixed -- that's a behavior change, out of scope for this pass. |
 
@@ -416,15 +425,16 @@ paths, drift math, normalization, retry behavior all have direct tests.
 4. ~~**Cut the dead surface** (table above); `verify_dns`'s ABC slot is the
    one that taxes the future most.~~ **Mostly done 2026-09-08** -- `verify_dns`,
    `--stop-on-error`, `HTTPClient`'s dead ctor params and get/put/delete
-   duplication, and the stale `config.py` comment are cleared. Still open:
-   `default_registrar`/`default_host` (D2) and `ProviderError` -- both
-   deliberately left, see the dead-code table.
+   duplication, and the stale `config.py` comment are cleared. ~~Still open:
+   `default_registrar`/`default_host` (D2)~~ (removed 2026-09-21, DEC-030)
+   and `ProviderError` -- deliberately left, see the dead-code table.
 5. **Track B E2E lane** -- the mocked suite's blind spot is precisely where
    every real incident has come from. **Not started; blocked on a test
    account/org per `docs/CONTEXT.md`.**
 6. Longer term: fetch Pages IPs from `api.github.com/meta` (cache + hardcoded
-   fallback); gentler `sync` apply path (D1); provider factory or config-field
-   removal (D2). **Not started.**
+   fallback); gentler `sync` apply path (D1); ~~provider factory or
+   config-field removal (D2)~~ (resolved 2026-09-21: fields removed,
+   DEC-030). **Remaining: Pages IPs + D1. Not started.**
 
 ---
 

@@ -595,6 +595,20 @@ A fourth, related fix landed in the same session at the provider layer (`mimeo/p
 
 ---
 
+### DEC-030: `default_registrar`/`default_host` Config Fields Removed (2026-09-21)
+
+**Status**: Active (Phase 8). Resolves D2 from `docs/CODE_REVIEW.md`.
+
+**Context**: `Config` loaded `default_registrar`/`default_host` (`[defaults]` registrar/host) but every command instantiated `PorkbunRegistrar`/`GitHubHost` by name — the fields implied a provider factory that never existed. DEC-029 had just added config fields that *do* work (`template_org`, `default_template`), sharpening the contrast: a config option that does nothing is worse than no option, because it implies support.
+
+**Decision**: Remove the fields. One registrar and one host exist, so a factory keyed on config would be a dict with a single entry; adding a provider is a code change (new class + wiring) regardless, at which point introducing a factory is trivial. Leftover `[defaults] registrar`/`host` keys in existing user configs are silently ignored — no breakage, no migration.
+
+**Alternatives considered**: Wire the factory now (rejected — speculative generality: no second provider exists or is planned, and the abstraction tax would be paid for a dict with one entry); keep the fields as inert documentation (rejected — that is exactly the false advertising D2 flagged).
+
+**Consequences**: `Config` no longer carries provider-selection state; provider choice is compile-time until a second provider ships. `config.toml.example`'s `[defaults]` section now documents only what it delivers (`template`, `ignore_domains`). Revisit the factory if a second registrar or host lands.
+
+---
+
 ## Superseded/Deprecated
 
 [No superseded decisions yet]

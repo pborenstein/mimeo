@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 import pytest
+from _pytest.capture import CaptureFixture
 
 from mimeo.config import Config
 from mimeo.exceptions import ConfigurationError
@@ -29,25 +30,6 @@ default_org = "testuser"
     return config_file
 
 
-@pytest.fixture
-def minimal_config_file(tmp_path: Path) -> Path:
-    """Create a minimal config file without optional fields."""
-    config_dir = tmp_path / "mimeo"
-    config_dir.mkdir()
-    config_file = config_dir / "config.toml"
-    config_file.write_text(
-        """
-[porkbun]
-api_key = "pk1_test"
-secret_key = "sk1_test"
-
-[github]
-default_org = "testuser"
-"""
-    )
-    return config_file
-
-
 def test_load_config_from_file(temp_config_file: Path) -> None:
     """Config should load from TOML file."""
     config = Config.load(temp_config_file)
@@ -55,16 +37,6 @@ def test_load_config_from_file(temp_config_file: Path) -> None:
     assert config.porkbun_api_key == "pk1_test_key"
     assert config.porkbun_secret == "sk1_test_secret"
     assert config.github_username == "testuser"
-    assert config.default_registrar == "porkbun"
-    assert config.default_host == "github"
-
-
-def test_load_config_with_defaults(minimal_config_file: Path) -> None:
-    """Config should use defaults for optional fields."""
-    config = Config.load(minimal_config_file)
-
-    assert config.default_registrar == "porkbun"
-    assert config.default_host == "github"
 
 
 def test_env_var_overrides(temp_config_file: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -144,42 +116,40 @@ def test_invalid_toml(tmp_path: Path) -> None:
         Config.load(config_file)
 
 
-def test_no_schema_version_warns(tmp_path: Path) -> None:
-    """Missing schema_version emits DeprecationWarning."""
+def test_no_schema_version_notices_on_stderr(tmp_path: Path, capsys: CaptureFixture[str]) -> None:
+    """Missing schema_version prints a visible stderr notice."""
     config_file = tmp_path / "config.toml"
     config_file.write_text(
         "[porkbun]\napi_key = \"pk1_test\"\nsecret_key = \"sk1_test\"\n"
         "[github]\ndefault_org = \"testuser\"\n"
     )
-    with pytest.warns(DeprecationWarning, match="schema_version"):
-        Config.load(config_file)
+    Config.load(config_file)
+    assert "no schema_version" in capsys.readouterr().err
 
 
-def test_current_schema_version_no_warning(tmp_path: Path) -> None:
-    """schema_version = 1 loads without warning."""
+def test_current_schema_version_no_notice(tmp_path: Path, capsys: CaptureFixture[str]) -> None:
+    """schema_version = 1 loads without any stderr notice."""
     config_file = tmp_path / "config.toml"
     config_file.write_text(
         "schema_version = 1\n"
         "[porkbun]\napi_key = \"pk1_test\"\nsecret_key = \"sk1_test\"\n"
         "[github]\ndefault_org = \"testuser\"\n"
     )
-    import warnings
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        cfg = Config.load(config_file)
+    cfg = Config.load(config_file)
     assert cfg.porkbun_api_key == "pk1_test"
+    assert capsys.readouterr().err == ""
 
 
-def test_future_schema_version_warns(tmp_path: Path) -> None:
-    """schema_version higher than current emits UserWarning."""
+def test_future_schema_version_notices_on_stderr(tmp_path: Path, capsys: CaptureFixture[str]) -> None:
+    """schema_version higher than current prints a visible stderr notice."""
     config_file = tmp_path / "config.toml"
     config_file.write_text(
         "schema_version = 999\n"
         "[porkbun]\napi_key = \"pk1_test\"\nsecret_key = \"sk1_test\"\n"
         "[github]\ndefault_org = \"testuser\"\n"
     )
-    with pytest.warns(UserWarning, match="schema_version"):
-        Config.load(config_file)
+    Config.load(config_file)
+    assert "only understands schema_version" in capsys.readouterr().err
 
 
 def test_invalid_schema_version_raises(tmp_path: Path) -> None:

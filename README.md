@@ -224,7 +224,7 @@ The tool uses provider abstractions (`Registrar`, `Host` ABCs) that allow adding
 uv sync --frozen && uv run pytest && uv run ruff check mimeo && uv run mypy mimeo
 ```
 
-361 tests. Linting and type checking are expected to be clean.
+360 tests. Linting and type checking are expected to be clean.
 
 ## Project structure
 

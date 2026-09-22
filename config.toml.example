@@ -20,8 +20,6 @@ default_org = "your-username-or-org"
 # default_private = false
 
 [defaults]
-registrar = "porkbun"
-host = "github"
 # Default template for new sites, looked up in github.template_org (default: mimeo)
 # template = "mimeo"
 # Domains excluded from fleet-wide sweeps (status --all / sync --all)

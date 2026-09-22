@@ -44,8 +44,6 @@ def mock_config() -> Config:
         porkbun_api_key="pk1_test",
         porkbun_secret="sk1_test",
         github_username="testuser",
-        default_registrar="porkbun",
-        default_host="github",
     )
 
 

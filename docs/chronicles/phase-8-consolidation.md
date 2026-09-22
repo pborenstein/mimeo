@@ -773,3 +773,15 @@ removal, not an architectural choice.
 **Decisions**: DEC-030
 
 **Files**: mimeo/config.py, tests/{test_config,test_cli}.py, config.toml.example, docs/{CODE_REVIEW,DECISIONS,README}.md (291f945); pyproject.toml, mimeo/__init__.py, uv.lock (c773a84); live config edited outside the repo
+
+## Entry 65: global --template-org/--deploy-org CLI flags (2026-09-21)
+
+**What**: `mimeo --template-org ORG --deploy-org ORG` -- both orgs overridable per invocation, for every command. Precedence: CLI flags > MIMEO_* env vars > config file. Extends DEC-029's config settings to the command line.
+
+**Why**: The orgs were config-file/env-only; trying a different template org or deploying to another destination required editing config. User asked for command-line specification.
+
+**How**: Main group records the flags via set_cli_overrides (mirrors the set_log_format module-state pattern); apply_cli_overrides mutates the loaded Config. The application point is the shared load_config wrapper in _processing.py -- all seven create/status/sync load sites funnel through it, so one wiring point covers everything (GitHubHost construction, repo URLs, template validation). doctor exempt: it validates the config file itself. Autouse test fixture resets flag state between tests (module state would otherwise leak into direct-invoke tests); one e2e test goes through the main group and asserts GitHubHost(default_org/template_org) get the overrides. 361 tests, ruff/mypy clean.
+
+**Decisions**: none new (extends DEC-029's precedence chain)
+
+**Files**: mimeo/cli/{__init__,_processing}.py, tests/test_cli.py, README.md, config.toml.example (e786760); docs updates in this commit

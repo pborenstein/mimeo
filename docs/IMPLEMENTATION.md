@@ -447,6 +447,17 @@ front-door verbs than it started with. See DEC-021.
   - [x] Version bumped 0.1.0 -> 1.1.0 (pyproject, `__version__`,
         uv.lock); `mimeo --version` reports it; 360 tests, ruff/mypy
         clean
+- [x] Global `--template-org`/`--deploy-org` CLI flags (2026-09-21,
+      Entry 65)
+  - [x] Both orgs overridable per-invocation (CLI > MIMEO_* env >
+        config file); wired once in the shared `load_config` wrapper in
+        `_processing.py`, so all seven create/status/sync load sites
+        follow automatically; `doctor` exempt (validates the file
+        itself)
+  - [x] Autouse test fixture resets flag state between tests; one
+        end-to-end test invokes through the `main` group and asserts
+        `GitHubHost` gets the overridden orgs; 361 tests, ruff/mypy
+        clean
 
 ---
 

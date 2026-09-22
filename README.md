@@ -11,8 +11,8 @@ uv sync
 cp config.toml.example ~/.config/mimeo/config.toml
 # edit ~/.config/mimeo/config.toml with your Porkbun API key and GitHub username
 
-mimeo doctor           # verify setup
-mimeo create example.com
+uv run mimeo doctor     # verify setup
+uv run mimeo create example.com
 ```
 
 Full setup details (prerequisites, `gh` token scope, global vs. dev install, environment variable overrides) are in [docs/INSTALLATION.md](./docs/INSTALLATION.md).
@@ -21,7 +21,7 @@ Full setup details (prerequisites, `gh` token scope, global vs. dev install, env
 
 `mimeo create example.com` orchestrates the full workflow:
 
-1. Creates a GitHub repository from a template (default: mimeo.lol)
+1. Creates a GitHub repository from a template (default: `mimeo`)
 2. Enables GitHub Pages with a custom domain
 3. Configures DNS via Porkbun API (4 A records + CNAME)
 4. Enables HTTPS enforcement when the cert is ready
@@ -67,9 +67,26 @@ mimeo create example.com --dry-run
 
 # Run sequentially instead of concurrently
 mimeo create example.com another.lol --sequential
+
+# Choose a different template (from github.template_org in config,
+# default tepiton; default template: mimeo)
+mimeo create example.com --template pandoc-simple
+
+# Create the repo and Pages only; configure DNS separately
+mimeo create example.com --skip-dns
 ```
 
 Multiple domains are processed concurrently (up to 5 workers). Use `--sequential` for verbose per-step output or when debugging.
+
+If a repository already exists, `create` leaves it unchanged (safe to re-run). `--force` replaces an existing repository's content with the template instead: it **deletes and recreates the repo**, so all existing content, issues, and history are lost, and managed DNS records are deleted and recreated as well (pass `--skip-dns` alongside `--force` to leave DNS untouched). `--force` prompts for confirmation unless `--yes` is passed:
+
+```bash
+# Replace an existing site with a different template (prompts first)
+mimeo create example.com --template new-theme --force
+
+# Same, non-interactive
+mimeo create example.com --template new-theme --force --yes
+```
 
 **`mimeo status <domain> [<domain> ...] | --all`** — one view of the fleet: registration expiry, nameservers, DNS drift, and Pages health per domain, joining the Porkbun account against mimeo-managed repos.
 
@@ -198,7 +215,7 @@ The tool uses provider abstractions (`Registrar`, `Host` ABCs) that allow adding
 uv sync --frozen && uv run pytest && uv run ruff check mimeo && uv run mypy mimeo
 ```
 
-294 tests. Linting and type checking are expected to be clean.
+361 tests. Linting and type checking are expected to be clean.
 
 ## Project structure
 

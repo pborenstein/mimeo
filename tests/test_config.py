@@ -7,6 +7,7 @@ import pytest
 
 from mimeo.config import Config
 from mimeo.exceptions import ConfigurationError
+from mimeo.providers.host.github import DEFAULT_TEMPLATE, TEMPLATE_ORG
 
 
 @pytest.fixture
@@ -242,3 +243,68 @@ ignore_domains = "example.dev"
     with pytest.raises(ConfigurationError) as exc_info:
         Config.load(config_file)
     assert "ignore_domains" in str(exc_info.value)
+
+
+def test_template_settings_default_to_provider_constants(temp_config_file: Path) -> None:
+    """template_org/default_template fall back to the provider defaults."""
+    config = Config.load(temp_config_file)
+    assert config.template_org == TEMPLATE_ORG
+    assert config.default_template == DEFAULT_TEMPLATE
+
+
+def test_template_settings_parsed_from_file(tmp_path: Path) -> None:
+    """github.template_org and defaults.template override the fallbacks."""
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        """
+schema_version = 1
+
+[porkbun]
+api_key = "pk1_test"
+secret_key = "sk1_test"
+
+[github]
+default_org = "testuser"
+template_org = "my-org"
+
+[defaults]
+template = "my-template"
+"""
+    )
+    config = Config.load(config_file)
+    assert config.template_org == "my-org"
+    assert config.default_template == "my-template"
+
+
+def test_template_settings_env_var_overrides(
+    temp_config_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """MIMEO_GITHUB_TEMPLATE_ORG / MIMEO_DEFAULT_TEMPLATE win over the file."""
+    monkeypatch.setenv("MIMEO_GITHUB_TEMPLATE_ORG", "env-org")
+    monkeypatch.setenv("MIMEO_DEFAULT_TEMPLATE", "env-template")
+
+    config = Config.load(temp_config_file)
+
+    assert config.template_org == "env-org"
+    assert config.default_template == "env-template"
+
+
+def test_template_settings_invalid_type(tmp_path: Path) -> None:
+    """Non-string template settings raise ConfigurationError."""
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        """
+schema_version = 1
+
+[porkbun]
+api_key = "pk1_test"
+secret_key = "sk1_test"
+
+[github]
+default_org = "testuser"
+template_org = 123
+"""
+    )
+    with pytest.raises(ConfigurationError) as exc_info:
+        Config.load(config_file)
+    assert "github.template_org" in str(exc_info.value)

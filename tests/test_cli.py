@@ -137,7 +137,9 @@ class TestCreateCommand:
         assert "https://example.com" in result.output
 
         mock_config_load.assert_called_once()
-        mock_host_class.assert_called_with(default_org="testuser")
+        mock_host_class.assert_called_with(
+            default_org="testuser", template_org="tepiton"
+        )
         mock_host.deploy_site.assert_called_once()
         mock_host.required_dns_records.assert_called_once_with("example.com")
         mock_registrar.check_nameservers.assert_called_once_with("example.com")
@@ -517,7 +519,47 @@ class TestCreateCommand:
         result = runner.invoke(create, ["example.com"])
 
         assert result.exit_code == 0
-        mock_host_class.assert_called_with(default_org="testuser")
+        mock_host_class.assert_called_with(
+            default_org="testuser", template_org="tepiton"
+        )
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_CREATE}.GitHubHost")
+    @patch(f"{_CREATE}.PorkbunRegistrar")
+    def test_create_template_defaults_to_config(
+        self,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+        mock_dns_records: List[DNSRecord],
+    ) -> None:
+        """Omitting --template uses defaults.template from config."""
+        mock_config.default_template = "custom-template"
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.deploy_site.return_value = DeployResult(
+            url="https://example.com", repo_created=True, https_enabled=True
+        )
+        mock_host.required_dns_records.return_value = mock_dns_records
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        mock_registrar = MagicMock()
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=True, actual=[], expected=[]
+        )
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar_class.return_value = mock_registrar
+
+        result = runner.invoke(create, ["example.com"])
+
+        assert result.exit_code == 0
+        mock_host.deploy_site.assert_called_with(
+            "example.com", template="custom-template", force=False
+        )
 
     @patch("mimeo.config.Config.load")
     @patch(f"{_CREATE}.GitHubHost")
@@ -1325,7 +1367,7 @@ class TestCreateForceCommand:
         mock_host_class.return_value = mock_host
 
         result = runner.invoke(
-            create, ["example.com", "--template", "mimeo.lol", "--force", "--dry-run"]
+            create, ["example.com", "--template", "mimeo", "--force", "--dry-run"]
         )
 
         assert result.exit_code == 0
@@ -1369,12 +1411,12 @@ class TestCreateForceCommand:
         mock_dns_provider_class.return_value = mock_dns_provider
 
         result = runner.invoke(
-            create, ["example.com", "--template", "mimeo.lol", "--force", "--yes"]
+            create, ["example.com", "--template", "mimeo", "--force", "--yes"]
         )
 
         assert result.exit_code == 0
         mock_host.deploy_site.assert_called_once_with(
-            "example.com", template="mimeo.lol", force=True
+            "example.com", template="mimeo", force=True
         )
 
     @patch("mimeo.config.Config.load")
@@ -1394,7 +1436,7 @@ class TestCreateForceCommand:
         mock_host_class.return_value = mock_host
 
         result = runner.invoke(
-            create, ["example.com", "--template", "mimeo.lol", "--force"], input="n\n"
+            create, ["example.com", "--template", "mimeo", "--force"], input="n\n"
         )
 
         assert result.exit_code == 0

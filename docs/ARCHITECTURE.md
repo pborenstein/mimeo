@@ -6,7 +6,7 @@ Mimeo is a CLI tool that automates the full provisioning pipeline for static lan
 
 The tool is structured around a provider abstraction that separates the registrar (DNS) and host (deployment) concerns. The current implementation supports Porkbun as the registrar and GitHub Pages as the host. The abstractions allow adding other providers without changing the core orchestration logic.
 
-Site content comes from GitHub template repositories in the `tepiton` org, generated via GitHub's template repo API (`POST /repos/{owner}/{repo}/generate`). There is no local content generation step.
+Site content comes from GitHub template repositories, generated via GitHub's template repo API (`POST /repos/{owner}/{repo}/generate`). The org holding the templates is configurable (`github.template_org` in config, default `tepiton`) and is independent of the destination org (`github.default_org`) where new site repos are created. There is no local content generation step.
 
 The CLI surface is five verbs: `create`, `status`, `sync`, `doctor`, and (once DEC-024 lands) `template lint`. Each of `create`, `status`, and `sync` absorbed one or more single-purpose commands from an earlier design (DEC-025); the provider layer underneath was untouched by that collapse.
 
@@ -69,7 +69,9 @@ mimeo/
 │       ├── github.py   GitHub Pages provider
 │       │                 gh CLI for API calls and git authentication
 │       │                 GITHUB_PAGES_IPS constant (185.199.108-111.153)
-│       │                 TEMPLATE_ORG = "tepiton", DEFAULT_TEMPLATE = "mimeo.lol"
+│       │                 TEMPLATE_ORG = "tepiton", DEFAULT_TEMPLATE = "mimeo"
+│       │                 (both configurable: github.template_org,
+│       │                  defaults.template in config)
 │       │                 Repository creation from template via GitHub API
 │       │                 Pages enable, custom domain, HTTPS enforcement
 │       │                 health_status() classifier
@@ -138,7 +140,7 @@ New providers implement these interfaces. The CLI orchestration in `cli/` calls 
 The `mimeo create <domain>` command orchestrates stages in sequence per domain:
 
 ```
-mimeo create example.com [--template mimeo.lol] [--skip-dns] [--force] [--yes]
+mimeo create example.com [--template mimeo] [--skip-dns] [--force] [--yes]
         │
         ▼
 Validate domain format (_processing.validate_domains)
@@ -162,7 +164,7 @@ Deploy to GitHub Pages (GitHubHost)
   │                              │
   ▼                              ▼
   create from template       enable Pages
-  POST /repos/{tepiton}/     set custom domain
+  POST /repos/{template_org}/ set custom domain
     {template}/generate      try HTTPS enforcement
   set topics: mimeo,               │
     landing-page, github-pages     │

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from mimeo.exceptions import ConfigurationError
+from mimeo.providers.host.github import DEFAULT_TEMPLATE, TEMPLATE_ORG
 
 CURRENT_SCHEMA_VERSION = 1
 
@@ -21,6 +22,8 @@ class Config:
     github_username: str
     default_registrar: str = "porkbun"
     default_host: str = "github"
+    template_org: str = TEMPLATE_ORG
+    default_template: str = DEFAULT_TEMPLATE
     ignore_domains: list[str] = field(default_factory=list)
 
     @classmethod
@@ -92,6 +95,15 @@ class Config:
             "default_org"
         )
 
+        # Template org and default template (optional; fall back to the
+        # provider defaults when neither config nor environment sets them)
+        template_org = os.getenv("MIMEO_GITHUB_TEMPLATE_ORG") or github_config.get(
+            "template_org"
+        )
+        default_template = os.getenv("MIMEO_DEFAULT_TEMPLATE") or defaults_config.get(
+            "template"
+        )
+
         # Validate required credentials
         missing = []
         if not porkbun_api_key:
@@ -114,11 +126,22 @@ class Config:
                 f"defaults.ignore_domains in {config_path} must be a list of domain names"
             )
 
+        for label, value in (
+            ("github.template_org", template_org),
+            ("defaults.template", default_template),
+        ):
+            if value is not None and not isinstance(value, str):
+                raise ConfigurationError(
+                    f"{label} in {config_path} must be a string"
+                )
+
         return cls(
             porkbun_api_key=porkbun_api_key,
             porkbun_secret=porkbun_secret,
             github_username=github_username,
             default_registrar=defaults_config.get("registrar", "porkbun"),
             default_host=defaults_config.get("host", "github"),
+            template_org=template_org or TEMPLATE_ORG,
+            default_template=default_template or DEFAULT_TEMPLATE,
             ignore_domains=[d.lower() for d in ignore_domains],
         )

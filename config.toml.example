@@ -1,76 +1,28 @@
-# Mimeo Configuration Example
-#
-# This file shows how to configure Mimeo for automated website deployment.
-#
-# INSTALLATION LOCATION:
-#   Copy this file to: ~/.config/mimeo/config.toml
-#
-#   Linux/macOS:
-#     mkdir -p ~/.config/mimeo
-#     cp config.toml.example ~/.config/mimeo/config.toml
-#     chmod 600 ~/.config/mimeo/config.toml  # Protect credentials
-#
-# ENVIRONMENT VARIABLE OVERRIDES:
-#   All settings can be overridden with MIMEO_* environment variables:
-#     export MIMEO_PORKBUN_API_KEY="your-key"
-#   export MIMEO_PORKBUN_SECRET="your-secret"
-#     export MIMEO_GITHUB_TOKEN="your-token"
-#
-#   Environment variables take precedence over values in this file.
-#
+# Mimeo configuration example.
+# Copy to ~/.config/mimeo/config.toml, fill in credentials, chmod 600.
+# Any setting can be overridden with a MIMEO_* env var (e.g.
+# MIMEO_PORKBUN_API_KEY); env vars win over this file.
 
-# =============================================================================
-# Porkbun Registrar Configuration
-# =============================================================================
+schema_version = 1
+
 [porkbun]
-# API credentials from https://porkbun.com/account/api
-# Click "Create API Key" and enable API access for your domains
-api_key = "pk1_your_api_key_here"
-secret_key = "sk1_your_secret_key_here"
-
-# Optional: Default TTL for DNS records (in seconds)
-# Default is 600 (10 minutes) if not specified
+# API key from https://porkbun.com/account/api
+api_key = "pk1_your_api_key"
+secret_key = "sk1_your_secret_key"
 # default_ttl = 600
 
-# =============================================================================
-# GitHub Configuration
-# =============================================================================
 [github]
-# GitHub username or organization for repository creation
-# Required - this is where repositories will be created
+# Where new site repositories are created (user or org)
 default_org = "your-username-or-org"
-
-# Note: Authentication uses gh CLI (run 'gh auth login' first)
-# No personal access token needed in this file
-
-# Optional: Make repositories private by default
-# Default is false (public repositories)
+# Where template repositories live; need not match default_org (default: tepiton)
+# template_org = "tepiton"
+# Authentication is via the gh CLI ('gh auth login'), not this file.
 # default_private = false
 
-# =============================================================================
-# Global Defaults
-# =============================================================================
 [defaults]
-# Default registrar provider (currently only "porkbun" supported)
 registrar = "porkbun"
-
-# Default hosting provider (currently only "github" supported)
 host = "github"
-
-# Optional: Default template for new sites
-# template = "simple-landing"
-
-# Optional: Domains to exclude from fleet-wide sweeps (status --all,
-# sync --all). Use for domains that are registered here but deliberately
-# managed elsewhere (e.g. DNS at Netlify). Naming a domain explicitly on
-# the command line always overrides this list.
+# Default template for new sites, looked up in github.template_org (default: mimeo)
+# template = "mimeo"
+# Domains excluded from fleet-wide sweeps (status --all / sync --all)
 # ignore_domains = ["example.dev", "elsewhere.net"]
-
-# =============================================================================
-# SECURITY NOTES
-# =============================================================================
-# - Keep this file secure! It contains API credentials.
-# - Never commit this file to version control.
-# - Use file permissions 600 (read/write for user only):
-#     chmod 600 ~/.config/mimeo/config.toml
-# - For CI/CD environments, use environment variables instead of this file.

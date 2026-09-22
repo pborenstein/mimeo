@@ -36,6 +36,15 @@ class TestGitHubHost:
         host = GitHubHost(token="ghp_test_token", default_org="testorg")
         assert host.token == "ghp_test_token"
         assert host.default_org == "testorg"
+        assert host.template_org == TEMPLATE_ORG
+
+    def test_initialization_with_custom_template_org(self, mock_gh_auth: Mock) -> None:
+        """A custom template_org overrides the default, independent of default_org."""
+        host = GitHubHost(
+            token="ghp_test_token", default_org="testorg", template_org="mytemplates"
+        )
+        assert host.default_org == "testorg"
+        assert host.template_org == "mytemplates"
 
     def test_initialization_without_token(self, mock_gh_auth: Mock) -> None:
         """Test GitHub host initialization without token."""
@@ -203,6 +212,37 @@ class TestGitHubHost:
                     )
                     # No manifest: the default dev paths apply.
                     mock_strip.assert_called_once_with("testorg/example.com", DEFAULT_DEV_PATHS)
+
+    def test_create_from_template_uses_custom_template_org(
+        self, mock_gh_auth: Mock
+    ) -> None:
+        """Template generate targets the configured template org, not default_org."""
+        host = GitHubHost(
+            token="ghp_test_token", default_org="testorg", template_org="mytemplates"
+        )
+        with patch.object(host, "_gh_api") as mock_api:
+            with patch.object(host, "_set_repository_topics"):
+                with patch.object(host, "_strip_template_dev_files"):
+                    mock_api.side_effect = [
+                        HostError("gh: Not Found (HTTP 404)", status_code=404),  # template has no manifest
+                        HostError("Not Found", status_code=404),  # repo existence check
+                        {"is_template": True},  # template repo is_template check
+                        {"full_name": "testorg/example.com"},  # template generate
+                        {"full_name": "testorg/example.com"},  # _wait_for_repo poll
+                    ]
+
+                    full_name, created, existed = host._create_from_template(
+                        "example.com", "testorg"
+                    )
+
+                    assert full_name == "testorg/example.com"
+                    assert created is True
+                    generate_call = mock_api.call_args_list[3]
+                    assert (
+                        generate_call[0][0]
+                        == f"repos/mytemplates/{DEFAULT_TEMPLATE}/generate"
+                    )
+                    assert generate_call[1]["data"]["owner"] == "testorg"
 
     def test_create_from_template_existing_repo(self, host: GitHubHost) -> None:
         """Test that existing repos are returned without calling template API."""

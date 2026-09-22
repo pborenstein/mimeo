@@ -581,6 +581,20 @@ A fourth, related fix landed in the same session at the provider layer (`mimeo/p
 
 ---
 
+### DEC-029: Template Org and Default Template Are Config Settings (2026-09-21)
+
+**Status**: Active (Phase 8).
+
+**Context**: `TEMPLATE_ORG = "tepiton"` and `DEFAULT_TEMPLATE = "mimeo.lol"` were module constants in `providers/host/github.py`, while the destination org (where site repos are created) was already configurable (`github.default_org`). Templates and destinations effectively had to live in the same org, and the default template was frozen to a repo that has since been renamed on GitHub (`tepiton/mimeo.lol` → `tepiton/mimeo`). Extends the config-field side of the open D2 question (`default_registrar`/`default_host`).
+
+**Decision**: Two new optional config settings with fallbacks: `github.template_org` (env `MIMEO_GITHUB_TEMPLATE_ORG`, default `tepiton`) and `defaults.template` (env `MIMEO_DEFAULT_TEMPLATE`, default `mimeo`), both type-validated. `GitHubHost` takes `template_org` as a constructor parameter (falling back to the constant); all template-repo API calls (validate, generate, manifest fetch) target `self.template_org`, independent of `default_org`. `create --template` resolves to `cfg.default_template` when the flag is omitted (`default=None` at the Click layer, resolved after config load). `DEFAULT_TEMPLATE` renamed to `"mimeo"` to match the renamed repo.
+
+**Alternatives considered**: Keep both as constants (rejected — a per-deployment setting belongs in the config file, not a code edit); import the constants the other way, github.py ← config (rejected — providers must not grow a dependency on the config layer for two literal strings).
+
+**Consequences**: One checkout can deploy from any template org to any destination org. `Config` imports the two constants from `providers.host.github` (no cycle: nothing under providers imports config). Tests asserting the `GitHubHost(...)` constructor contract gained the `template_org` kwarg; `--template`'s help text states the config-driven default. D2's remaining half — whether `default_registrar`/`default_host` stay as config fields or move behind a provider factory — is unaffected.
+
+---
+
 ## Superseded/Deprecated
 
 [No superseded decisions yet]

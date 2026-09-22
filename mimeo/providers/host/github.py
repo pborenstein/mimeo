@@ -21,7 +21,7 @@ from mimeo.providers.host.template_manifest import (
 from mimeo.utils.retry import retry_with_jitter
 
 TEMPLATE_ORG = "tepiton"
-DEFAULT_TEMPLATE = "mimeo.lol"
+DEFAULT_TEMPLATE = "mimeo"
 
 # gh prints API errors as e.g. "gh: Not Found (HTTP 404)" -- the single place
 # a status code is recovered from gh stderr is _run_gh_command.
@@ -62,18 +62,26 @@ class GitHubHost(Host):
     - GitHub token with 'repo' and 'workflow' scopes
     """
 
-    def __init__(self, token: str | None = None, default_org: str | None = None) -> None:
+    def __init__(
+        self,
+        token: str | None = None,
+        default_org: str | None = None,
+        template_org: str | None = None,
+    ) -> None:
         """Initialize GitHub host provider.
 
         Args:
             token: GitHub personal access token (optional, uses gh auth if not provided)
             default_org: Default organization/user for repository creation
+            template_org: Organization holding template repositories
+                (defaults to TEMPLATE_ORG)
 
         Raises:
             HostError: If gh CLI is not available or not authenticated
         """
         self.token = token
         self.default_org = default_org
+        self.template_org = template_org or TEMPLATE_ORG
         self._verify_gh_cli()
 
     def _verify_gh_cli(self) -> None:
@@ -280,7 +288,7 @@ class GitHubHost(Host):
         Args:
             repo_name: Name for the new repository
             owner: Owner (user or org) for the new repository
-            template_repo: Template repository name in TEMPLATE_ORG
+            template_repo: Template repository name in the template org
             private: Whether to create a private repository
             force: If True, delete existing repo and recreate from template
 
@@ -322,16 +330,16 @@ class GitHubHost(Host):
         }
 
         try:
-            self._ensure_is_template(f"{TEMPLATE_ORG}/{template_repo}")
+            self._ensure_is_template(f"{self.template_org}/{template_repo}")
             response = self._gh_api(
-                f"repos/{TEMPLATE_ORG}/{template_repo}/generate",
+                f"repos/{self.template_org}/{template_repo}/generate",
                 method="POST",
                 data=data,
             )
             full_name = response.get("full_name")
             if not full_name:
                 raise HostError(
-                    f"Failed to create repository from template {TEMPLATE_ORG}/{template_repo}"
+                    f"Failed to create repository from template {self.template_org}/{template_repo}"
                 )
         except HostError:
             if repo_existed:
@@ -378,7 +386,7 @@ class GitHubHost(Host):
         """
         try:
             file_data = self._gh_api(
-                f"repos/{TEMPLATE_ORG}/{template_repo}/contents/{MANIFEST_FILENAME}"
+                f"repos/{self.template_org}/{template_repo}/contents/{MANIFEST_FILENAME}"
             )
         except HostError as e:
             if e.status_code == 404:
@@ -386,7 +394,7 @@ class GitHubHost(Host):
             raise
         if not isinstance(file_data, dict) or "content" not in file_data:
             raise HostError(
-                f"{MANIFEST_FILENAME} in {TEMPLATE_ORG}/{template_repo} is not a readable file"
+                f"{MANIFEST_FILENAME} in {self.template_org}/{template_repo} is not a readable file"
             )
         raw = base64.b64decode(file_data["content"]).decode("utf-8")
         return parse_manifest(raw)
@@ -736,7 +744,7 @@ class GitHubHost(Host):
 
         Args:
             domain: Domain name for the site
-            template: Template repository name in the tepiton org
+            template: Template repository name in the template org
 
         Returns:
             DeployResult with url, repo_created, and https_enabled flags
@@ -806,7 +814,7 @@ class GitHubHost(Host):
             }
 
     def validate_template(self, template_repo: str) -> None:
-        """Verify a template repository exists in TEMPLATE_ORG.
+        """Verify a template repository exists in the template org.
 
         Args:
             template_repo: Template repository name (without org prefix)
@@ -815,10 +823,10 @@ class GitHubHost(Host):
             HostError: With a clear message if the template is not found
         """
         try:
-            self._gh_api(f"repos/{TEMPLATE_ORG}/{template_repo}")
+            self._gh_api(f"repos/{self.template_org}/{template_repo}")
         except HostError:
             raise HostError(
-                f"Template '{template_repo}' not found in {TEMPLATE_ORG}. "
+                f"Template '{template_repo}' not found in {self.template_org}. "
                 f"Check the spelling and try again."
             )
 

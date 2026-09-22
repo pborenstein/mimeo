@@ -127,7 +127,9 @@ def _process_single_domain(
     log("Configuring GitHub repository")
     dns_records = None
     try:
-        with GitHubHost(default_org=cfg.github_username) as host:
+        with GitHubHost(
+            default_org=cfg.github_username, template_org=cfg.template_org
+        ) as host:
             deploy = host.deploy_site(domain, template=template, force=force)
             dns_records = host.required_dns_records(domain)
             result["url"] = deploy.url
@@ -233,9 +235,9 @@ def _process_single_domain(
 )
 @click.option(
     "--template",
-    default=DEFAULT_TEMPLATE,
-    show_default=True,
-    help="Template repository name to use (from the tepiton org)",
+    default=None,
+    help="Template repository name to use "
+    "(default: defaults.template from config, else 'mimeo')",
 )
 @click.option(
     "--skip-dns",
@@ -286,7 +288,7 @@ def create(
         mimeo create example.com --dry-run
         mimeo create site1.com site2.com --sequential
         mimeo create example.com --skip-dns
-        mimeo create example.com --template mimeo.lol --force
+        mimeo create example.com --template mimeo --force
         mimeo create site1.com site2.com --template new-theme --force --yes
     """
     if not domains:
@@ -295,9 +297,12 @@ def create(
 
     validate_domains(domains)
     cfg = load_config(config)
+    template = template or cfg.default_template
     log_format = get_log_format()
 
-    with GitHubHost(default_org=cfg.github_username) as host:
+    with GitHubHost(
+        default_org=cfg.github_username, template_org=cfg.template_org
+    ) as host:
         try:
             host.validate_template(template)
         except Exception as e:

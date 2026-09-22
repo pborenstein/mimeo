@@ -2,28 +2,24 @@
 phase: 8
 phase_name: Consolidation
 updated: 2026-09-21
-last_commit: 8a52f08
+last_commit: 51a0409
 ---
 
 ## Current Focus
 
-Config work wrapped (Entry 63, DEC-029): template org and default
-template are config settings (`github.template_org`, `defaults.template`),
-independent of the destination org (`github.default_org`);
-`DEFAULT_TEMPLATE` renamed to "mimeo". README accuracy pass landed with
-it, and `uv.lock` is now committed.
+Code-review close-out wrapped (Entry 64, DEC-030): BUG 6 fixed
+(schema notices now visible on stderr), D2 resolved by removal
+(`default_registrar`/`default_host` gone), version bumped to 1.1.0.
+With DEC-029 (configurable template org/default template) this
+closes out the config surface: every `[defaults]`/`[github]` key now
+does real work.
 
 ## Active Tasks
 
-- [ ] **BUG 6**: missing-`schema_version` warning invisible to CLI users
-      (`DeprecationWarning` hidden outside `__main__`) — print to stderr
-      or drop the check. Small.
-- [ ] **D2 remainder**: `default_registrar`/`default_host` — provider
-      factory vs. config-field removal (DEC-029 extended the
-      config-field side for templates only).
 - [ ] **Track B**: Stage 4 E2E test lane, blocked on test account/org.
 - [ ] **Backlog**: rec #6 long-termers — Pages IPs from
-      `api.github.com/meta`, gentler create-only-missing `sync` path (D1).
+      `api.github.com/meta` (cache + hardcoded fallback), gentler
+      create-only-missing `sync` path (D1).
 
 ## Blockers
 
@@ -41,8 +37,11 @@ Track B blocked on a test account/org. Everything else unblocked.
 - Already-existed create no-op keeps exit 0 with a warn recap (DEC-028).
 - Tests constructing 404/422-meaning `HostError`s must pass
   `status_code=` explicitly — parsing lives in `_run_gh_command`.
+- Version is 1.1.0 (`mimeo --version`); uv.lock is committed, so bump
+  the version in pyproject + `__version__` then `uv lock`.
 
 ## Next Session
 
-BUG 6 is the quick win; otherwise the D2 factory-vs-removal decision or
-the rec #6 long-termers.
+The rec #6 long-termers (Pages IPs from the meta API, D1 surgical DNS
+apply), or Track B once a test account/org exists.
+

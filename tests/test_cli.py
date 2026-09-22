@@ -18,6 +18,7 @@ from mimeo.cli import (
     doctor,
     main,
 )
+from mimeo.cli._processing import set_cli_overrides
 
 from mimeo.config import Config
 from mimeo.exceptions import ConfigurationError, HostError, RegistrarError
@@ -35,6 +36,14 @@ _PROCESSING = "mimeo.cli._processing"
 def runner() -> CliRunner:
     """Create CLI test runner."""
     return CliRunner()
+
+
+@pytest.fixture(autouse=True)
+def _clean_cli_overrides() -> None:
+    """Reset --template-org/--deploy-org module state around every test."""
+    set_cli_overrides(None, None)
+    yield
+    set_cli_overrides(None, None)
 
 
 @pytest.fixture
@@ -557,6 +566,50 @@ class TestCreateCommand:
         assert result.exit_code == 0
         mock_host.deploy_site.assert_called_with(
             "example.com", template="custom-template", force=False
+        )
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_CREATE}.GitHubHost")
+    @patch(f"{_CREATE}.PorkbunRegistrar")
+    def test_create_global_org_flags_override_config(
+        self,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+        mock_dns_records: List[DNSRecord],
+    ) -> None:
+        """Global --template-org/--deploy-org flags win over config values."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.deploy_site.return_value = DeployResult(
+            url="https://example.com", repo_created=True, https_enabled=True
+        )
+        mock_host.required_dns_records.return_value = mock_dns_records
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        mock_registrar = MagicMock()
+        mock_registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=True, actual=[], expected=[]
+        )
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar_class.return_value = mock_registrar
+
+        result = runner.invoke(
+            main,
+            [
+                "--template-org", "cli-tpl-org",
+                "--deploy-org", "cli-deploy-org",
+                "create", "example.com",
+            ],
+        )
+
+        assert result.exit_code == 0
+        mock_host_class.assert_called_with(
+            default_org="cli-deploy-org", template_org="cli-tpl-org"
         )
 
     @patch("mimeo.config.Config.load")

@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, Iterable, List, Sequence, TypeVar
 
 import click
 
+from ..config import Config
 from ..exceptions import (
     EXIT_AUTH,
     EXIT_CONFIG,
@@ -27,6 +28,7 @@ from ..utils.retry import _TRANSIENT_HOST_KEYWORDS
 
 # Set by main() group before subcommands run
 _log_format: str = "text"
+_cli_overrides: Dict[str, str] = {}
 
 
 def set_log_format(fmt: str) -> None:
@@ -38,6 +40,24 @@ def set_log_format(fmt: str) -> None:
 def get_log_format() -> str:
     """Get the current log format."""
     return _log_format
+
+
+def set_cli_overrides(template_org: str | None, deploy_org: str | None) -> None:
+    """Record the --template-org/--deploy-org global flags (None = not given)."""
+    _cli_overrides.clear()
+    if template_org:
+        _cli_overrides["template_org"] = template_org
+    if deploy_org:
+        _cli_overrides["deploy_org"] = deploy_org
+
+
+def apply_cli_overrides(cfg: Config) -> Config:
+    """Apply the global org flags over a loaded config (CLI > env > file)."""
+    if "template_org" in _cli_overrides:
+        cfg.template_org = _cli_overrides["template_org"]
+    if "deploy_org" in _cli_overrides:
+        cfg.github_username = _cli_overrides["deploy_org"]
+    return cfg
 
 
 _DOMAIN_PATTERN = re.compile(r"^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$")
@@ -147,8 +167,12 @@ def _categorize_error(exc: BaseException) -> tuple[int, str]:
     return EXIT_GENERAL, "error"
 
 
-def load_config(config_path: Any) -> Any:
+def load_config(config_path: Any) -> Config:
     """Load configuration, exiting on error.
+
+    Config.load applies file-then-env-var resolution; the global
+    --template-org/--deploy-org flags are applied on top here, giving
+    CLI > env > file precedence.
 
     Args:
         config_path: Path to config file or None
@@ -156,16 +180,15 @@ def load_config(config_path: Any) -> Any:
     Returns:
         Config object
     """
-    from ..config import Config
-
     try:
-        return Config.load(config_path)
+        cfg = Config.load(config_path)
     except ConfigurationError as e:
         click.secho(f"[config] {e}", fg="red", err=True)
         sys.exit(EXIT_CONFIG)
     except Exception as e:
         click.secho(f"[config] {e}", fg="red", err=True)
         sys.exit(EXIT_GENERAL)
+    return apply_cli_overrides(cfg)
 
 
 _CATEGORY_TO_CODE = {

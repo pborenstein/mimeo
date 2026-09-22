@@ -1,7 +1,8 @@
 # Mimeo configuration example.
 # Copy to ~/.config/mimeo/config.toml, fill in credentials, chmod 600.
 # Any setting can be overridden with a MIMEO_* env var (e.g.
-# MIMEO_PORKBUN_API_KEY); env vars win over this file.
+# MIMEO_PORKBUN_API_KEY); env vars win over this file. The global
+# --template-org/--deploy-org CLI flags win over both.
 
 schema_version = 1
 

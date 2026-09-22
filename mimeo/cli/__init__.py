@@ -3,7 +3,12 @@
 import click
 
 from .. import __version__
-from ._processing import _categorize_error, _emit, set_log_format
+from ._processing import (
+    _categorize_error,
+    _emit,
+    set_cli_overrides,
+    set_log_format,
+)
 from .create import create
 from .doctor import (
     _check_config,
@@ -26,9 +31,25 @@ from .sync import sync
     default="text",
     help="Log output format (default: text)",
 )
-def main(log_format: str) -> None:
+@click.option(
+    "--template-org",
+    metavar="ORG",
+    default=None,
+    help="Org holding template repositories (overrides github.template_org)",
+)
+@click.option(
+    "--deploy-org",
+    metavar="ORG",
+    default=None,
+    help="GitHub user/org where site repositories are created "
+    "(overrides github.default_org)",
+)
+def main(
+    log_format: str, template_org: str | None, deploy_org: str | None
+) -> None:
     """Provision and manage custom-domain sites on GitHub Pages."""
     set_log_format(log_format)
+    set_cli_overrides(template_org, deploy_org)
 
 
 main.add_command(create)

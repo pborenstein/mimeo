@@ -33,9 +33,14 @@ Idempotent: safe to re-run against an existing deployment.
 ```bash
 # Emit structured JSON log lines to stderr instead of human-readable text
 mimeo --log-format json create example.com
+
+# Override where templates live and where site repos are created
+mimeo --template-org mytemplates --deploy-org myorg create example.com
 ```
 
 `--log-format` accepts `text` (default) or `json`. In JSON mode each diagnostic line is a newline-delimited JSON object with `ts`, `level`, `message`, and optionally `domain`. Result output (tables, JSON arrays) still goes to stdout.
+
+`--template-org` and `--deploy-org` override `github.template_org` and `github.default_org` from the config file for the invocation. Precedence: CLI flags > `MIMEO_*` environment variables > config file.
 
 ## Commands
 
@@ -224,7 +229,7 @@ The tool uses provider abstractions (`Registrar`, `Host` ABCs) that allow adding
 uv sync --frozen && uv run pytest && uv run ruff check mimeo && uv run mypy mimeo
 ```
 
-360 tests. Linting and type checking are expected to be clean.
+361 tests. Linting and type checking are expected to be clean.
 
 ## Project structure
 

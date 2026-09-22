@@ -418,6 +418,23 @@ front-door verbs than it started with. See DEC-021.
       2026-09-12 without implementation: getting the eleventy templates
       working was the answer. Full design preserved in
       `docs/SUBDOMAINS.md` if ever revived.
+- [x] Config-driven template source + README accuracy pass (2026-09-21,
+      Entry 63, DEC-029)
+  - [x] `github.template_org` (env `MIMEO_GITHUB_TEMPLATE_ORG`, default
+        tepiton) and `defaults.template` (env `MIMEO_DEFAULT_TEMPLATE`,
+        default mimeo) added to Config with type validation;
+        `GitHubHost` takes `template_org` independent of `default_org`
+        and aims validate/generate/manifest calls at it; `create
+        --template` resolves from config when omitted
+  - [x] `DEFAULT_TEMPLATE` renamed mimeo.lol -> mimeo (template repo was
+        renamed in tepiton); 361 tests passing, ruff/mypy clean
+  - [x] README accuracy pass: `uv run` in Quick Start, `create` documents
+        `--template`/`--force`/`--yes`/`--skip-dns`, test count corrected;
+        `uv.lock` committed (un-ignored) so `uv sync --frozen` works on
+        fresh clones
+  - [x] Live `~/.config/mimeo/config.toml` and `config.toml.example`
+        rewritten clean; destination-org vs template-org roles explicit
+        and adjacent (live config outside the repo, not committed)
 
 ---
 

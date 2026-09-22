@@ -749,3 +749,15 @@ removal, not an architectural choice.
 **Decisions**: none new -- design stance recorded here: no toggle, the OS setting is the single source of truth for laptopistan's theme.
 
 **Files**: TEMPLATES/laptopistan/index.html (4233437, user-committed); tepiton.github.io (list.md superseded into index.md, user commits through the 09-14 deploys); this repo docs only (this commit)
+
+## Entry 63: configurable template org/default template; README accuracy pass (2026-09-21)
+
+**What**: `github.template_org` (env `MIMEO_GITHUB_TEMPLATE_ORG`, default tepiton) and `defaults.template` (env `MIMEO_DEFAULT_TEMPLATE`, default mimeo) are config settings now. `GitHubHost` takes `template_org` independent of `default_org` — validate, generate, and manifest calls all target it — and `create --template` falls back to `defaults.template` when omitted. `DEFAULT_TEMPLATE` renamed to "mimeo" (the tepiton repo was renamed from mimeo.lol). Same session: a README accuracy pass (uv run in Quick Start, `create` documenting --template/--force/--yes/--skip-dns, stale test count), `uv.lock` committed so `uv sync --frozen` works on fresh clones, and both the live config and config.toml.example rewritten clean with the destination-org vs template-org distinction explicit and adjacent.
+
+**Why**: Template source and destination were both hardcoded to tepiton, so they could never differ; the default template named a repo that no longer exists. Also verified this session: the repo is clean to go public (no token-shaped strings anywhere in git history; config lives outside the repo; \*.nogit\* files blocked by the user's global gitignore) — public-as-visible, not advertised for use.
+
+**How**: Config imports the two fallback constants from github.py (no cycle: nothing under providers imports config). Click's `--template` default is None, resolved after config load so the config value can be the effective default. 361 tests passing (+8: config parsing/env/type, create template-from-config, custom-org generate URL), ruff/mypy clean.
+
+**Decisions**: DEC-029
+
+**Files**: mimeo/config.py, mimeo/providers/host/github.py, mimeo/cli/create.py, README.md, config.toml.example, docs/{ARCHITECTURE,DECISIONS}.md — code at 24b3513; docs updates in this commit

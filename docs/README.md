@@ -11,7 +11,7 @@ Navigation index for all Mimeo documentation files.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Developers | Component map, data flows, ASCII workflow diagrams |
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Operators | Failure diagnosis and remediation by category |
 | [IMPLEMENTATION.md](IMPLEMENTATION.md) | Contributors | Phase tracker, current tasks, completed work |
-| [DECISIONS.md](DECISIONS.md) | Contributors | Architectural decision registry (DEC-001 through DEC-026) |
+| [DECISIONS.md](DECISIONS.md) | Contributors | Architectural decision registry (DEC-001 through DEC-029) |
 | [CONTEXT.md](CONTEXT.md) | Contributors | Current session state, active tasks, blockers |
 | [CODE_REVIEW.md](CODE_REVIEW.md) | Contributors | Critical code review: verified bugs, design concerns, priorities |
 | [SUBDOMAINS.md](SUBDOMAINS.md) | Contributors | Proposed design: sites on subdomains (hostname vs. DNS zone split) |

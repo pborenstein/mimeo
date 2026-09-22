@@ -785,3 +785,15 @@ removal, not an architectural choice.
 **Decisions**: none new (extends DEC-029's precedence chain)
 
 **Files**: mimeo/cli/{__init__,_processing}.py, tests/test_cli.py, README.md, config.toml.example (e786760); docs updates in this commit
+
+## Entry 66: Track B closed as empirically served (2026-09-22)
+
+**What**: Stage 4 (the gated E2E integration test lane hitting real Porkbun/GitHub APIs) closed without being built. Docs only, no code.
+
+**Why**: The lane existed because live-API surprises are the mocked suite's blind spot -- and every such incident to date was caught by the real usage the lane meant to institutionalize: DEC-022's repo deletion (rollback designed after), DEC-026's ownership bugs (found by live runs), the Stage 5C extra-drift bug (live run against 002373.xyz), plus the rename-307 redirect, generate-vs-file-tree race, and stale-pages-artifact 422 quirks. A single-operator tool exercised live every session already has that regression coverage; what it lacks (repeatable-on-demand runs, destructive-path safety on a sacrificial account) doesn't justify a test account/org. User's call, matching the Stage 6 precedent (dropped with design preserved).
+
+**How**: IMPLEMENTATION.md Stage 4 marked closed-by-empiricism with the incident list and hedge; CODE_REVIEW.md recommendation 5 and the blind-spot paragraph struck accordingly. Hedge recorded for dormancy: a scripts/e2e_smoke.sh against a junk domain, unrun by default. CONTEXT board reduces to the rec #6 long-termers; no blockers remain.
+
+**Decisions**: none new (closure, not a design change)
+
+**Files**: docs/{IMPLEMENTATION,CODE_REVIEW,CONTEXT}.md (this commit)

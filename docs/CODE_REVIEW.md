@@ -389,8 +389,9 @@ paths, drift math, normalization, retry behavior all have direct tests.
 - The blind spot is integration reality: every incident in the decision log
   (DEC-022's destroyed repo, DEC-026's DNS-rewrite-on-existing-repo, the
   Stage 5C drift-reporting bug) was found by live testing, not by the suite.
-  This is the strongest argument for Track B's E2E lane (blocked on a test
-  account/org per CONTEXT.md). Priority should track unblocking it.
+  ~~This is the strongest argument for Track B's E2E lane~~ (Track B closed
+  2026-09-22 as empirically served -- that same live testing is the
+  coverage; see Entry 66).
 - `tests/test_cli.py` (1,266 lines) still has the mock-setup duplication the
   March review flagged (~163 `MagicMock`/`patch` occurrences). The March fix
   suggestion (shared "all providers mocked OK" fixture) still applies.
@@ -428,9 +429,12 @@ paths, drift math, normalization, retry behavior all have direct tests.
    duplication, and the stale `config.py` comment are cleared. ~~Still open:
    `default_registrar`/`default_host` (D2)~~ (removed 2026-09-21, DEC-030)
    and `ProviderError` -- deliberately left, see the dead-code table.
-5. **Track B E2E lane** -- the mocked suite's blind spot is precisely where
-   every real incident has come from. **Not started; blocked on a test
-   account/org per `docs/CONTEXT.md`.**
+5. ~~**Track B E2E lane** -- the mocked suite's blind spot is precisely
+   where every real incident has come from.~~ **Closed 2026-09-22,
+   served empirically** -- every live-API incident to date was caught by
+   real usage (DEC-022, DEC-026, the sync extra-drift bug, and the
+   rename/race/artifact quirks); see Entry 66. Hedge if the fleet goes
+   dormant: `scripts/e2e_smoke.sh` against a junk domain.
 6. Longer term: fetch Pages IPs from `api.github.com/meta` (cache + hardcoded
    fallback); gentler `sync` apply path (D1); ~~provider factory or
    config-field removal (D2)~~ (resolved 2026-09-21: fields removed,

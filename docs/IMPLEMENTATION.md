@@ -79,8 +79,19 @@ front-door verbs than it started with. See DEC-021.
   - [x] Fate of `dns repair` / `fix https`: kept as targeted scalpels
         (repair verifies propagation; fix https does discovery); sync is
         the batch front door
-- [ ] Stage 4: E2E integration test lane (separate from unit tests, gated,
-      hits real APIs; `create`/`status`/`sync` are the flows worth covering)
+- [x] Stage 4: E2E integration test lane — **closed 2026-09-22 without
+      building it: served empirically**. The lane's rationale was that
+      live-API surprises are the mocked suite's blind spot, and every
+      such incident to date was in fact caught by real usage: DEC-022's
+      repo deletion (rollback designed after), DEC-026's ownership bugs
+      (found by live runs), the sync extra-drift bug (live run against
+      002373.xyz), plus the rename-307, generate-vs-file-tree race, and
+      stale-artifact 422 quirks. A single-operator tool exercised live
+      every session already has the regression coverage the lane sought;
+      what it lacks (repeatable-on-demand runs, destructive-path safety
+      on a sacrificial account) isn't worth a test account/org. Hedge if
+      the fleet ever goes dormant: a `scripts/e2e_smoke.sh` against a
+      junk domain, unrun by default.
 - [x] Identity fix: replace "A tool to generate websites quickly" with
       "Provision and manage custom-domain sites on GitHub Pages"
       (CLI help, pyproject, package docstring, CLAUDE.md); README gained

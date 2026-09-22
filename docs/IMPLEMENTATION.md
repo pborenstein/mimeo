@@ -435,6 +435,18 @@ front-door verbs than it started with. See DEC-021.
   - [x] Live `~/.config/mimeo/config.toml` and `config.toml.example`
         rewritten clean; destination-org vs template-org roles explicit
         and adjacent (live config outside the repo, not committed)
+- [x] BUG 6 + D2 close-out; v1.1.0 (2026-09-21, Entry 64, DEC-030)
+  - [x] BUG 6: `schema_version` notices (missing + future version) print
+        to stderr (click.secho, yellow) instead of
+        `warnings.warn`-classes Python hides outside `__main__`; tests
+        assert on captured stderr via capsys
+  - [x] D2 resolved by removal (DEC-030): `default_registrar`/
+        `default_host` dropped from Config, example config, and tests;
+        stale `[defaults]` registrar/host keys in existing configs are
+        silently ignored
+  - [x] Version bumped 0.1.0 -> 1.1.0 (pyproject, `__version__`,
+        uv.lock); `mimeo --version` reports it; 360 tests, ruff/mypy
+        clean
 
 ---
 

@@ -761,3 +761,15 @@ removal, not an architectural choice.
 **Decisions**: DEC-029
 
 **Files**: mimeo/config.py, mimeo/providers/host/github.py, mimeo/cli/create.py, README.md, config.toml.example, docs/{ARCHITECTURE,DECISIONS}.md — code at 24b3513; docs updates in this commit
+
+## Entry 64: BUG 6 + D2 close-out; version 1.1.0 (2026-09-21)
+
+**What**: Three items. (1) BUG 6: the schema_version notices now print to stderr (click.secho, yellow) instead of warnings.warn classes Python hides outside __main__ -- the "add schema_version = 1" nudge reached an audience of zero before; both the missing-version and future-version notices converted, tests assert on captured stderr. (2) D2 resolved by removal (DEC-030): default_registrar/default_host dropped from Config, example config, and tests -- the fields implied a provider factory that never existed, and with one registrar and one host a factory is a dict with one entry. Stale [defaults] registrar/host keys in existing configs are silently ignored. (3) Version bumped 0.1.0 -> 1.1.0 (pyproject, __version__, uv.lock); user's call to skip 1.0.
+
+**Why**: BUG 6 was the last open code-review bug (minutes of work); D2 was sharpened by DEC-029 adding config fields that do real work next to two that did nothing; the version bump marks maturity after the DEC-029/030 config work.
+
+**How**: _notice() helper in config.py wraps click.secho(err=True); config.py now imports click (already a hard dependency). CODE_REVIEW.md dispositions updated (BUG 6 FIXED, D2 RESOLVED, recommendations 4/6 struck); rec #6 now reduces to Pages IPs from api.github.com/meta + D1. 360 tests (-1: the now-empty defaults test), ruff/mypy clean.
+
+**Decisions**: DEC-030
+
+**Files**: mimeo/config.py, tests/{test_config,test_cli}.py, config.toml.example, docs/{CODE_REVIEW,DECISIONS,README}.md (291f945); pyproject.toml, mimeo/__init__.py, uv.lock (c773a84); live config edited outside the repo

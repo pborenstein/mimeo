@@ -34,7 +34,7 @@ These options go before the subcommand and apply to every command.
 
 | Option | Effect | Default |
 |:-------|:-------|:--------|
-| `--log-format text` / `--log-format json` | Log format for diagnostic output on stderr | `text` |
+| `--log-format text` <br> `--log-format json` | Log format for diagnostic output on stderr | `text` |
 | `--template-org ORG` | Org holding template repositories | `github.template_org` (`tepiton`) |
 | `--deploy-org ORG` | GitHub user/org where site repositories are created | `github.default_org` (required) |
 
@@ -89,7 +89,9 @@ One view of the fleet: registration expiry, nameservers, DNS drift, and Pages he
 | Full detail for scripting | `mimeo status --all --format json \| jq '.[] \| select(.dns_status == "drift")'` |
 | Include the full live DNS records | `mimeo status example.com --with-dns` |
 
-A bare `mimeo status` refuses to run: the fleet sweep makes several API calls per domain and is slow on large accounts, so it requires the explicit `--all`. Registered domains with no site show `no repo`; sites whose domain is not in the Porkbun account show `-` on the registrar side. The DNS column is `-` when there is no repo (no desired state to compare against). Drift and unhealthy sites are findings (exit 0); API errors exit nonzero with partial results.
+A bare `mimeo status` refuses to run: the fleet sweep makes several API calls per domain and is slow on large accounts, so it requires the explicit `--all`.
+
+Registered domains with no site show `no repo`; sites whose domain is not in the Porkbun account show `-` on the registrar side. The DNS column is `-` when there is no repo (no desired state to compare against). Drift and unhealthy sites are findings (exit 0); API errors exit nonzero with partial results.
 
 `--source` narrows the report to a single provider instead of the cross-provider join.
 

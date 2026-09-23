@@ -39,6 +39,8 @@ mimeo --log-format json create example.com
 
 ## Commands
 
+### doctor
+
 **`mimeo doctor`** — check that all prerequisites are met before running any other command:
 
 ```bash
@@ -53,6 +55,7 @@ Optionally pass one or more domain names to also check that their nameservers po
 mimeo doctor example.com another.lol
 ```
 
+### create
 **`mimeo create <domain> [<domain> ...]`** — provision one or more domains:
 
 ```bash
@@ -88,6 +91,8 @@ mimeo create example.com --template new-theme --force
 mimeo create example.com --template new-theme --force --yes
 ```
 
+### status
+
 **`mimeo status <domain> [<domain> ...] | --all`** — one view of the fleet: registration expiry, nameservers, DNS drift, and Pages health per domain, joining the Porkbun account against mimeo-managed repos.
 
 ```bash
@@ -111,6 +116,8 @@ mimeo status --all --with-dns --format json > fleet.json
 
 A bare `mimeo status` refuses to run: the fleet sweep is slow, so it requires the explicit `--all`. Registered domains with no site show `no repo`; sites whose domain is not in the Porkbun account show `-` on the registrar side. The DNS column is `-` when there is no repo (no desired state to compare against). Drift and unhealthy sites are findings (exit 0); API errors exit nonzero with partial results.
 
+### sync
+
 **`mimeo sync <domain> [<domain> ...] | --all`** — converge domains on their desired state: apply missing DNS records and enable HTTPS enforcement when the certificate is ready.
 
 ```bash
@@ -128,6 +135,8 @@ mimeo sync example.com --reset-nameservers
 ```
 
 Sync will not create repositories (`mimeo create`), change content (`mimeo create --force`), or delete DNS records it does not manage, and it only touches nameservers with `--reset-nameservers`. A bare `mimeo sync` refuses to run: fleet-wide convergence requires the explicit `--all`.
+
+### status
 
 **`mimeo status --source github`** (site inventory) — show all mimeo-managed sites (repos tagged with the `mimeo` topic):
 

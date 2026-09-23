@@ -30,181 +30,116 @@ Idempotent: safe to re-run against an existing deployment.
 
 ## Global options
 
-```bash
-# Emit structured JSON log lines to stderr instead of human-readable text
-mimeo --log-format json create example.com
+These options go before the subcommand and apply to every command.
 
-# Override where templates live and where site repos are created
+| Option | Effect | Default |
+|:-------|:-------|:--------|
+| `--log-format text` / `--log-format json` | Log format for diagnostic output on stderr | `text` |
+| `--template-org ORG` | Org holding template repositories | `github.template_org` (`tepiton`) |
+| `--deploy-org ORG` | GitHub user/org where site repositories are created | `github.default_org` (required) |
+
+Templates and sites live in different places: the template org holds the repositories `create` copies from, while the deploy org — usually your username — is where new site repositories land. The two need not match; pass `--template-org` or `--deploy-org` to override either for a single invocation:
+
+```bash
+mimeo --log-format json create example.com
 mimeo --template-org mytemplates --deploy-org myorg create example.com
 ```
 
-`--log-format` accepts `text` (default) or `json`. In JSON mode each diagnostic line is a newline-delimited JSON object with `ts`, `level`, `message`, and optionally `domain`. Result output (tables, JSON arrays) still goes to stdout.
+Precedence: CLI flags > `MIMEO_*` environment variables > config file.
 
-`--template-org` and `--deploy-org` override `github.template_org` and `github.default_org` from the config file for the invocation. Precedence: CLI flags > `MIMEO_*` environment variables > config file.
+In JSON log mode each diagnostic line is a newline-delimited JSON object with `ts`, `level`, `message`, and optionally `domain`. Result output (tables, JSON arrays) still goes to stdout.
 
 ## Commands
 
 ### doctor
 
-**`mimeo doctor`** — check that all prerequisites are met before running any other command:
+Checks that all prerequisites are met before running any other command: Python version, `gh` installation, `gh` authentication, `workflow` token scope, and config file validity. Each check prints a pass/fail result with remediation instructions. Passing domain names also checks that their nameservers point to Porkbun.
 
-```bash
-mimeo doctor
-```
-
-Verifies Python version, `gh` installation, `gh` authentication, `workflow` token scope, and config file validity. Prints a pass/fail result for each check with remediation instructions.
-
-Optionally pass one or more domain names to also check that their nameservers point to Porkbun:
-
-```bash
-mimeo doctor example.com another.lol
-```
+| Task | Command |
+|:-----|:--------|
+| Run all checks | `mimeo doctor` |
+| Also check nameservers for specific domains | `mimeo doctor example.com another.lol` |
 
 ### create
-**`mimeo create <domain> [<domain> ...]`** — provision one or more domains:
 
-```bash
-# Single domain
-mimeo create example.com
+Provisions one or more domains end to end. Templates are looked up in the template org (see [Global options](#global-options)); the default template is `mimeo`. Multiple domains are processed concurrently (up to 5 workers); use `--sequential` for verbose per-step output or when debugging.
 
-# Multiple domains (concurrent by default)
-mimeo create example.com another.lol third.com
+| Task | Command |
+|:-----|:--------|
+| Provision a single domain | `mimeo create example.com` |
+| Provision several domains concurrently | `mimeo create example.com another.lol third.com` |
+| Preview without executing | `mimeo create example.com --dry-run` |
+| Run sequentially with per-step output | `mimeo create example.com another.lol --sequential` |
+| Use a specific template | `mimeo create example.com --template pandoc-simple` |
+| Create repo and Pages only; configure DNS separately | `mimeo create example.com --skip-dns` |
+| Replace an existing site with a different template | `mimeo create example.com --template new-theme --force` |
+| Same, without the confirmation prompt | `mimeo create example.com --template new-theme --force --yes` |
 
-# Preview without executing
-mimeo create example.com --dry-run
-
-# Run sequentially instead of concurrently
-mimeo create example.com another.lol --sequential
-
-# Choose a different template (from github.template_org in config,
-# default tepiton; default template: mimeo)
-mimeo create example.com --template pandoc-simple
-
-# Create the repo and Pages only; configure DNS separately
-mimeo create example.com --skip-dns
-```
-
-Multiple domains are processed concurrently (up to 5 workers). Use `--sequential` for verbose per-step output or when debugging.
-
-If a repository already exists, `create` leaves it unchanged (safe to re-run). `--force` replaces an existing repository's content with the template instead: it **deletes and recreates the repo**, so all existing content, issues, and history are lost, and managed DNS records are deleted and recreated as well (pass `--skip-dns` alongside `--force` to leave DNS untouched). `--force` prompts for confirmation unless `--yes` is passed:
-
-```bash
-# Replace an existing site with a different template (prompts first)
-mimeo create example.com --template new-theme --force
-
-# Same, non-interactive
-mimeo create example.com --template new-theme --force --yes
-```
+If a repository already exists, `create` leaves it unchanged (safe to re-run). `--force` instead replaces an existing repository's content with the template: it **deletes and recreates the repo**, so all existing content, issues, and history are lost, and managed DNS records are deleted and recreated as well. Pass `--skip-dns` alongside `--force` to leave DNS untouched. `--force` prompts for confirmation unless `--yes` is passed.
 
 ### status
 
-**`mimeo status <domain> [<domain> ...] | --all`** — one view of the fleet: registration expiry, nameservers, DNS drift, and Pages health per domain, joining the Porkbun account against mimeo-managed repos.
+One view of the fleet: registration expiry, nameservers, DNS drift, and Pages health per domain, joining the Porkbun account against mimeo-managed repos.
 
-```bash
-# Specific domains (quick)
-mimeo status example.com another.lol
+| Task | Command |
+|:-----|:--------|
+| Check specific domains (quick) | `mimeo status example.com another.lol` |
+| Whole fleet: union of registered domains and mimeo repos | `mimeo status --all` |
+| Only domains that need attention | `mimeo status --all --problems` |
+| Full detail for scripting | `mimeo status --all --format json \| jq '.[] \| select(.dns_status == "drift")'` |
+| Include the full live DNS records | `mimeo status example.com --with-dns` |
 
-# Whole fleet: union of registered domains and mimeo repos
-# (several API calls per domain -- takes a while on large accounts)
-mimeo status --all
+A bare `mimeo status` refuses to run: the fleet sweep makes several API calls per domain and is slow on large accounts, so it requires the explicit `--all`. Registered domains with no site show `no repo`; sites whose domain is not in the Porkbun account show `-` on the registrar side. The DNS column is `-` when there is no repo (no desired state to compare against). Drift and unhealthy sites are findings (exit 0); API errors exit nonzero with partial results.
 
-# Only domains that need attention
-mimeo status --all --problems
+`--source` narrows the report to a single provider instead of the cross-provider join.
 
-# Full detail for scripting
-mimeo status --all --format json | jq '.[] | select(.dns_status == "drift")'
+#### --source github
 
-# Include the full live DNS records (one extra API call per domain)
-mimeo status example.com --with-dns
-mimeo status --all --with-dns --format json > fleet.json
-```
+Site inventory: all mimeo-managed sites, i.e. repos tagged with the `mimeo` topic.
 
-A bare `mimeo status` refuses to run: the fleet sweep is slow, so it requires the explicit `--all`. Registered domains with no site show `no repo`; sites whose domain is not in the Porkbun account show `-` on the registrar side. The DNS column is `-` when there is no repo (no desired state to compare against). Drift and unhealthy sites are findings (exit 0); API errors exit nonzero with partial results.
+| Task | Command |
+|:-----|:--------|
+| Human-readable table | `mimeo status --all --source github` |
+| JSON output | `mimeo status --all --source github --format json` |
+| CSV output | `mimeo status --all --source github --format csv` |
+| Include Pages health | `mimeo status --all --source github --health` |
+| Include the template each site was created from | `mimeo status --all --source github --show-template` |
+
+With `--health`, each site is classified as `healthy`, `fixable`, `cert_pending`, `no_cert`, or `pages_error`, and output is sorted by severity (problems first).
+
+#### --source porkbun
+
+Registrar inventory: all domains in the Porkbun account, regardless of whether mimeo manages them. Output fields: `domain`, `tld`, `expires`, `auto_renew`, `ns_ok` (whether NS points to Porkbun), `nameservers`. `--with-dns` includes each domain's live DNS records (doubles the API calls).
+
+| Task | Command |
+|:-----|:--------|
+| Human-readable table | `mimeo status --all --source porkbun` |
+| JSON output | `mimeo status --all --source porkbun --format json` |
+| Full inventory to CSV | `mimeo status --all --source porkbun --format csv --with-dns > inventory.csv` |
+| Which domains do not point at Porkbun | `mimeo status --all --source porkbun --format json \| jq '.[] \| select(.ns_ok == false) \| .domain'` |
+| Adjust concurrency | `mimeo status --all --source porkbun --workers 10` (default 5) |
+
+#### --source dns
+
+Live DNS records for named domains, or the drift against what GitHub Pages expects. Unlike the other sources, `--source dns` has no fleet-wide mode; it always takes explicit domain names. Repairing missing records and enabling HTTPS enforcement are both part of `mimeo sync`; replacing repository content with a different template is `mimeo create --force`.
+
+| Task | Command |
+|:-----|:--------|
+| Raw live records | `mimeo status example.com --source dns` |
+| Drift only (missing/extra vs. expected) | `mimeo status example.com --source dns --problems` |
 
 ### sync
 
-**`mimeo sync <domain> [<domain> ...] | --all`** — converge domains on their desired state: apply missing DNS records and enable HTTPS enforcement when the certificate is ready.
+Converges domains on their desired state: applies missing DNS records and enables HTTPS enforcement when the certificate is ready. It will not create repositories (`mimeo create`), change content (`mimeo create --force`), or delete DNS records it does not manage, and it only touches nameservers with `--reset-nameservers`.
 
-```bash
-# Preview fleet-wide changes first
-mimeo sync --all --dry-run
+| Task | Command |
+|:-----|:--------|
+| Preview fleet-wide changes first | `mimeo sync --all --dry-run` |
+| Converge the whole fleet | `mimeo sync --all` |
+| Converge specific domains | `mimeo sync example.com another.lol` |
+| Also reset nameservers that point elsewhere | `mimeo sync example.com --reset-nameservers` |
 
-# Converge the whole fleet (explicit --all required)
-mimeo sync --all
-
-# Specific domains
-mimeo sync example.com another.lol
-
-# Also reset nameservers that point elsewhere
-mimeo sync example.com --reset-nameservers
-```
-
-Sync will not create repositories (`mimeo create`), change content (`mimeo create --force`), or delete DNS records it does not manage, and it only touches nameservers with `--reset-nameservers`. A bare `mimeo sync` refuses to run: fleet-wide convergence requires the explicit `--all`.
-
-### status
-
-**`mimeo status --source github`** (site inventory) — show all mimeo-managed sites (repos tagged with the `mimeo` topic):
-
-```bash
-# Human-readable table
-mimeo status --all --source github
-
-# JSON output
-mimeo status --all --source github --format json
-
-# CSV output
-mimeo status --all --source github --format csv
-
-# Include GitHub Pages health status
-mimeo status --all --source github --health
-
-# Include the template each site was created from
-mimeo status --all --source github --show-template
-```
-
-Health status values: `healthy`, `fixable`, `cert_pending`, `no_cert`, `pages_error`.
-Output is sorted by severity (problems first) when `--health` is given.
-
-**`mimeo status --source porkbun`** (registrar inventory) — list all domains in the Porkbun account, regardless of whether mimeo manages them:
-
-```bash
-# Human-readable table (domain, expiry, NS status)
-mimeo status --all --source porkbun
-
-# JSON output — pipeable
-mimeo status --all --source porkbun --format json
-
-# CSV output
-mimeo status --all --source porkbun --format csv
-
-# Include DNS records per domain (doubles API calls)
-mimeo status --all --source porkbun --with-dns
-
-# Adjust concurrency (default 5)
-mimeo status --all --source porkbun --workers 10
-```
-
-Output fields: `domain`, `tld`, `expires`, `auto_renew`, `ns_ok` (whether NS points to Porkbun), `nameservers`.
-
-```bash
-# Check which domains are not pointing to Porkbun
-mimeo status --all --source porkbun --format json | jq '.[] | select(.ns_ok == false) | .domain'
-
-# Export full domain inventory to CSV
-mimeo status --all --source porkbun --format csv --with-dns > inventory.csv
-```
-
-**`mimeo status --source dns`** (raw records / drift) — show live DNS records for named domains, or drift against what GitHub Pages expects:
-
-```bash
-# Raw live records
-mimeo status example.com --source dns
-
-# Drift only (missing/extra vs. expected)
-mimeo status example.com --source dns --problems
-```
-
-`--source dns` has no fleet-wide mode; it always takes explicit domain names. Repairing missing records and enabling HTTPS enforcement are both part of `mimeo sync` (see above). Replacing repository content with a different template is `mimeo create --force` (see above).
+A bare `mimeo sync` refuses to run: fleet-wide convergence requires the explicit `--all`.
 
 ## Architecture overview
 
@@ -223,48 +158,28 @@ mimeo create example.com
 
 The tool uses provider abstractions (`Registrar`, `Host` ABCs) that allow adding new registrars and hosts without changing the core orchestration. See [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for full component diagrams and data flows.
 
-## Validation
+## Development
 
 ```bash
 uv sync --frozen && uv run pytest && uv run ruff check mimeo && uv run mypy mimeo
 ```
 
-361 tests. Linting and type checking are expected to be clean.
+361 tests. Linting and type checking are expected to be clean. See [docs/INSTALLATION.md](./docs/INSTALLATION.md) for development setup.
 
 ## Project structure
 
 ```
 mimeo/
 ├── mimeo/
-│   ├── cli/
-│   │   ├── __init__.py                 # Command group registration
-│   │   ├── _processing.py              # Shared concurrent processing + output helpers
-│   │   ├── create.py                   # Create command (absorbs template apply)
-│   │   ├── status.py                   # Status command (absorbs list, registrar list,
-│   │   │                                  dns show, dns check)
-│   │   ├── sync.py                     # Sync command (absorbs dns repair, fix https)
-│   │   └── doctor.py                   # Doctor command
-│   ├── config.py                       # Config loading (~/.config/mimeo/config.toml)
-│   ├── exceptions.py                   # Exception hierarchy + exit codes
-│   ├── models.py                       # DNSRecord, NameserverCheckResult
-│   ├── providers/
-│   │   ├── base.py                     # Registrar / DNSProvider / Host ABCs
-│   │   ├── registrar/porkbun.py        # Porkbun registrar + DNS provider
-│   │   └── host/github.py             # GitHub Pages automation (via gh CLI)
-│   └── utils/
-│       ├── http.py                     # requests.Session with error handling
-│       └── retry.py                    # retry_with_jitter() for transient errors
+│   ├── cli/                  # doctor, create, status, sync commands
+│   ├── providers/            # Registrar / DNSProvider / Host abstractions; Porkbun, GitHub Pages
+│   ├── utils/                # HTTP session with error handling, retry with jitter
+│   ├── config.py             # Config loading (~/.config/mimeo/config.toml)
+│   ├── models.py             # DNSRecord, NameserverCheckResult
+│   └── exceptions.py         # Exception hierarchy + exit codes
 ├── tests/
-├── scripts/                            # Smoke tests and utilities
-├── docs/
-│   ├── README.md                       # Documentation index
-│   ├── INSTALLATION.md                 # Prerequisites, install, configuration
-│   ├── ARCHITECTURE.md                 # Component map and workflow diagrams
-│   ├── TROUBLESHOOTING.md              # Failure diagnosis by category
-│   ├── IMPLEMENTATION.md               # Phase tracker
-│   ├── DECISIONS.md                    # Architectural decisions
-│   └── chronicles/                     # Session history
-└── pyproject.toml
+├── scripts/                  # Smoke tests and utilities
+└── docs/
 ```
 
 ## Documentation
@@ -281,9 +196,3 @@ mimeo/
 
 - Only supports Porkbun (registrar) and GitHub Pages (host). Provider abstraction is in place for future additions.
 - DNS propagation is not polled after configuration -- run `mimeo status` afterwards to confirm records have propagated.
-
-## Development
-
-See [docs/INSTALLATION.md](./docs/INSTALLATION.md) for dev setup, and [CLAUDE.md](./CLAUDE.md) for coding standards, testing, and git workflow.
-
-See [docs/DECISIONS.md](./docs/DECISIONS.md) for architectural decisions.

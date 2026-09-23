@@ -797,3 +797,15 @@ removal, not an architectural choice.
 **Decisions**: none new (closure, not a design change)
 
 **Files**: docs/{IMPLEMENTATION,CODE_REVIEW,CONTEXT}.md (this commit)
+
+## Entry 67: README restructured per documentation principles; org flags documented (2026-09-22)
+
+**What**: README overhaul, docs only. Global options is now a table documenting `--template-org`/`--deploy-org` (the config key and default each overrides) with the org model in prose -- templates and sites live in different orgs and need not match. Every command's commented example blocks became Task|Command tables; the two duplicate `### status` sections merged into one with `#### --source github/porkbun/dns` subsections; bold pseudo-heading lead-ins became natural prose; the annotated project tree trimmed to directory level; Validation folded into Development; the CLAUDE.md reference removed from Development.
+
+**Why**: Entry 65 landed the org flags but Global options only mentioned them in passing. User asked for proper documentation and for the README to follow their documentation-principles gist (https://gist.github.com/pborenstein/80b6e1a9011b4a02ad13dfbc06874141): information vs. data distinction (tables for structured data), no redundant hierarchy or pseudo-headings, identical format for similar content, jargon-free language, LLM config files excluded from docs.
+
+**How**: Net -91 lines. Judgment calls per the principles: the CLAUDE.md pointer dropped from Development (principles exclude LLM config files; the file itself untouched), per-file tree comments dropped (component detail is ARCHITECTURE.md's job), jq examples kept as table rows with escaped pipes. Flag semantics verified against cli/__init__.py and config.py before writing (precedence CLI > MIMEO_* env > config; template org defaults to tepiton, deploy org maps to github.default_org). No code changes.
+
+**Decisions**: none new (documentation practice; the gist is the reference)
+
+**Files**: README.md (7cc2f14)

@@ -2,15 +2,14 @@
 phase: 8
 phase_name: Consolidation
 updated: 2026-09-22
-last_commit: 2926bfc
+last_commit: c70f4e4
 ---
 
 ## Current Focus
 
-Track B closed as empirically served (Entry 66) -- the board reduces
-to the rec #6 long-termers, with no blockers. Org configurability
-(Entries 63-65: config keys + global CLI flags) and v1.1.0 are landed;
-all code-review bugs are closed and D2 is resolved (DEC-030).
+README restructured per the documentation-principles gist, with
+--template-org/--deploy-org fully documented (Entry 67). The board is
+down to the rec #6 long-termers; no blockers.
 
 ## Active Tasks
 
@@ -24,6 +23,10 @@ None.
 
 ## Context
 
+- README follows the user's documentation-principles gist (link in
+  Entry 67): Task|Command example tables, tables for structured data,
+  no pseudo-headings, no LLM-config-file references — keep the style
+  in future README edits.
 - Org model: `github.template_org` (tepiton) holds templates;
   `github.default_org` is where site repos land. Overridable per
   invocation with `--template-org`/`--deploy-org` (applied in
@@ -45,4 +48,3 @@ None.
 
 The rec #6 long-termers: Pages IPs from the meta API, and D1's
 surgical create-only-missing DNS apply.
-

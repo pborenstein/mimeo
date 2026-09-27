@@ -809,3 +809,15 @@ removal, not an architectural choice.
 **Decisions**: none new (documentation practice; the gist is the reference)
 
 **Files**: README.md (7cc2f14)
+
+## Entry 68: Non-obliterating template apply -- design analysis (2026-09-27)
+
+**What**: Analysis session, no code. Surveyed the template fleet and mapped what "apply a template without obliterating content" would mean. The fleet: 10 template repos in tepiton, all is_template, all shipping mimeo.template.json (none declare custom dev_paths). Two families with different stakes: single-page templates (mimeo, pandoc-simple, laptopistan), where the template IS the site and obliteration is honest semantics; and the seven Eleventy starters with a clean scaffold/content split -- scaffold in _includes/, _config/, css/, js/, eleventy.config.js, package.json, pages workflow; content in content/ as Markdown + .11tydata.js.
+
+**Why**: --force is the only re-application path and it destroys everything: rename-aside, regenerate, delete the displaced repo, recreate managed DNS. The root cause is structural: template application is conflated with repo creation -- GitHub's generate API is a one-shot byte copy that only works at creation, and no apply-to-existing-repo primitive exists in the codebase. Goal: hand sites new layouts/themes without torching their chapters.
+
+**How**: Three shapes mapped. (A) overlay refresh -- fetch the template tarball, apply manifest substitutions to incoming bytes before pushing (cleaner than today's post-hoc edits: matches guaranteed), push one commit via the Git data API (blobs/tree/commit/ref) skipping declared content paths; repo identity preserved, so Pages config, CNAME verification, certs, and DNS all stay untouched -- that is the operational payoff. (B) three-way merge -- record the applied template SHA (git notes on HEAD; a marker file would risk publication through pandoc-simple) so site-side scaffold edits (theme tweaks) are detected rather than clobbered. (C) regenerate-and-swap carrying content over -- rejected: keeps repo-identity churn and its DNS/Pages drag. Recommendation: (A) gated on a new content_paths field in mimeo.template.json (absent = nothing preserved, so single-page templates keep current semantics for free), fail loud on missing substitution targets per DEC-024, warn-recap stale scaffold files the new template dropped (no deletes in v1), defer (B) until a real clobber incident. Open question: same-template refresh only, or cross-template migration (chapbook -> prose-blog needs a content-format story)? Surface: a --keep-content-style flag on create --force, not a new verb (Phase 8 fewer-verbs rule); stays out of sync per Stage 3's "content is a choice, not drift".
+
+**Decisions**: none new (analysis; DEC-024's manifest is the designated extension point)
+
+**Files**: none -- analysis only; template trees surveyed live via gh api against tepiton/{mimeo,pandoc-simple,laptopistan,eleventy-*}

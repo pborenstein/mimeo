@@ -1,0 +1,21 @@
+#!/bin/zsh
+set -euo pipefail
+
+if (( $# != 2 )); then
+  print -u2 "usage: $0 ORGANIZATION DOMAIN"
+  exit 64
+fi
+
+org=$1
+domain=$2
+found=0
+
+while IFS= read -r repo; do
+  cname=$(gh api "/repos/$repo/pages" --jq '.cname // empty' 2>/dev/null || true)
+  if [[ "$cname" == "$domain" ]]; then
+    print -- "$repo"
+    found=1
+  fi
+done < <(gh repo list "$org" --limit 1000 --json nameWithOwner --jq '.[].nameWithOwner')
+
+exit $(( found ? 0 : 1 ))

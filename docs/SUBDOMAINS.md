@@ -1,7 +1,8 @@
 # Subdomain Sites
 
-Status: **Proposed design** — not yet decided or scheduled. Open questions are
-listed at the end; once settled they should be promoted to `DECISIONS.md`.
+Status: **On ice** (parked 2026-09-29) — proposed design, deliberately
+unscheduled. Open questions are listed at the end; once settled they should be
+promoted to `DECISIONS.md`.
 
 ## Goal
 

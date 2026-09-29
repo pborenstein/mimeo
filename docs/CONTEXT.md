@@ -7,12 +7,16 @@ last_commit: c7edfea
 
 ## Current Focus
 
-Quiet period (user call, 2026-09-29): template apply and subdomain
-sites are on ice; nothing scheduled. Standing backlog: rec #6
-long-termers.
+Command-model reconsideration (2026-09-29, user-driven). First
+write-up: docs/SITE_ADDRESS.md — the operand becomes a site
+address, not a domain; builtin `*.github.io` sites; zone optional.
+Proposed, undecided. More command questions expected from the user.
 
 ## Active Tasks
 
+- [ ] **Command model redesign**: under consideration — first
+      write-up is `docs/SITE_ADDRESS.md` (proposed status).
+      Further command-model questions pending from the user.
 - [ ] **Backlog**: rec #6 long-termers — Pages IPs from
       `api.github.com/meta` (cache + hardcoded fallback); D1
       create-only-missing `sync` path.
@@ -63,5 +67,6 @@ None.
 
 ## Next Session
 
-Nothing scheduled — apply and subdomains are on ice. Rec #6
-long-termers remain open; otherwise wait for the user's next call.
+Command-model discussions continue: `docs/SITE_ADDRESS.md` awaits
+the user's verdict, and other command issues are queued. Apply and
+subdomains stay on ice; rec #6 long-termers remain open.

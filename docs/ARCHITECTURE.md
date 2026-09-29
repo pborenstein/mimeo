@@ -8,7 +8,7 @@ The tool is structured around a provider abstraction that separates the registra
 
 Site content comes from GitHub template repositories, generated via GitHub's template repo API (`POST /repos/{owner}/{repo}/generate`). The org holding the templates is configurable (`github.template_org` in config, default `tepiton`) and is independent of the destination org (`github.default_org`) where new site repos are created. There is no local content generation step.
 
-The CLI surface is five verbs: `create`, `status`, `sync`, `doctor`, and (once DEC-024 lands) `template lint`. Each of `create`, `status`, and `sync` absorbed one or more single-purpose commands from an earlier design (DEC-025); the provider layer underneath was untouched by that collapse.
+The CLI surface is five verbs: `create`, `delete`, `status`, `sync`, and `doctor`. Each of `create`, `status`, and `sync` absorbed one or more single-purpose commands from an earlier design (DEC-025); `delete` (DEC-030) completes the lifecycle as the inverse of `create`. The provider layer underneath was untouched by that collapse.
 
 ## Component Map
 
@@ -22,6 +22,9 @@ mimeo/
 │   │                       ThreadPoolExecutor for concurrent provisioning
 │   ├── create.py          mimeo create -- provision, and optionally replace
 │   │                       (--force), a site from a template
+│   ├── delete.py          mimeo delete -- tear a site down: delete the repo
+│   │                       (or disable Pages with --keep-repo) and remove
+│   │                       managed DNS records; registration untouched
 │   ├── status.py          mimeo status -- cross-provider fleet view;
 │   │                       --source narrows to one provider
 │   ├── sync.py            mimeo sync -- converge DNS + HTTPS enforcement
@@ -194,6 +197,31 @@ Report result: url, https_pending, dns_pending
 ```
 
 `--force` replaces an existing repository's content from the template; without it, an existing repo is left unchanged and DNS configuration is skipped (nothing new to point at). The domain-substitution manifest (DEC-024) reruns automatically on both plain `create` and `create --force`: a template shipping `mimeo.template.json` has its declared self-reference points rewritten to the deployed domain, with failures surfaced loudly rather than skipped.
+
+### `mimeo delete`
+
+The inverse of `create` (DEC-030): unmake the site without touching the registration. Explicit domains only -- no fleet-wide mode. Sequential; always confirms unless `--yes`.
+
+```
+mimeo delete [domains ...] [--keep-repo] [--dry-run] [--yes]
+        │
+        ▼
+Host side first (GitHubHost.teardown_site)
+  default ──► DELETE /repos/{owner}/{domain}     (Pages + custom domain
+                404 ──► repo_existed=False          die with the repo)
+  --keep-repo ──► DELETE /repos/{owner}/{domain}/pages
+        │
+        ▼
+DNS side, only if the host side succeeded
+  domain registered in Porkbun?
+    no ──► skip with warning
+    yes ──► PorkbunDNSProvider.remove_dns_records():
+              delete records matching required_dns_records()
+              (type + name; ALIAS-at-apex counts as managed)
+              unmanaged records are never touched
+```
+
+Registration and nameservers are never modified. `delete` + `create` is the repurpose path; `create --force` is the in-place replacement path. Deleting a repository requires the `delete_repo` token scope (the same one `create --force` needs).
 
 ### Concurrency
 

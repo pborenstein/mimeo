@@ -7,13 +7,20 @@ last_commit: c7edfea
 
 ## Current Focus
 
-Command-model reconsideration (2026-09-29, user-driven). First
-write-up: docs/SITE_ADDRESS.md — the operand becomes a site
-address, not a domain; builtin `*.github.io` sites; zone optional.
-Proposed, undecided. More command questions expected from the user.
+Command-model reconsideration (2026-09-29, user-driven), first
+build landed: the `delete` verb (DEC-031, v1.2.0) — full teardown
+or --keep-repo, managed records only, registration untouched.
+Purpose: repurposing scratch domains (delete + create replaces
+create --force as the repurpose path). Not yet live-tested on a
+real scratch domain. Also from this thread:
+docs/SITE_ADDRESS.md (proposed, undecided).
 
 ## Active Tasks
 
+- [ ] **delete live test**: run `mimeo delete 002371.xyz --dry-run`
+      then real on a scratch domain; `delete_repo` scope already
+      proven by --force. Doctor check for the scope is a possible
+      follow-up (DEC-031).
 - [ ] **Command model redesign**: under consideration — first
       write-up is `docs/SITE_ADDRESS.md` (proposed status).
       Further command-model questions pending from the user.
@@ -62,11 +69,12 @@ None.
   already-existed create no-op keeps exit 0 with a warn recap.
 - Tests constructing 404/422-meaning `HostError`s must pass
   `status_code=` explicitly — parsing lives in `_run_gh_command`.
-- Version is 1.1.0 (`mimeo --version`); uv.lock is committed, so bump
-  pyproject + `__version__` then `uv lock`.
+- Version is 1.2.0 (`mimeo --version`, delete verb); uv.lock is
+  committed, so bump pyproject + `__version__` then `uv lock`.
 
 ## Next Session
 
+`delete` (v1.2.0, DEC-031) awaits live-testing on a scratch domain.
 Command-model discussions continue: `docs/SITE_ADDRESS.md` awaits
 the user's verdict, and other command issues are queued. Apply and
 subdomains stay on ice; rec #6 long-termers remain open.

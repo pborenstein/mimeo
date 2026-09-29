@@ -15,10 +15,11 @@ from mimeo.cli import (
     _check_nameservers,
     _check_python_version,
     create,
+    delete,
     doctor,
     main,
 )
-from mimeo.cli._processing import set_cli_overrides
+from mimeo.cli._processing import set_cli_overrides, set_log_format
 
 from mimeo.config import Config
 from mimeo.exceptions import ConfigurationError, HostError, RegistrarError
@@ -39,11 +40,18 @@ def runner() -> CliRunner:
 
 
 @pytest.fixture(autouse=True)
-def _clean_cli_overrides() -> None:
-    """Reset --template-org/--deploy-org module state around every test."""
+def _clean_cli_state() -> None:
+    """Reset --template-org/--deploy-org/--log-format module state around every test.
+
+    Without the log-format reset, a test invoking ``main --log-format json``
+    leaves the global at "json" and every later direct-command invocation
+    renders JSON instead of text.
+    """
     set_cli_overrides(None, None)
+    set_log_format("text")
     yield
     set_cli_overrides(None, None)
+    set_log_format("text")
 
 
 @pytest.fixture
@@ -1494,3 +1502,371 @@ class TestCreateForceCommand:
         assert "WARNING" in result.output
         assert "Aborted." in result.output
         mock_host.deploy_site.assert_not_called()
+
+
+class TestDeleteCommand:
+    """Tests for the delete command."""
+
+    _DELETE = "mimeo.cli.delete"
+
+    def test_delete_help(self, runner: CliRunner) -> None:
+        """Test delete command shows help."""
+        result = runner.invoke(delete, ["--help"])
+        assert result.exit_code == 0
+        assert "Tear down deployed sites" in result.output
+        assert "DOMAINS" in result.output
+
+    def test_delete_requires_domain(self, runner: CliRunner) -> None:
+        """No domain args prints full help instead of Click's terse error."""
+        result = runner.invoke(delete, [])
+        assert result.exit_code != 0
+        assert "Missing argument" not in result.output
+        assert "Usage: delete" in result.output
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_DELETE}.GitHubHost")
+    @patch(f"{_DELETE}.PorkbunRegistrar")
+    @patch(f"{_DELETE}.PorkbunDNSProvider")
+    def test_delete_success(
+        self,
+        mock_dns_provider_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+        mock_dns_records: List[DNSRecord],
+    ) -> None:
+        """Full teardown: repo deleted, managed records removed."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.teardown_site.return_value = {
+            "repo_full_name": "testuser/example.com",
+            "repo_existed": True,
+            "repo_deleted": True,
+            "pages_disabled": False,
+        }
+        mock_host.required_dns_records.return_value = mock_dns_records
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        mock_registrar = MagicMock()
+        mock_registrar.domain_exists.return_value = True
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar_class.return_value = mock_registrar
+
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.remove_dns_records.return_value = 5
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
+
+        result = runner.invoke(delete, ["example.com", "--yes"])
+
+        assert result.exit_code == 0
+        assert "Repository deleted" in result.output
+        assert "Removed 5 DNS records" in result.output
+        assert "Deleted 1/1 domains" in result.output
+        mock_host.teardown_site.assert_called_once_with("example.com", delete_repository=True)
+        mock_dns_provider.remove_dns_records.assert_called_once_with(
+            "example.com", mock_dns_records
+        )
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_DELETE}.GitHubHost")
+    @patch(f"{_DELETE}.PorkbunRegistrar")
+    @patch(f"{_DELETE}.PorkbunDNSProvider")
+    def test_delete_confirms_before_destroying(
+        self,
+        mock_dns_provider_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """Without --yes the destructive prompt must be answered."""
+        mock_config_load.return_value = mock_config
+
+        result = runner.invoke(delete, ["example.com"], input="n\n")
+
+        assert result.exit_code == 0
+        assert "WARNING" in result.output
+        assert "Domain registrations are NOT touched" in result.output
+        assert "Aborted." in result.output
+        mock_host_class.assert_not_called()
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_DELETE}.GitHubHost")
+    @patch(f"{_DELETE}.PorkbunRegistrar")
+    @patch(f"{_DELETE}.PorkbunDNSProvider")
+    def test_delete_keep_repo(
+        self,
+        mock_dns_provider_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+        mock_dns_records: List[DNSRecord],
+    ) -> None:
+        """--keep-repo disables Pages instead of deleting the repository."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.teardown_site.return_value = {
+            "repo_full_name": "testuser/example.com",
+            "repo_existed": True,
+            "repo_deleted": False,
+            "pages_disabled": True,
+        }
+        mock_host.required_dns_records.return_value = mock_dns_records
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        mock_registrar = MagicMock()
+        mock_registrar.domain_exists.return_value = True
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar_class.return_value = mock_registrar
+
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.remove_dns_records.return_value = 5
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
+
+        result = runner.invoke(delete, ["example.com", "--keep-repo", "--yes"])
+
+        assert result.exit_code == 0
+        assert "GitHub Pages disabled" in result.output
+        assert "Repository: kept" in result.output
+        mock_host.teardown_site.assert_called_once_with("example.com", delete_repository=False)
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_DELETE}.GitHubHost")
+    @patch(f"{_DELETE}.PorkbunRegistrar")
+    @patch(f"{_DELETE}.PorkbunDNSProvider")
+    def test_delete_repo_missing_still_cleans_dns(
+        self,
+        mock_dns_provider_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+        mock_dns_records: List[DNSRecord],
+    ) -> None:
+        """A missing repository still gets DNS cleanup (records outlive repos)."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.teardown_site.return_value = {
+            "repo_full_name": "testuser/example.com",
+            "repo_existed": False,
+            "repo_deleted": False,
+            "pages_disabled": False,
+        }
+        mock_host.required_dns_records.return_value = mock_dns_records
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        mock_registrar = MagicMock()
+        mock_registrar.domain_exists.return_value = True
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar_class.return_value = mock_registrar
+
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.remove_dns_records.return_value = 5
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
+
+        result = runner.invoke(delete, ["example.com", "--yes"])
+
+        assert result.exit_code == 0
+        assert "No repository found" in result.output
+        assert "Repository: not found" in result.output
+        mock_dns_provider.remove_dns_records.assert_called_once()
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_DELETE}.GitHubHost")
+    @patch(f"{_DELETE}.PorkbunRegistrar")
+    @patch(f"{_DELETE}.PorkbunDNSProvider")
+    def test_delete_skips_dns_when_not_registered(
+        self,
+        mock_dns_provider_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+        mock_dns_records: List[DNSRecord],
+    ) -> None:
+        """Domain not in the Porkbun account: repo teardown proceeds, DNS skipped."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.teardown_site.return_value = {
+            "repo_full_name": "testuser/example.com",
+            "repo_existed": True,
+            "repo_deleted": True,
+            "pages_disabled": False,
+        }
+        mock_host.required_dns_records.return_value = mock_dns_records
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        mock_registrar = MagicMock()
+        mock_registrar.domain_exists.return_value = False
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar_class.return_value = mock_registrar
+
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
+
+        result = runner.invoke(delete, ["example.com", "--yes"])
+
+        assert result.exit_code == 0
+        assert "not registered in this Porkbun account" in result.output
+        assert "DNS: not in Porkbun account" in result.output
+        mock_dns_provider.remove_dns_records.assert_not_called()
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_DELETE}.GitHubHost")
+    @patch(f"{_DELETE}.PorkbunRegistrar")
+    @patch(f"{_DELETE}.PorkbunDNSProvider")
+    def test_delete_host_failure_fails_loudly(
+        self,
+        mock_dns_provider_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """A host-side failure fails the domain; DNS is never touched."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.teardown_site.side_effect = HostError("GitHub teardown failed: boom")
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        mock_registrar = MagicMock()
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar_class.return_value = mock_registrar
+
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
+
+        result = runner.invoke(delete, ["example.com", "--yes"])
+
+        assert result.exit_code == 1
+        assert "✗ example.com" in result.output
+        assert "1 of 1 domains failed" in result.output
+        mock_dns_provider.remove_dns_records.assert_not_called()
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_DELETE}.GitHubHost")
+    @patch(f"{_DELETE}.PorkbunRegistrar")
+    @patch(f"{_DELETE}.PorkbunDNSProvider")
+    def test_delete_dns_failure_is_partial(
+        self,
+        mock_dns_provider_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+        mock_dns_records: List[DNSRecord],
+    ) -> None:
+        """Repo deleted but DNS cleanup failed: partial exit, honest recap."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.teardown_site.return_value = {
+            "repo_full_name": "testuser/example.com",
+            "repo_existed": True,
+            "repo_deleted": True,
+            "pages_disabled": False,
+        }
+        mock_host.required_dns_records.return_value = mock_dns_records
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        mock_registrar = MagicMock()
+        mock_registrar.domain_exists.return_value = True
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar_class.return_value = mock_registrar
+
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.remove_dns_records.side_effect = RegistrarError("Porkbun API error: nope")
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
+
+        result = runner.invoke(delete, ["example.com", "--yes"])
+
+        # Repo deleted but DNS cleanup failed: the row is a provider
+        # failure (single domain -> EXIT_GENERAL, not EXIT_PARTIAL)
+        assert result.exit_code == 1
+        assert "DNS cleanup failed" in result.output
+        assert "1 of 1 domains failed" in result.output
+
+    @patch("mimeo.config.Config.load")
+    def test_delete_dry_run(self, mock_config_load: Any, runner: CliRunner, mock_config: Config) -> None:
+        """Dry run prints the plan without providers or confirmation."""
+        mock_config_load.return_value = mock_config
+
+        result = runner.invoke(delete, ["example.com", "--dry-run"])
+
+        assert result.exit_code == 0
+        assert "DRY RUN" in result.output
+        assert "Would delete repository: testuser/example.com" in result.output
+        assert "Would remove managed DNS records" in result.output
+        assert "NOT touch the domain registration" in result.output
+        assert "Deleted" not in result.output
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_DELETE}.GitHubHost")
+    @patch(f"{_DELETE}.PorkbunRegistrar")
+    @patch(f"{_DELETE}.PorkbunDNSProvider")
+    def test_delete_nothing_to_delete(
+        self,
+        mock_dns_provider_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+        mock_dns_records: List[DNSRecord],
+    ) -> None:
+        """Repo gone, records gone: honest 'nothing to delete' recap, exit 0."""
+        mock_config_load.return_value = mock_config
+
+        mock_host = MagicMock()
+        mock_host.teardown_site.return_value = {
+            "repo_full_name": "testuser/example.com",
+            "repo_existed": False,
+            "repo_deleted": False,
+            "pages_disabled": False,
+        }
+        mock_host.required_dns_records.return_value = mock_dns_records
+        mock_host.__enter__.return_value = mock_host
+        mock_host_class.return_value = mock_host
+
+        mock_registrar = MagicMock()
+        mock_registrar.domain_exists.return_value = True
+        mock_registrar.__enter__.return_value = mock_registrar
+        mock_registrar_class.return_value = mock_registrar
+
+        mock_dns_provider = MagicMock()
+        mock_dns_provider.remove_dns_records.return_value = 0
+        mock_dns_provider.__enter__.return_value = mock_dns_provider
+        mock_dns_provider_class.return_value = mock_dns_provider
+
+        result = runner.invoke(delete, ["example.com", "--yes"])
+
+        assert result.exit_code == 0
+        assert "⚠ example.com" in result.output
+        assert "Nothing to delete" in result.output
+        assert "Deleted 0/1 domains (1 nothing to delete)" in result.output

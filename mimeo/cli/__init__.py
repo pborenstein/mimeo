@@ -10,6 +10,7 @@ from ._processing import (
     set_log_format,
 )
 from .create import create
+from .delete import delete
 from .doctor import (
     _check_config,
     _check_gh_auth,
@@ -53,6 +54,7 @@ def main(
 
 
 main.add_command(create)
+main.add_command(delete)
 main.add_command(status)
 main.add_command(sync)
 main.add_command(doctor)
@@ -61,6 +63,7 @@ main.add_command(doctor)
 __all__ = [
     "main",
     "create",
+    "delete",
     "status",
     "sync",
     "doctor",

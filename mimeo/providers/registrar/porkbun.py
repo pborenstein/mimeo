@@ -282,6 +282,53 @@ class PorkbunDNSProvider(_PorkbunClient, DNSProvider):
                 raise
             raise RegistrarError(f"Failed to configure DNS for {domain}: {e}") from e
 
+    def remove_dns_records(self, domain: str, records: List[DNSRecord]) -> int:
+        """Delete the managed records for a domain (inverse of configure_dns).
+
+        Deletes every existing record whose (type, normalized name) matches
+        the given set -- the same records configure_dns would manage, plus
+        the ALIAS-at-apex parking record it would replace. Records outside
+        the managed set are never touched.
+
+        Args:
+            domain: Domain name to clean up
+            records: The managed record set (required_dns_records output)
+
+        Returns:
+            Number of records deleted
+
+        Raises:
+            RegistrarError: If the API call fails
+        """
+        try:
+            existing_records = self.get_domain_records(domain)
+
+            managed_records = {
+                (r.type, self._normalize_record_name(r.name, domain)) for r in records
+            }
+
+            deleted = 0
+            for existing in existing_records:
+                record_type = existing.get("type", "")
+                record_name = existing.get("name", "")
+                record_id = existing.get("id", "")
+
+                normalized_name = self._normalize_record_name(record_name, domain)
+
+                if (record_type, normalized_name) in managed_records or (
+                    record_type == "ALIAS"
+                    and normalized_name == ""
+                    and ("A", "") in managed_records
+                ):
+                    self._delete_record(domain, record_id)
+                    deleted += 1
+            return deleted
+
+        except Exception as e:
+            if isinstance(e, RegistrarError):
+                raise
+            raise RegistrarError(f"Failed to remove DNS records for {domain}: {e}") from e
+
     def check_dns_drift(
         self,
         domain: str,

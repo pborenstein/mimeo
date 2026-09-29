@@ -1173,3 +1173,83 @@ class TestHealthStatus:
             "pages_status": None,
         }
         assert health_status(health) == "pages_error"
+
+
+class TestTeardownSite:
+    """Tests for teardown_site and disable_pages."""
+
+    @pytest.fixture
+    def mock_gh_auth(self) -> Mock:
+        """Mock successful gh auth check."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(returncode=0, stdout="", stderr="")
+            yield mock_run
+
+    @pytest.fixture
+    def host(self, mock_gh_auth: Mock) -> GitHubHost:
+        """Create GitHubHost for testing."""
+        return GitHubHost(token="ghp_test_token", default_org="testorg")
+
+    def test_disable_pages(self, host: GitHubHost) -> None:
+        """Disabling Pages issues a DELETE against the pages endpoint."""
+        with patch.object(host, "_gh_api") as mock_api:
+            mock_api.return_value = {}
+            assert host.disable_pages("testorg/example.com") is True
+            mock_api.assert_called_once_with(
+                "repos/testorg/example.com/pages", method="DELETE"
+            )
+
+    def test_disable_pages_not_configured(self, host: GitHubHost) -> None:
+        """A 404 (Pages not enabled) is a no-op, not an error."""
+        with patch.object(host, "_gh_api") as mock_api:
+            mock_api.side_effect = HostError("Not Found", status_code=404)
+            assert host.disable_pages("testorg/example.com") is False
+
+    def test_disable_pages_other_failure_raises(self, host: GitHubHost) -> None:
+        """Non-404 failures surface instead of masquerading as success."""
+        with patch.object(host, "_gh_api") as mock_api:
+            mock_api.side_effect = HostError("Forbidden", status_code=403)
+            with pytest.raises(HostError):
+                host.disable_pages("testorg/example.com")
+
+    def test_teardown_site_deletes_repository(self, host: GitHubHost) -> None:
+        """Full teardown deletes the repo via the REST endpoint; Pages goes with it."""
+        with patch.object(host, "_gh_api") as mock_api:
+            mock_api.return_value = {}
+            result = host.teardown_site("example.com")
+
+            mock_api.assert_called_once_with("repos/testorg/example.com", method="DELETE")
+            assert result == {
+                "repo_full_name": "testorg/example.com",
+                "repo_existed": True,
+                "repo_deleted": True,
+                "pages_disabled": False,
+            }
+
+    def test_teardown_site_repository_missing(self, host: GitHubHost) -> None:
+        """A missing repository is reported, not raised -- DNS may still need cleanup."""
+        with patch.object(host, "_gh_api") as mock_api:
+            mock_api.side_effect = HostError("Not Found", status_code=404)
+            result = host.teardown_site("example.com")
+
+            assert result["repo_deleted"] is False
+            assert result["repo_existed"] is False
+
+    def test_teardown_site_other_failure_raises(self, host: GitHubHost) -> None:
+        """A non-404 failure (auth, 5xx) must surface loudly."""
+        with patch.object(host, "_gh_api") as mock_api:
+            mock_api.side_effect = HostError("Forbidden", status_code=403)
+            with pytest.raises(HostError):
+                host.teardown_site("example.com")
+
+    def test_teardown_site_keep_repo_disables_pages(self, host: GitHubHost) -> None:
+        """delete_repository=False spares the repo and disables Pages instead."""
+        with patch.object(host, "_gh_api") as mock_api:
+            mock_api.return_value = {}
+            result = host.teardown_site("example.com", delete_repository=False)
+
+            mock_api.assert_called_once_with(
+                "repos/testorg/example.com/pages", method="DELETE"
+            )
+            assert result["repo_deleted"] is False
+            assert result["pages_disabled"] is True

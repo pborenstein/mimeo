@@ -778,6 +778,78 @@ class GitHubHost(Host):
                 raise
             raise HostError(f"Failed to deploy site for {domain}: {e}") from e
 
+    def disable_pages(self, repo_full_name: str) -> bool:
+        """Disable GitHub Pages for a repository.
+
+        Removes the Pages configuration, including any custom domain.
+        Idempotent: a repository without Pages is already in the target
+        state.
+
+        Args:
+            repo_full_name: Full repository name (owner/repo)
+
+        Returns:
+            True if Pages was disabled, False if it was not enabled
+
+        Raises:
+            HostError: If the API call fails for a reason other than
+                Pages not being configured
+        """
+        try:
+            self._gh_api(f"repos/{repo_full_name}/pages", method="DELETE")
+        except HostError as e:
+            if e.status_code != 404:
+                raise
+            return False
+        return True
+
+    def teardown_site(
+        self, domain: str, delete_repository: bool = True
+    ) -> Dict[str, Any]:
+        """Tear down a site's GitHub side (inverse of deploy_site).
+
+        Deletes the repository -- the Pages configuration and custom
+        domain go with it -- or, when the repository is kept, disables
+        Pages so the site stops serving. Repository deletion uses the
+        REST endpoint rather than `gh repo delete` so a missing
+        repository surfaces as a structured 404 instead of CLI text.
+
+        Args:
+            domain: Site domain; also the repository name (repo name ==
+                domain until the site-address redesign lands)
+            delete_repository: If False, keep the repository and only
+                disable its Pages configuration
+
+        Returns:
+            Dict with keys: repo_full_name, repo_existed, repo_deleted,
+            pages_disabled
+
+        Raises:
+            HostError: If an API call fails for a reason other than the
+                target already being gone
+        """
+        owner = self.default_org or self._get_authenticated_user()
+        repo_full_name = f"{owner}/{domain}"
+        result: Dict[str, Any] = {
+            "repo_full_name": repo_full_name,
+            "repo_existed": True,
+            "repo_deleted": False,
+            "pages_disabled": False,
+        }
+
+        if delete_repository:
+            try:
+                self._gh_api(f"repos/{repo_full_name}", method="DELETE")
+                result["repo_deleted"] = True
+            except HostError as e:
+                if e.status_code != 404:
+                    raise
+                result["repo_existed"] = False
+        else:
+            result["pages_disabled"] = self.disable_pages(repo_full_name)
+
+        return result
+
     def get_pages_health(self, repo_full_name: str) -> Dict[str, Any]:
         """Fetch Pages configuration health for a repository.
 

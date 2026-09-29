@@ -609,6 +609,20 @@ A fourth, related fix landed in the same session at the provider layer (`mimeo/p
 
 ---
 
+### DEC-031: `delete` Completes the Lifecycle as the Inverse of `create` (2026-09-29)
+
+**Status**: Active (Phase 8). Implemented same day; the destructive primitives (`_delete_repository`, `_delete_record`) were already exercised by `create --force`, so the verb is the second half of `--force` without the rebuild.
+
+**Context**: mimeo could make the domain-to-Pages promise (`create`), keep it (`sync`), and audit it (`status`), but unmaking it meant three web UIs — delete the repo, disable Pages, remove the Porkbun records. The immediate driver was repurposing scratch domains (`002371.xyz` & co.): the only CLI path was `create --force`, which obliterates and rebuilds in one step and cannot leave the domain dormant in between. Part of the command-model reconsideration that also produced `docs/SITE_ADDRESS.md` (proposed); passes the DEC-021 identity test — teardown is the fourth view of the one job.
+
+**Decision**: A fifth verb, `mimeo delete [DOMAINS...]`, composable and confirmation-gated. Default is full teardown: delete the repository (Pages config and custom domain die with it — deleting the Pages config separately would be redundant) then remove exactly the managed DNS records (`required_dns_records()` matching by type + normalized name, including the ALIAS-at-apex parking record `configure_dns` would replace; unmanaged records are never touched). `--keep-repo` spares the repository and disables Pages instead — the recoverable half of the teardown, since `sync`/`create` can restore records and Pages trivially while repo deletion loses issues and history irrecoverably. Scope limits, deliberately: explicit domains only (no `--all` — fleet-wide deletion has no convergence floor under it the way `sync --all` does); registration and nameservers are never touched (Porkbun's API cannot deregister anyway, and the zone may outlive the site); host side first, and DNS cleanup only runs when the host stage succeeded (removing records under a live repo breaks a site the user asked to remove, which is a different, unrequested state). Repository deletion uses the REST endpoint (`DELETE /repos/{owner}/{repo}`) rather than `gh repo delete` so a missing repo surfaces as a structured 404 — a missing repo is reported and DNS cleanup still runs, since records can outlive repos. A domain absent from the Porkbun account gets repo/Pages teardown only, with a warning.
+
+**Alternatives considered**: Granular `--dns`/`--pages`/`--repo` subset flags (rejected — only two coherent teardown modes exist, "everything" and "stop serving, keep the repo"; a second spelling adds combinatorial surface for no user); `--repo` opt-in with a dns+pages default (rejected — the scratch-domain workflow, the reason the verb exists, wants full teardown, and `--keep-repo` as the escape hatch keeps the irreversible-optimization argument); a `teardown` subcommand under `create` (rejected — DEC-025 already collapsed per-incident verbs into top-level lifecycle verbs).
+
+**Consequences**: `delete` + `create` is the repurpose path; `create --force` remains the in-place replacement. Repo deletion needs the `delete_repo` token scope (same as `--force`) — a `doctor` check is a follow-up if other machines hit it. Under the proposed site-address model, teardown branches on zone presence exactly like create (a builtin site's teardown is repo-only) — no rework needed when that lands. Also fixed en passant: `tests/test_cli.py`'s autouse fixture now resets the `--log-format` global between tests; a `main --log-format json` invocation used to leak into later direct-command tests (existing create tests passed only by substring luck inside JSON records).
+
+---
+
 ## Superseded/Deprecated
 
 [No superseded decisions yet]

@@ -666,3 +666,110 @@ def test_porkbun_nameservers_constant() -> None:
     assert len(PORKBUN_NAMESERVERS) == 4
     for ns in PORKBUN_NAMESERVERS:
         assert ns.endswith(".ns.porkbun.com")
+
+
+class TestRemoveDNSRecords:
+    """Tests for remove_dns_records (the inverse of configure_dns)."""
+
+    @pytest.fixture
+    def provider(self) -> PorkbunDNSProvider:
+        return PorkbunDNSProvider(api_key="pk1_test_key", secret_key="sk1_test_secret")
+
+    @pytest.fixture
+    def managed_records(self) -> list[DNSRecord]:
+        return [DNSRecord(type="A", name="", content=ip, ttl=600) for ip in GITHUB_PAGES_IPS] + [
+            DNSRecord(type="CNAME", name="www", content="testuser.github.io", ttl=600)
+        ]
+
+    @responses.activate
+    def test_removes_managed_records_only(
+        self, provider: PorkbunDNSProvider, managed_records: list[DNSRecord]
+    ) -> None:
+        """Deletes exactly the (type, name) pairs in the managed set."""
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/retrieve/example.com",
+            json={
+                "status": "SUCCESS",
+                "records": [
+                    {"id": "111", "type": "A", "name": "", "content": "185.199.108.153"},
+                    {"id": "112", "type": "CNAME", "name": "www", "content": "testuser.github.io"},
+                    {"id": "113", "type": "TXT", "name": "_verification", "content": "token"},
+                    {"id": "114", "type": "CNAME", "name": "", "content": "parking.porkbun.com"},
+                ],
+            },
+            status=200,
+        )
+        for rid in ("111", "112"):
+            responses.add(
+                responses.POST,
+                f"https://api-ipv4.porkbun.com/api/json/v3/dns/delete/example.com/{rid}",
+                json={"status": "SUCCESS"},
+                status=200,
+            )
+
+        removed = provider.remove_dns_records("example.com", managed_records)
+
+        assert removed == 2
+        # 1 retrieve + 2 deletes; the TXT and the parking CNAME at the apex
+        # are outside the managed set and survive
+        assert len(responses.calls) == 3
+        deleted_ids = {c.request.url.rsplit("/", 1)[-1] for c in responses.calls[1:]}
+        assert deleted_ids == {"111", "112"}
+
+    @responses.activate
+    def test_removes_alias_at_apex(
+        self, provider: PorkbunDNSProvider, managed_records: list[DNSRecord]
+    ) -> None:
+        """An ALIAS at the apex counts as managed (configure_dns would replace it)."""
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/retrieve/example.com",
+            json={
+                "status": "SUCCESS",
+                "records": [
+                    {"id": "201", "type": "ALIAS", "name": "@", "content": "parking.porkbun.com"},
+                ],
+            },
+            status=200,
+        )
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/delete/example.com/201",
+            json={"status": "SUCCESS"},
+            status=200,
+        )
+
+        removed = provider.remove_dns_records("example.com", managed_records)
+
+        assert removed == 1
+
+    @responses.activate
+    def test_no_managed_records_present(
+        self, provider: PorkbunDNSProvider, managed_records: list[DNSRecord]
+    ) -> None:
+        """Nothing to delete is 0, not an error."""
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/retrieve/example.com",
+            json={"status": "SUCCESS", "records": []},
+            status=200,
+        )
+
+        assert provider.remove_dns_records("example.com", managed_records) == 0
+        assert len(responses.calls) == 1
+
+    @responses.activate
+    def test_api_failure_raises(
+        self, provider: PorkbunDNSProvider, managed_records: list[DNSRecord]
+    ) -> None:
+        """A failing retrieve surfaces as RegistrarError, not a silent 0."""
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/retrieve/example.com",
+            json={"status": "ERROR", "message": "Invalid domain."},
+            status=200,
+        )
+
+        with pytest.raises(RegistrarError):
+            provider.remove_dns_records("example.com", managed_records)

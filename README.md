@@ -77,6 +77,19 @@ Provisions one or more domains end to end. Templates are looked up in the templa
 
 If a repository already exists, `create` leaves it unchanged (safe to re-run). `--force` instead replaces an existing repository's content with the template: it **deletes and recreates the repo**, so all existing content, issues, and history are lost, and managed DNS records are deleted and recreated as well. Pass `--skip-dns` alongside `--force` to leave DNS untouched. `--force` prompts for confirmation unless `--yes` is passed.
 
+### delete
+
+Tears down sites: deletes the GitHub repository (the Pages site and custom domain go with it) and removes the managed DNS records (GitHub Pages A/CNAME) from Porkbun. The domain registration and nameservers are never touched — `delete` then `create` is how to repurpose a domain with a fresh template. Domains must be named explicitly; there is no fleet-wide mode.
+
+| Task | Command |
+|:-----|:--------|
+| Tear down a site completely | `mimeo delete example.com` |
+| Same, without the confirmation prompt | `mimeo delete example.com --yes` |
+| Stop serving but keep the repository | `mimeo delete example.com --keep-repo` |
+| Preview without executing | `mimeo delete example.com --dry-run` |
+
+`delete` prompts for confirmation unless `--yes` is passed. With `--keep-repo` the repository is spared and only its Pages configuration is disabled. Deleting a repository needs the `delete_repo` token scope — the same scope `create --force` requires. A domain whose repository is already gone still gets its DNS records cleaned up; a domain not registered in the Porkbun account gets repo/Pages teardown only.
+
 ### status
 
 One view of the fleet: registration expiry, nameservers, DNS drift, and Pages health per domain, joining the Porkbun account against mimeo-managed repos.

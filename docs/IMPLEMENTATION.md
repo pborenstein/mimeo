@@ -469,6 +469,39 @@ front-door verbs than it started with. See DEC-021.
         end-to-end test invokes through the `main` group and asserts
         `GitHubHost` gets the overridden orgs; 361 tests, ruff/mypy
         clean
+- [x] Template fleet reconciliation; apply + subdomains parked
+      (2026-09-29, Entry 69)
+  - [x] Docs caught up to the 11-template fleet: pandoc-resume added
+        2026-09-28 outside a session (user-live-tested; its manifest
+        parses clean under the strict DEC-024 parser -- one
+        yaml-frontmatter-key on index.md url, same shape as
+        pandoc-simple); CONTEXT.md, DEC-024 status updated; note
+        committed in the mimeo-sites TEMPLATES meta-repo (cc7e07c)
+  - [x] Entry 68's apply design and the subdomain design moved On Ice
+        (user call, no revive date); SUBDOMAINS.md status flipped to
+        On ice
+- [x] `delete` verb + site-address design doc; v1.2.0 (2026-09-29,
+      Entry 69, DEC-031)
+  - [x] `mimeo delete [DOMAINS...]`: full teardown by default
+        (repository via REST DELETE -- structured 404s, Pages +
+        custom domain die with it), `--keep-repo` (Pages disabled
+        only), managed-records-only DNS removal (inverse of
+        configure_dns incl. the ALIAS-at-apex parking record);
+        explicit domains only (no --all), sequential, host-side first
+        with DNS gated on host success; 22 new tests (383 total),
+        mypy/ruff clean; `delete_repo` scope already proven by
+        --force; not yet live-tested on a scratch domain
+  - [x] Latent test pollution fixed: the autouse fixture now resets
+        the --log-format global (a `main --log-format json` run used
+        to leak into later direct-command tests)
+  - [x] `docs/SITE_ADDRESS.md` (proposed, undecided): the operand
+        becomes a site address (custom domain; + `--repo` decoupling;
+        org root `org.github.io`; path site `org.github.io/x`), zone
+        optional, status/sync join re-keyed onto the Pages cname,
+        {url} manifest token (manifest v2), registrar credentials
+        deferred to use; 8 open decisions; design-only until a real
+        builtin-site need -- but the join re-key has standalone value
+        (renamed repos orphan themselves in status today)
 
 ---
 

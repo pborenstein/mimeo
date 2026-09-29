@@ -2,20 +2,18 @@
 phase: 8
 phase_name: Consolidation
 updated: 2026-09-29
-last_commit: c7edfea
+last_commit: 29b2077
 ---
 
 ## Current Focus
 
-Command-model reconsideration (user-driven). First build: the
-`delete` verb (DEC-031, v1.2.0) — teardown as create's inverse,
-for repurposing scratch domains; not yet live-tested.
-`docs/SITE_ADDRESS.md` (proposed) is the standing design thread.
+Command-model reconsideration (user-driven): `delete` landed
+(DEC-031, v1.2.0, not yet live-tested); `SITE_ADDRESS.md`
+(proposed) is the standing design thread.
 
 ## Active Tasks
 
-- [ ] **delete live test**: `--dry-run` then real on a scratch
-      domain (002371.xyz & co.).
+- [ ] **delete live test**: `--dry-run` then real on 002371.xyz.
 - [ ] **Command model**: `docs/SITE_ADDRESS.md` proposed,
       undecided; more command questions queued from the user.
 - [ ] **Backlog**: rec #6 long-termers — Pages IPs from
@@ -23,11 +21,8 @@ for repurposing scratch domains; not yet live-tested.
 
 ## On Ice (2026-09-29, user call)
 
-- **Template apply**: Entry 68 design; its open questions are
-      preserved there (refresh vs migration; pandoc-resume's
-      customizable index.md).
-- **Subdomain sites**: `docs/SUBDOMAINS.md`; closed 2026-09-12,
-      parked.
+- **Template apply**: Entry 68 design (open questions preserved
+      there). **Subdomain sites**: `docs/SUBDOMAINS.md`; parked.
 
 ## Blockers
 
@@ -35,24 +30,22 @@ None.
 
 ## Context
 
-- Templates: 11 repos in `tepiton` — 7 Eleventy starters, 3
-  single-page, pandoc-resume (2026-09-28, user-tested). Canonical
-  inventory: mimeo-sites TEMPLATES/CLAUDE.md. `--force` remains
-  the only in-place replacement path.
+- Templates: 11 repos in `tepiton` (7 Eleventy starters, 3
+  single-page, pandoc-resume). Canonical inventory: mimeo-sites
+  TEMPLATES/CLAUDE.md. `--force` is the only in-place replacement.
 - Org model: `github.template_org` (tepiton) holds templates;
   `github.default_org` receives site repos; `--template-org`/
   `--deploy-org` override per invocation.
-- README style: user's documentation-principles gist (Entry 67) —
-  Task|Command tables, no pseudo-headings.
-- Exit codes (DEC-027/028): only confirmed-transient exits 5;
-  already-existed create no-op keeps exit 0. Tests building
-  404/422 `HostError`s must pass `status_code=` explicitly.
+- README style: documentation-principles gist (Entry 67) —
+  Task|Command tables.
+- Exit codes (DEC-027/028): only confirmed-transient exits 5.
+  Tests building 404/422 `HostError`s must pass `status_code=`.
 - Repo is public-as-visible; live usage is the real E2E hedge
   (`scripts/e2e_smoke.sh` on a junk domain). Version 1.2.0; bump
   pyproject + `__version__` + `uv lock` together.
 
 ## Next Session
 
-Live-test `delete` on a scratch domain; `SITE_ADDRESS.md` awaits
-the user's verdict, further command-model questions queued. Apply
-and subdomains stay on ice; rec #6 long-termers open.
+Live-test `delete` on a scratch domain; SITE_ADDRESS.md awaits
+the user's verdict (more command questions queued). Apply and
+subdomains on ice; rec #6 long-termers open.

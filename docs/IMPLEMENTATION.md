@@ -490,7 +490,7 @@ front-door verbs than it started with. See DEC-021.
         explicit domains only (no --all), sequential, host-side first
         with DNS gated on host success; 22 new tests (383 total),
         mypy/ruff clean; `delete_repo` scope already proven by
-        --force; not yet live-tested on a scratch domain
+        --force; user-tested live on a scratch domain (2026-09-29)
   - [x] Latent test pollution fixed: the autouse fixture now resets
         the --log-format global (a `main --log-format json` run used
         to leak into later direct-command tests)

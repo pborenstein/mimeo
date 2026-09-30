@@ -7,14 +7,13 @@ last_commit: 4c38e5c
 
 ## Current Focus
 
-Command-model reconsideration (user-driven): `delete` (DEC-031)
-and the Website-field deploy step (DEC-032) landed at v1.3.0;
-delete is not yet live-tested. `SITE_ADDRESS.md` (proposed) is
-the standing design thread.
+Command-model reconsideration (user-driven): `delete` (DEC-031,
+user-tested live) and the Website-field deploy step (DEC-032)
+landed at v1.3.0. `SITE_ADDRESS.md` (proposed) is the standing
+design thread.
 
 ## Active Tasks
 
-- [ ] **delete live test**: `--dry-run` then real on 002371.xyz.
 - [ ] **Command model**: `docs/SITE_ADDRESS.md` proposed,
       undecided; more command questions queued from the user.
 - [ ] **Backlog**: rec #6 long-termers — Pages IPs from
@@ -47,6 +46,6 @@ None.
 
 ## Next Session
 
-Live-test `delete` on a scratch domain; SITE_ADDRESS.md awaits
-the user's verdict (more command questions queued). Apply and
-subdomains on ice; rec #6 long-termers open.
+`SITE_ADDRESS.md` awaits the user's verdict (more command
+questions queued). Apply and subdomains on ice; rec #6
+long-termers open.

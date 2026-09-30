@@ -512,6 +512,17 @@ front-door verbs than it started with. See DEC-021.
         post-push workflow runs green; eleventy family unchanged
         (already true); ordering guarantee documented in
         ARCHITECTURE.md's create flow
+- [x] Website field set at deploy; v1.3.0 (2026-09-29, Entry 71,
+      DEC-032)
+  - [x] `deploy_site` sets the repository Website field
+        (`homepage`) to `https://{domain}/` on every deploy;
+        live-verified on tepiton/002371.xyz; 384 tests, mypy/ruff
+        clean
+  - [x] The "Include in the home page" checkboxes
+        (releases/packages/deployments) verified UI-only -- no
+        REST/GraphQL surface (OpenAPI spec, Repository type,
+        UpdateRepositoryInput, empirical PATCH all confirm); out
+        of scope per DEC-032, probe method recorded there
 
 ---
 

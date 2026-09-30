@@ -7,9 +7,10 @@ last_commit: 1fcf323
 
 ## Current Focus
 
-Command-model reconsideration (user-driven): `delete` landed
-(DEC-031, v1.2.0, not yet live-tested); `SITE_ADDRESS.md`
-(proposed) is the standing design thread.
+Command-model reconsideration (user-driven): `delete` (DEC-031)
+and the Website-field deploy step (DEC-032) landed at v1.3.0;
+delete is not yet live-tested. `SITE_ADDRESS.md` (proposed) is
+the standing design thread.
 
 ## Active Tasks
 

@@ -623,7 +623,7 @@ A fourth, related fix landed in the same session at the provider layer (`mimeo/p
 
 ---
 
-### DEC-032: `create` Sets the Repository Website Field; Homepage-Section Checkboxes Are Out of Scope (2026-09-30)
+### DEC-032: `create` Sets the Repository Website Field; Homepage-Section Checkboxes Are Out of Scope (2026-09-29)
 
 **Status**: Active (Phase 8). Prompted by the user hand-configuring `tepiton/amoxtli.dev` as the reference and asking mimeo to do it at create time.
 

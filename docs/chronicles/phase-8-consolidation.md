@@ -845,3 +845,15 @@ removal, not an architectural choice.
 **Decisions**: none new (the fleet convention -- all deploy workflows cancel-in-progress: true -- lives in mimeo-sites).
 
 **Files**: template repos only; ARCHITECTURE.md create-flow ordering note (this commit).
+
+## Entry 71: Website field set at deploy; homepage-section checkboxes verified UI-only (2026-09-29)
+
+**What**: User hand-configured tepiton/amoxtli.dev (Website = https://amoxtli.dev/, "Use your GitHub Pages website" on, Releases/Packages/Deployments unchecked) as the reference and asked mimeo to do the same at create time, alongside topics. Implemented the automatable half: `deploy_site` now sets the repository Website field (`homepage`) to `https://{domain}/` on every deploy — fresh, `--force` recreate, and the existed path, which already configures Pages settings and the custom domain. Live-verified on tepiton/002371.xyz before wiring.
+
+**Why**: Presentation metadata is part of making a fleet of sites look intentional; the About sidebar's site link was the manual remainder after topics were automated (DEC-024-era `_set_repository_topics`).
+
+**How**: A survey against the live API split the ask. Website field = standard `homepage` PATCH property (a JSON diff of the hand-configured repo against a default one showed `homepage` as the only feature difference). The "Include in the home page" checkboxes exist nowhere in the public API: absent from the REST OpenAPI spec (`repository-update`), GraphQL `Repository` (data connections only), and `UpdateRepositoryInput`; an empirical PATCH with `has_releases`/`has_packages`/`has_deployments` on a scratch repo was silently ignored (GET-diff empty). Frontend-only state; out of scope per DEC-032, revisit if GitHub ships fields. 384 tests (one new: `_set_homepage` call shape + deploy wiring), mypy/ruff clean, v1.3.0. En passant: caught a harness-generated `.zcodeignore` that `git add -A` had swept into the feature commit — untracked, gitignored.
+
+**Decisions**: DEC-032.
+
+**Files**: `mimeo/providers/host/github.py` (`_set_homepage` + deploy_site wiring), `tests/providers/host/test_github.py`, README/ARCHITECTURE/DECISIONS/CONTEXT; commit afc8159 (v1.3.0).

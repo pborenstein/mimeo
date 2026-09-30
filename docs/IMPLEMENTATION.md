@@ -502,6 +502,16 @@ front-door verbs than it started with. See DEC-021.
         deferred to use; 8 open decisions; design-only until a real
         builtin-site need -- but the join re-key has standalone value
         (renamed repos orphan themselves in status today)
+- [x] Create deploy-ordering analysis; fleet workflow concurrency
+      fix (2026-09-29, Entry 70)
+  - [x] Confirmed substitution already precedes Pages enable in
+        `_create_from_template` (every content commit lands first);
+        the flash-of-template window lived in the four non-eleventy
+        templates' starter concurrency (`cancel-in-progress:
+        false`) -- flipped to true and pushed per-repo, all four
+        post-push workflow runs green; eleventy family unchanged
+        (already true); ordering guarantee documented in
+        ARCHITECTURE.md's create flow
 
 ---
 

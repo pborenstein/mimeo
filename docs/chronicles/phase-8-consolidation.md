@@ -833,3 +833,15 @@ removal, not an architectural choice.
 **Decisions**: DEC-031 (delete semantics, scope limits, and alternatives incl. the rejected granular subset flags). SITE_ADDRESS.md carries 8 open decisions and stays proposed -- build only when a real builtin-site need exists, but its join re-key (repo -> Pages cname) has standalone value for renamed repos.
 
 **Files**: `mimeo/cli/delete.py` (new); `mimeo/providers/host/github.py`, `mimeo/providers/registrar/porkbun.py`; `tests/test_cli.py`, `tests/providers/host/test_github.py`, `tests/providers/registrar/test_porkbun.py`; README, ARCHITECTURE.md, DECISIONS.md, CONTEXT.md, `docs/SITE_ADDRESS.md` (new). Commits: 840dfdb (fleet reconcile + park), 24df411 (SITE_ADDRESS), ce0689f (delete, v1.2.0).
+
+## Entry 70: Create's flash-of-template question -- ordering already correct; fleet concurrency fixed (2026-09-29)
+
+**What**: User asked whether the live page briefly serves the un-substituted template (template -> Pages -> substitution) and proposed enabling Pages only after substitution. Analysis: mimeo's order is already substitution-first -- `_create_from_template` finishes every content commit (generate, dev-file strip, manifest delete, `_apply_template_manifest`) before `deploy_site` enables Pages, sets the cname, or enforces HTTPS. The real window was one layer down: the deploy workflows trigger per push, and the run fired by the raw generate push can deploy un-substituted content if it executes just after Pages comes online. The seven eleventy templates already closed this (`concurrency: group pages, cancel-in-progress: true`); the four non-eleventy templates (mimeo, laptopistan, pandoc-simple, pandoc-resume) carried the GitHub starter default (`false`) and were exposed.
+
+**Why**: The window is real but rarely observed -- fresh domains are unreachable until DNS propagates and the cert issues, and `--force` recreations are masked by cert re-provisioning -- so it survived unnoticed. The ordering guarantee was also undocumented; both are worth writing down.
+
+**How**: One-line flip in the four non-eleventy workflows (the static.yml starter comment, whose do-NOT-cancel rationale no longer applied, removed too); committed and pushed per-repo -- tepiton/mimeo 7186c85, laptopistan 6e22169, pandoc-simple 1086161, pandoc-resume 658bfd6 (the first three rebased over the user's out-of-band README/rename commits, which touched nothing workflow-related). All four post-push runs green. Local tepiton/mimeo checkout's remote URL moved off the pre-rename mimeo.lol redirect. Fleet state noted in the mimeo-sites TEMPLATES meta-repo (d52bc56). No mimeo-repo code change.
+
+**Decisions**: none new (the fleet convention -- all deploy workflows cancel-in-progress: true -- lives in mimeo-sites).
+
+**Files**: template repos only; ARCHITECTURE.md create-flow ordering note (this commit).

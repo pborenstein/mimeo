@@ -196,7 +196,7 @@ Report result: url, https_pending, dns_pending
   (no propagation poll -- run 'mimeo status' to confirm)
 ```
 
-`--force` replaces an existing repository's content from the template; without it, an existing repo is left unchanged and DNS configuration is skipped (nothing new to point at). The domain-substitution manifest (DEC-024) reruns automatically on both plain `create` and `create --force`: a template shipping `mimeo.template.json` has its declared self-reference points rewritten to the deployed domain, with failures surfaced loudly rather than skipped.
+`--force` replaces an existing repository's content from the template; without it, an existing repo is left unchanged and DNS configuration is skipped (nothing new to point at). The domain-substitution manifest (DEC-024) reruns automatically on both plain `create` and `create --force`: a template shipping `mimeo.template.json` has its declared self-reference points rewritten to the deployed domain, with failures surfaced loudly rather than skipped. Deploy ordering guarantees no flash of raw template content: every content commit (dev-file strip, manifest deletion, substitutions) precedes Pages enablement, and all template deploy workflows use `concurrency: group "pages", cancel-in-progress: true` so the burst of runs those commits trigger collapses to the final content (Entry 70).
 
 ### `mimeo delete`
 

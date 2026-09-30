@@ -695,6 +695,28 @@ class GitHubHost(Host):
             data=data,
         )
 
+    def _set_homepage(self, repo_full_name: str, domain: str) -> None:
+        """Set the repository's Website field to the site URL.
+
+        Puts the site link in the repo's About sidebar. The dialog's
+        "Include in the home page" checkboxes (releases/packages/
+        deployments) are UI-only state with no REST or GraphQL
+        surface and are deliberately not attempted (DEC-032).
+
+        Args:
+            repo_full_name: Full repository name (owner/repo)
+            domain: Site domain; the Website field becomes
+                https://{domain}/
+
+        Raises:
+            HostError: If the API call fails
+        """
+        self._gh_api(
+            f"repos/{repo_full_name}",
+            method="PATCH",
+            data={"homepage": f"https://{domain}/"},
+        )
+
     def enable_https_enforcement(self, repo_full_name: str) -> bool:
         """Enable HTTPS enforcement for GitHub Pages.
 
@@ -737,7 +759,8 @@ class GitHubHost(Host):
         1. Create a GitHub repository from the template (domain name as repo name)
         2. Enable GitHub Pages
         3. Configure custom domain
-        4. Enable HTTPS enforcement (if certificate is ready)
+        4. Set the repository Website field to https://{domain}/ (DEC-032)
+        5. Enable HTTPS enforcement (if certificate is ready)
 
         If the repository already exists, skips creation and only configures
         GitHub Pages settings and custom domain.
@@ -764,6 +787,7 @@ class GitHubHost(Host):
 
             self._enable_github_pages(repo_full_name)
             self._set_custom_domain(repo_full_name, domain)
+            self._set_homepage(repo_full_name, domain)
             https_enabled = self.enable_https_enforcement(repo_full_name)
 
             return DeployResult(

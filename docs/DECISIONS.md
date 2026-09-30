@@ -623,6 +623,20 @@ A fourth, related fix landed in the same session at the provider layer (`mimeo/p
 
 ---
 
+### DEC-032: `create` Sets the Repository Website Field; Homepage-Section Checkboxes Are Out of Scope (2026-09-30)
+
+**Status**: Active (Phase 8). Prompted by the user hand-configuring `tepiton/amoxtli.dev` as the reference and asking mimeo to do it at create time.
+
+**Context**: The repo's "Edit repository details" dialog has a Website field and, under "Include in the home page", checkboxes for Releases / Packages / Deployments and "Use your GitHub Pages website". A survey against the live API found the two halves have completely different automatability: the Website field is the standard `homepage` property (PATCH `/repos/{owner}/{repo}`), while the homepage-section checkboxes exist nowhere in the public API — absent from the REST OpenAPI spec (`repository-update` schema), from GraphQL `Repository` (only data connections: `releases`, `packages`, `deployments`), and from `UpdateRepositoryInput`; and an empirical PATCH with `has_releases`/`has_packages`/`has_deployments` on a scratch repo was silently ignored. They are frontend-only state; the GitHub community discussion requesting API access is the tracking thread.
+
+**Decision**: `deploy_site` sets the repository Website field to `https://{domain}/` for every deploy (fresh, `--force` recreate, and the existed path — which already configures Pages settings and the custom domain, so presentation metadata is in keeping). The homepage-section checkboxes are deliberately not attempted; a `deploy` cannot toggle what no API exposes.
+
+**Alternatives considered**: Drive the web UI (rejected — screen-scraping GitHub's frontend is exactly the fragility mimeo exists to avoid); re-check the API surface periodically (kept as a note, not code — revisit when GitHub ships fields; the probe method is recorded here and in Entry 71's chronicle).
+
+**Consequences**: New and re-deployed sites get the site link in the About sidebar automatically; hiding the Releases/Packages/Deployments sections stays a per-repo manual click. One extra API call per deploy.
+
+---
+
 ## Superseded/Deprecated
 
 [No superseded decisions yet]

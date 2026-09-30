@@ -60,3 +60,6 @@ config.toml
 data/
 
 .zcode/
+
+# ZCode harness local config
+.zcodeignore

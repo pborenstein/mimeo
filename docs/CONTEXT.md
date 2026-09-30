@@ -41,7 +41,7 @@ None.
 - Exit codes (DEC-027/028): only confirmed-transient exits 5.
   Tests building 404/422 `HostError`s must pass `status_code=`.
 - Repo is public-as-visible; live usage is the real E2E hedge
-  (`scripts/e2e_smoke.sh` on a junk domain). Version 1.2.0; bump
+  (`scripts/e2e_smoke.sh` on a junk domain). Version 1.3.0; bump
   pyproject + `__version__` + `uv lock` together.
 
 ## Next Session

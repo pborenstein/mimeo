@@ -168,8 +168,8 @@ Deploy to GitHub Pages (GitHubHost)
   ▼                              ▼
   create from template       enable Pages
   POST /repos/{template_org}/ set custom domain
-    {template}/generate      try HTTPS enforcement
-  set topics: mimeo,               │
+    {template}/generate      set Website field (DEC-032)
+  set topics: mimeo,         try HTTPS enforcement
     landing-page, github-pages     │
         └──────────────────────────┘
                    │

@@ -62,7 +62,7 @@ Checks that all prerequisites are met before running any other command: Python v
 
 ### create
 
-Provisions one or more domains end to end. Templates are looked up in the template org (see [Global options](#global-options)); the default template is `mimeo`. Multiple domains are processed concurrently (up to 5 workers); use `--sequential` for verbose per-step output or when debugging.
+Provisions one or more domains end to end. Templates are looked up in the template org (see [Global options](#global-options)); the default template is `mimeo`. Multiple domains are processed concurrently (up to 5 workers); use `--sequential` for verbose per-step output or when debugging. Every deploy sets the repository's Website field to the site URL; the "Include in the home page" checkboxes (releases/packages/deployments) have no API surface and remain a manual per-repo setting.
 
 | Task | Command |
 |:-----|:--------|

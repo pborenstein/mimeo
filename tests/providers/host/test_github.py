@@ -797,60 +797,77 @@ class TestGitHubHost:
             assert call_args[1]["method"] == "PUT"
             assert call_args[1]["data"]["cname"] == "example.com"
 
+    def test_set_homepage(self, host: GitHubHost) -> None:
+        """The Website field becomes the site URL with trailing slash."""
+        with patch.object(host, "_gh_api") as mock_api:
+            mock_api.return_value = {}
+            host._set_homepage("testorg/example.com", "example.com")
+            mock_api.assert_called_once_with(
+                "repos/testorg/example.com",
+                method="PATCH",
+                data={"homepage": "https://example.com/"},
+            )
+
     def test_deploy_site_new_repo(self, host: GitHubHost) -> None:
         """Test successful deployment creates repo from template."""
         with patch.object(host, "_create_from_template") as mock_create:
             with patch.object(host, "_enable_github_pages") as mock_pages:
                 with patch.object(host, "_set_custom_domain") as mock_domain:
-                    with patch.object(host, "enable_https_enforcement") as mock_https:
-                        mock_create.return_value = ("testorg/example.com", True, False)
-                        mock_https.return_value = True
+                    with patch.object(host, "_set_homepage") as mock_homepage:
+                        with patch.object(host, "enable_https_enforcement") as mock_https:
+                            mock_create.return_value = ("testorg/example.com", True, False)
+                            mock_https.return_value = True
 
-                        result = host.deploy_site("example.com")
+                            result = host.deploy_site("example.com")
 
-                        assert result.url == "https://example.com"
-                        assert result.repo_created is True
-                        assert result.repo_existed is False
-                        assert result.https_enabled is True
-                        mock_create.assert_called_once_with(
-                            repo_name="example.com",
-                            owner="testorg",
-                            template_repo=DEFAULT_TEMPLATE,
-                            force=False,
-                        )
-                        mock_pages.assert_called_once_with("testorg/example.com")
-                        mock_domain.assert_called_once_with("testorg/example.com", "example.com")
+                            assert result.url == "https://example.com"
+                            assert result.repo_created is True
+                            assert result.repo_existed is False
+                            assert result.https_enabled is True
+                            mock_create.assert_called_once_with(
+                                repo_name="example.com",
+                                owner="testorg",
+                                template_repo=DEFAULT_TEMPLATE,
+                                force=False,
+                            )
+                            mock_pages.assert_called_once_with("testorg/example.com")
+                            mock_domain.assert_called_once_with("testorg/example.com", "example.com")
+                            mock_homepage.assert_called_once_with(
+                                "testorg/example.com", "example.com"
+                            )
 
     def test_deploy_site_existing_repo(self, host: GitHubHost) -> None:
         """Test deployment with existing repo returns repo_created=False."""
         with patch.object(host, "_create_from_template") as mock_create:
             with patch.object(host, "_enable_github_pages"):
                 with patch.object(host, "_set_custom_domain"):
-                    with patch.object(host, "enable_https_enforcement") as mock_https:
-                        mock_create.return_value = ("testorg/example.com", False, True)
-                        mock_https.return_value = False
+                    with patch.object(host, "_set_homepage"):
+                        with patch.object(host, "enable_https_enforcement") as mock_https:
+                            mock_create.return_value = ("testorg/example.com", False, True)
+                            mock_https.return_value = False
 
-                        result = host.deploy_site("example.com")
+                            result = host.deploy_site("example.com")
 
-                        assert result.repo_created is False
-                        assert result.repo_existed is True
+                            assert result.repo_created is False
+                            assert result.repo_existed is True
 
     def test_deploy_site_custom_template(self, host: GitHubHost) -> None:
         """Test deployment passes custom template to _create_from_template."""
         with patch.object(host, "_create_from_template") as mock_create:
             with patch.object(host, "_enable_github_pages"):
                 with patch.object(host, "_set_custom_domain"):
-                    with patch.object(host, "enable_https_enforcement", return_value=True):
-                        mock_create.return_value = ("testorg/example.com", True, False)
+                    with patch.object(host, "_set_homepage"):
+                        with patch.object(host, "enable_https_enforcement", return_value=True):
+                            mock_create.return_value = ("testorg/example.com", True, False)
 
-                        host.deploy_site("example.com", template="pandoc-simple")
+                            host.deploy_site("example.com", template="pandoc-simple")
 
-                        mock_create.assert_called_once_with(
-                            repo_name="example.com",
-                            owner="testorg",
-                            template_repo="pandoc-simple",
-                            force=False,
-                        )
+                            mock_create.assert_called_once_with(
+                                repo_name="example.com",
+                                owner="testorg",
+                                template_repo="pandoc-simple",
+                                force=False,
+                            )
 
     def test_deploy_site_error_handling(self, host: GitHubHost) -> None:
         """Test unexpected errors are wrapped in HostError."""

@@ -881,3 +881,15 @@ removal, not an architectural choice.
 **Decisions**: none new -- still a proposed design. OD #2's recommendation changed (gate to warning + DNSSEC refusal); OD #1 unchanged and still the first decision to make.
 
 **Files**: `docs/NETLIFY.md`; IMPLEMENTATION.md, CONTEXT.md, this entry; this commit.
+
+## Entry 74: Documentation-principles pass over the remaining docs (2026-10-01)
+
+**What**: The Entry 67 gist (documentation principles) applied to the rest of the doc set. SITE_ADDRESS.md and SUBDOMAINS.md de-jargonized (14 and 6 wording spots); README's test count corrected (361 to 384, verified by running the suite).
+
+**Why**: The Entry 73 review found AI-tell prose in the first NETLIFY.md draft, and the other two proposed-design docs were written in the same voice: "welds them together", "that coincidence *is* the design", "silently splits the moment", "right for free", italics used for emphasis. The user asked for the same treatment project-wide.
+
+**How**: Surgical wording edits to the two design docs -- meaning, structure, and every open decision unchanged; only the phrasing ("ties them together", "the code relies on that", "stops matching as soon as", "correct automatically"). An audit decided where the gist does not apply: chronicles, DECISIONS.md, and CODE_REVIEW.md are point-in-time records and rewriting them would falsify the record; IMPLEMENTATION.md and CONTEXT.md are fixed-format trackers; CLAUDE.md is excluded by the gist's own rule (LLM config files); ARCHITECTURE.md, TROUBLESHOOTING.md, INSTALLATION.md, docs/README.md, and the root README were audited and left alone (the README was the Entry 67 work itself; TROUBLESHOOTING's Symptoms/Solutions labels are a consistent operator-doc convention, not pseudo-headings). Verified by grep: none of the flagged vocabulary remains in the two edited files.
+
+**Decisions**: none new (style only). Policy recorded: the gist governs all prose docs going forward; point-in-time records are never rewritten retroactively.
+
+**Files**: `docs/SITE_ADDRESS.md`, `docs/SUBDOMAINS.md`, `README.md`; IMPLEMENTATION.md, CONTEXT.md, this entry; this commit.

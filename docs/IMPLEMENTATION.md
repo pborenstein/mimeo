@@ -543,6 +543,16 @@ front-door verbs than it started with. See DEC-021.
         drift becomes NS-and-attachment; `netlify.toml` carries
         the repo-side configuration incl. build plugins (OD #6);
         full prose rewrite to the Entry 67 gist
+- [x] Documentation-principles pass over the remaining docs
+      (2026-10-01, Entry 74)
+  - [x] SITE_ADDRESS.md (14 spots) and SUBDOMAINS.md (6 spots)
+        de-jargonized -- wording only, meaning and decisions
+        unchanged; README test count corrected 361 -> 384
+        (verified by running the suite). Gist exemptions
+        recorded: chronicles, DECISIONS.md, CODE_REVIEW.md are
+        point-in-time records, never rewritten;
+        ARCHITECTURE/TROUBLESHOOTING/INSTALLATION/docs index
+        audited and already compliant
 
 ---
 

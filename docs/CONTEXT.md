@@ -7,16 +7,14 @@ last_commit: ff6c2ea
 
 ## Current Focus
 
-Command-model reconsideration (user-driven): two proposed designs
-standing -- `docs/SITE_ADDRESS.md` and `docs/NETLIFY.md` (second
-host, revised after user review). `delete` (DEC-031) and
-Website-field deploy (DEC-032) landed at v1.3.0.
+Command-model work: `docs/SITE_ADDRESS.md` and `docs/NETLIFY.md`
+(second host) both proposed; `delete` (DEC-031) + Website field
+(DEC-032) shipped at v1.3.0.
 
 ## Active Tasks
 
 - [ ] **Netlify second host**: `docs/NETLIFY.md` proposed,
-      undecided; first decision is the DNS mode (Open Decision #1);
-      DEC-030's factory-revisit trigger.
+      undecided; first decision is the DNS mode (OD #1).
 - [ ] **Command model**: `docs/SITE_ADDRESS.md` proposed,
       undecided; more command questions queued from the user.
 - [ ] **Backlog**: rec #6 long-termers — Pages IPs from
@@ -36,17 +34,17 @@ None.
 - Templates: 11 repos in `tepiton` (7 Eleventy starters, 3
       single-page, pandoc-resume). Canonical inventory: mimeo-sites
       TEMPLATES/CLAUDE.md. `--force` is the only in-place replacement.
-- Netlify (Entries 72–73): `netlify api` works like `gh api`; repo
-      link needs the one-time browser-only GitHub App install; in
-      mode A Netlify writes the site records and DNSSEC is the only
-      refusal-worthy NS-switch condition; `netlify.toml` carries the
-      repo-side configuration.
+- Netlify (Entries 72–73): mode A — Netlify writes the site records,
+      mimeo creates zone/attaches/switches NS; DNSSEC is the only
+      NS-switch refusal; `netlify.toml` carries repo-side config.
 - Org model: `github.template_org` (tepiton) holds templates;
       `github.default_org` receives site repos; `--template-org`/
       `--deploy-org` override per invocation.
+- Doc style: the Entry 67 gist governs all prose docs (Entries
+      73–74); chronicles/DECISIONS/CODE_REVIEW are never rewritten.
 - Exit codes (DEC-027/028): only confirmed-transient exits 5.
       Tests building 404/422 `HostError`s must pass `status_code=`.
-- Repo is public-as-visible; live usage is the real E2E hedge
+- Repo is public-as-visible; live usage is the E2E hedge
       (`scripts/e2e_smoke.sh` on a junk domain). Version 1.3.0; bump
       pyproject + `__version__` + `uv lock` together.
 

@@ -26,10 +26,11 @@ becomes "a site address."
 
 The argument to `mimeo create` plays five roles at once: repo name, Pages
 custom domain, DNS zone, `status`/`sync` join key, and the `{domain}` value
-in template manifests. `deploy_site` (`github.py:731`) welds them together —
+in template manifests. `deploy_site` (`github.py:731`) ties them together —
 `repo_name=domain`, `_set_custom_domain(domain)`,
-`url=f"https://{domain}"` — and for every site mimeo manages today, that
-coincidence *is* the design. A `*.github.io` site breaks it completely: the
+`url=f"https://{domain}"` — and for every site mimeo manages today the five
+values are the same string, which is what the code relies on. A
+`*.github.io` site breaks that completely: the
 repo is the site, the hostname is GitHub's, and there is no zone to own, no
 records to write, no registrar call to make. The model underneath should be
 **repo + Pages always; custom domain (and therefore a zone) optional**:
@@ -49,7 +50,7 @@ the first thing `create` does after argument validation is verify ownership
 (`create.py:120`), and Porkbun's answer for `tepiton.github.io` is "not
 registered in this Porkbun account." Nothing is created.
 
-Two further walls stand behind that one:
+Two further problems stand behind that one:
 
 - Config load requires Porkbun credentials unconditionally (`config.py:111`)
   — even a hypothetical builtin-only operation cannot run without them.
@@ -57,8 +58,8 @@ Two further walls stand behind that one:
   site would have its "custom domain" set to `org.github.io`, which is not
   ours to set.
 
-So the failure mode is safe, and — as with subdomains — the change is
-structural because of what lies past the gate, not the gate itself.
+The failure mode is safe; as with subdomains, the change is structural
+because of what comes after the gate, not the gate itself.
 
 ## What Needs to Happen
 
@@ -71,8 +72,8 @@ sites without zones exist.
 by every command. Grammar: a `.github.io` suffix means builtin (root if
 bare, project if it carries `/path` — the address names the repo either
 way); anything else is a custom-domain site and parses to exactly today's
-values. The suffix is unambiguous — nobody owns `github.io` but GitHub —
-so the CLI keeps a single positional argument. One optional flag, `--repo`,
+values. The suffix is unambiguous (only GitHub owns `github.io`), so the
+CLI keeps a single positional argument. One optional flag, `--repo`,
 decouples the repository name on custom-domain sites; the domain remains
 the site's identity (URL, join key), and the repo name becomes an
 implementation detail. Pointed at an existing hand-made repo, this is also
@@ -94,13 +95,13 @@ wait. `DeployResult.url` derives from hostname + path instead of echoing
 the operand.
 
 **3. Add a `{url}` token to the manifest grammar.** A root site works with
-`{domain}` verbatim (`org.github.io`). A project site's truthful URL has a
-path, and manifests like pandoc-resume's `https://{domain}/` would lie
-about it. Add `{url}` — the full site URL, scheme + host + path — and leave
-`{domain}` meaning hostname. The manifest parser is strict, so old
-manifests and old mimeo binaries fail loudly rather than silently
-mis-substituting; the `version` field exists for exactly this seam
-(DEC-024 addendum 3).
+`{domain}` verbatim (`org.github.io`). A project site's real URL has a
+path, and manifests like pandoc-resume's `https://{domain}/` would
+substitute the wrong value. Add `{url}` — the full site URL, scheme +
+host + path — and leave `{domain}` meaning hostname. The manifest parser
+is strict, so old manifests and old mimeo binaries fail loudly rather
+than silently mis-substituting; the `version` field exists for exactly
+this case (DEC-024 addendum 3).
 
 **4. Teach the fleet views builtin sites — and re-key the join.**
 `status`/`sync` enumeration gains a third source: repos with Pages
@@ -110,9 +111,9 @@ account; `sync` skips them with a reason ("builtin Pages host —
 nothing to converge") rather than treating them as drift. The join
 itself moves off repo-name equality (`domain in repo_names`,
 `status.py:487`) onto the Pages custom-domain setting read per repo:
-repo → `cname` → hostname → zone. Name membership silently splits the
-moment repo and domain decouple (change 1's `--repo` form) — and
-already orphans any renamed repo today — while the `cname` is what
+repo → `cname` → hostname → zone. Name membership stops matching as soon
+as repo and domain decouple (change 1's `--repo` form) — and
+already misses any renamed repo today — while the `cname` is what
 the site actually serves. The per-repo Pages-config read this
 requires is the same one that distinguishes builtin sites.
 
@@ -135,7 +136,7 @@ segment of the address, not the address.
   what already works.
 - **The provider ABCs.** Registrar and Host are already separate; DNS is
   already conditional in practice (`--skip-dns`, and DNS is skipped when
-  the repo existed). This design makes the condition principled instead of
+  the repo existed). This design makes the condition explicit instead of
   incidental.
 - **The existed-repo no-op.** Adopting the already-live `tepiton.github.io`
   falls out of the `repo_existed` path (DEC-027/028): warn recap, exit 0.
@@ -145,13 +146,13 @@ segment of the address, not the address.
 
 | # | Question | Recommendation | Rationale |
 |---|----------|----------------|-----------|
-| 1 | Whose `github.io`? Address prefix vs `--deploy-org` vs authenticated user | The prefix *is* the destination account (fully qualified, cf. #8): a conflicting `--deploy-org` is refused before any work; a matching one is a redundant no-op; with no flag the prefix overrides `default_org`, being explicit input. Personal sites: `user.github.io` with no flag | A repo named `tepiton.github.io` in another account never serves at `tepiton.github.io` — it becomes a path-site at `pborenstein.github.io/tepiton.github.io/`. One spelling per fact |
+| 1 | Whose `github.io`? Address prefix vs `--deploy-org` vs authenticated user | The prefix names the destination account (fully qualified, cf. #8): a conflicting `--deploy-org` is refused before any work; a matching one is a redundant no-op; with no flag the prefix overrides `default_org`, being explicit input. Personal sites: `user.github.io` with no flag | A repo named `tepiton.github.io` in another account never serves at `tepiton.github.io` — it becomes a path-site at `pborenstein.github.io/tepiton.github.io/`. Each fact gets one spelling |
 | 2 | `{url}` within manifest version 1, or bump to 2 | Bump to 2 | An old mimeo handed a v1 manifest containing `{url}` should say "unsupported manifest version," not mis-substitute; the version field was added for precisely this |
 | 3 | Are builtin sites in `status --all` / `sync --all` by default? | Yes, with `-` registrar columns; sync skips with reason | They are fleet members; hiding them recreates the "invisible hand-made site" problem `tepiton.github.io` already embodies |
 | 4 | Does `{domain}` change meaning for builtin sites? | No — it stays "the hostname"; `{url}` carries the path | Grammar stability; feeds and canonical URLs want the distinction |
-| 5 | Identity (DEC-021) | Record the widening when built: "Pages fleet manager; domains optional" | Scope creep only if unwritten |
-| 6 | Merge with the subdomain design or stay separate? | Build `SiteSpec` now with `zone` nullable; subdomains later reuse it (`zone` = longest registered suffix) | One model, two address cases; the parked design's changes 1–2 become free |
-| 7 | Free-form repo names on custom-domain sites (`--repo foo`)? | Allow; default stays repo = hostname | The domain is the site's identity (URL, join key); the repo name is an implementation detail. Also yields "adopt an existing repo, attach a domain" for free via the existed-repo path |
+| 5 | Identity (DEC-021) | Record the widening when built: "Pages fleet manager; domains optional" | The wider scope becomes scope creep only if left unwritten |
+| 6 | Merge with the subdomain design or stay separate? | Build `SiteSpec` now with `zone` nullable; subdomains later reuse it (`zone` = longest registered suffix) | One model, two address cases; the parked design's changes 1–2 are then already done |
+| 7 | Free-form repo names on custom-domain sites (`--repo foo`)? | Allow; default stays repo = hostname | The domain is the site's identity (URL, join key); the repo name is an implementation detail. Also gives "adopt an existing repo, attach a domain" as a side effect of the existed-repo path |
 | 8 | Does `--repo` apply to builtin addresses? | No — reject it | The builtin forms already name their repo in the address (`org.github.io` is the root repo; `org.github.io/x` is repo `x`); a second spelling only creates contradictions |
 
 ## Suggested Staging
@@ -164,7 +165,7 @@ Two passes, each independently landable and testable:
    reasons, and the invariant retirement, exercised against an org
    holding both kinds of site.
 
-Sequencing note: change 1's `--repo` form silently splits in `status`
+Sequencing note: change 1's `--repo` form stops matching in `status`
 until change 4's re-keyed join lands — either ship `--repo` with pass 2
 or pull the join re-key into pass 1.
 

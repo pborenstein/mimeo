@@ -28,7 +28,7 @@ Every "domain" in mimeo is a single string playing three roles at once:
    against Porkbun registrations.
 
 For an apex domain (`example.com`) all three roles are the same string, and
-that coincidence *is* the current design. A subdomain splits them:
+the current design depends on that coincidence. A subdomain splits them:
 
 ```
 site hostname:   service.example.com    repo name, Pages CNAME, URL
@@ -39,7 +39,7 @@ record name:     service                the label inside the zone
 It also introduces a relationship the code has never had to think about:
 **one zone can contain many sites**. `example.com`, `service.example.com`,
 and `blog.example.com` are three sites in one zone. Every piece of logic that
-implicitly assumes "this zone belongs to this one site" has to learn to share.
+implicitly assumes "this zone belongs to this one site" must be updated to share.
 
 ## Behavior Today
 
@@ -56,9 +56,9 @@ than a one-line fix is what would happen past that gate:
 - Nameserver checks would query the subdomain, which has no NS records of
   its own — the answer lives at the zone.
 - DNS record calls would go to a "zone" that is not a zone.
-- Worst, the DNS desired state for an apex site (A records at the apex plus
-  a `www` CNAME) would be applied as-is — a subdomain site trying to take
-  over its parent's apex.
+- Worst of the three: the DNS desired state for an apex site (A records at
+  the apex plus a `www` CNAME) would be applied as-is, giving a subdomain
+  site control of its parent's apex.
 
 ## What Needs to Happen
 
@@ -76,10 +76,10 @@ nameservers, DNS record operations).
 Match the hostname against the account's registered domains and take the
 longest suffix: `service.example.com` → `example.com`,
 `a.b.example.com` → `example.com`. No match means the same refusal create
-gives today. This makes ownership verification *stronger* than today's exact
+gives today. This makes ownership verification stronger than today's exact
 string match, needs no new dependency, and gets multi-label suffixes
-(`co.uk`) right for free because the account — not a suffix list — defines
-where zones are cut.
+(`co.uk`) correct automatically, because the account — not a suffix list —
+defines where the zone boundaries are.
 
 **3. Give subdomain sites their own DNS desired state.** An apex site keeps
 exactly today's records (four A at the apex, CNAME for `www`). A subdomain
@@ -109,12 +109,12 @@ it. Nameserver checks can be deduplicated per zone when several sites share
 one.
 
 Minor and included: normalize hostnames (lowercase, strip trailing dot) on
-input. Deeper subdomains (`a.b.example.com`) fall out naturally — the record
-name is just `a.b`.
+input. Deeper subdomains (`a.b.example.com`) need no extra handling — the
+record name is just `a.b`.
 
 ## What Does NOT Need to Change
 
-Useful for scoping — most of the system already speaks the right language:
+Useful for scoping — most of the system already works this way:
 
 - **Hosting side entirely.** Repo creation, Pages enable, custom domain,
   HTTPS enforcement, and template customization all want the hostname,

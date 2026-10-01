@@ -534,6 +534,15 @@ front-door verbs than it started with. See DEC-021.
         (also SITE_ADDRESS's seam -- worth landing even if Netlify
         stalls); 8 open decisions; DEC-030's named
         factory-revisit trigger
+- [x] NETLIFY.md review corrections + documentation-principles
+      rewrite (2026-10-01, Entry 73)
+  - [x] NS switch corrected: records are left in place, not
+        deleted -- a warning instead of a gate, DNSSEC the only
+        refusal (OD #2); mode A record authoring is Netlify's --
+        mimeo creates the zone, attaches the domain, switches NS;
+        drift becomes NS-and-attachment; `netlify.toml` carries
+        the repo-side configuration incl. build plugins (OD #6);
+        full prose rewrite to the Entry 67 gist
 
 ---
 

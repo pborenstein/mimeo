@@ -869,3 +869,15 @@ removal, not an architectural choice.
 **Decisions**: none new -- proposed design, promoting to DECISIONS.md once the mode fork is settled. NETLIFY.md is DEC-030's named "revisit the factory" trigger.
 
 **Files**: `docs/NETLIFY.md` (new), `docs/README.md`, IMPLEMENTATION.md, CONTEXT.md; this commit.
+
+## Entry 73: NETLIFY.md after user review -- rewrite and three corrections (2026-10-01)
+
+**What**: The user reviewed the Entry 72 design doc, challenged three claims (all correct), and asked for a rewrite in the documentation-principles style (the gist from Entry 67). The doc was rewritten end to end and corrected in the same pass; no code.
+
+**Why**: The review found the doc arguing harder than the facts. First, the NS switch does not delete records: Porkbun keeps the zone and switching back restores service, so the failure is a quiet outage, not a loss -- a warning fits, and the proposed hard gate was over-built. The one case that warrants refusal is DNSSEC: the registry's DS records point at Porkbun's keys, and switching NS without updating them breaks the whole domain, site included. Second, mode A does not have mimeo writing DNS records: Netlify writes the apex/www records itself when the domain is attached, so mimeo's job is create zone, attach domain, switch NS, and drift becomes "NS still Netlify's, domain still attached" -- mode A makes mimeo's DNS work smaller, which is an argument for it the doc had underweighted. Third, `netlify.toml` carries most of the per-template configuration (build command and publish dir, build environment, plugins, redirects, headers) from the repo at build time -- this also gives pandoc-resume a documented path (build plugins) and lets the repo-link call omit `cmd`/`dir`. The prose itself failed the gist: "load-bearing", "seam", "greenfield", "welds", and label-style constructions ("What the switch leaves behind:") replaced with plain statements; the Goal commands became a Task|Command table and the prerequisites a Constraint|What-it-means table.
+
+**How**: Full rewrite of `docs/NETLIFY.md`, then the three corrections folded in, then a language pass over the new text (grep-verified: no flagged vocabulary remains). Structure unchanged: 7 changes, 8 open decisions, 2-pass staging. Open Decision #2 now reads "print the records the switch will stop serving, then proceed (skippable with `--yes`); refuse only when DNSSEC is enabled"; OD #6's rationale points at netlify.toml build plugins.
+
+**Decisions**: none new -- still a proposed design. OD #2's recommendation changed (gate to warning + DNSSEC refusal); OD #1 unchanged and still the first decision to make.
+
+**Files**: `docs/NETLIFY.md`; IMPLEMENTATION.md, CONTEXT.md, this entry; this commit.

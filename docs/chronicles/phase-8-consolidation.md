@@ -857,3 +857,15 @@ removal, not an architectural choice.
 **Decisions**: DEC-032.
 
 **Files**: `mimeo/providers/host/github.py` (`_set_homepage` + deploy_site wiring), `tests/providers/host/test_github.py`, README/ARCHITECTURE/DECISIONS/CONTEXT; commit afc8159 (v1.3.0).
+
+## Entry 72: Netlify as a second host -- proposed design (2026-10-01)
+
+**What**: User asked what adding Netlify as a host would mean (set the nameservers to Netlify, a mess of configuration, "Netlify has a CLI like gh that handles auth and associates the project with the repo"). Session was research + design: `docs/NETLIFY.md` (proposed, undecided), no code.
+
+**Why**: The Host ABC has had exactly one implementation since Phase 3, and DEC-030 explicitly deferred the host factory until a second host lands. Netlify builds from the same tepiton template repos (continuous deployment from GitHub), so the repo half of the pipeline is shared and only the serving half changes -- which exposes that `GitHubHost.deploy_site` welds the two halves together.
+
+**How**: Research confirmed every step is API-addressable through `netlify api <operation>` -- the gh pattern exactly (auth via `netlify login`/`NETLIFY_AUTH_TOKEN`, raw JSON, OpenAPI operation names): site create, repo link (`PUT /sites/{id}/repo` + `GET /{account_slug}/repos` -- requires the one-time, browser-only Netlify GitHub App install on the site-repos org), custom domain, DNS zone (`POST /dns_zones` returns the assigned NS1 nameservers), Porkbun NS handoff (`POST /domain/updateNameServers/{domain}`), Let's Encrypt cert, `force_ssl`. The doc's spine is the DNS mode fork: external DNS (keep Porkbun, reuse all existing machinery, cert converges via the sync loop) vs NS delegation (Netlify's recommended path, but MX/email hazard at the switch, delete must restore Porkbun NS -- a DEC-031 amendment -- and NS expectations become host-aware). Seven changes in dependency order, led by splitting GitHubHost into repo-provider + Pages-host; that split is also the seam SITE_ADDRESS change 2 wants, so it is worth landing even if Netlify stalls. 8 open decisions with recommendations; two-pass staging (mode B first, mode A + fleet correctness second). docs/README.md index gained the NETLIFY.md row plus two stale-row fixes (SITE_ADDRESS.md was missing; the DEC range said 030).
+
+**Decisions**: none new -- proposed design, promoting to DECISIONS.md once the mode fork is settled. NETLIFY.md is DEC-030's named "revisit the factory" trigger.
+
+**Files**: `docs/NETLIFY.md` (new), `docs/README.md`, IMPLEMENTATION.md, CONTEXT.md; this commit.

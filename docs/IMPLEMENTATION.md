@@ -523,6 +523,17 @@ front-door verbs than it started with. See DEC-021.
         REST/GraphQL surface (OpenAPI spec, Repository type,
         UpdateRepositoryInput, empirical PATCH all confirm); out
         of scope per DEC-032, probe method recorded there
+- [x] Netlify second-host design doc (2026-10-01, Entry 72)
+  - [x] `docs/NETLIFY.md` (proposed, undecided): Netlify via
+        `netlify api` (the gh pattern); the DNS mode fork gates
+        everything -- external DNS (reuse the Porkbun machinery,
+        cert converges via sync) vs NS delegation (Netlify's
+        recommended path; MX hazard at the switch, delete must
+        restore Porkbun NS -- a DEC-031 amendment, host-aware NS
+        checks); 7 changes led by the GitHubHost repo/host split
+        (also SITE_ADDRESS's seam -- worth landing even if Netlify
+        stalls); 8 open decisions; DEC-030's named
+        factory-revisit trigger
 
 ---
 

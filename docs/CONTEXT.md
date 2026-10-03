@@ -1,8 +1,8 @@
 ---
 phase: 8
 phase_name: Consolidation
-updated: 2026-10-01
-last_commit: a41fce0
+updated: 2026-10-02
+last_commit: 2835858
 ---
 
 ## Current Focus
@@ -34,14 +34,16 @@ None.
 - Templates: 11 repos in `tepiton` (7 Eleventy starters, 3
       single-page, pandoc-resume). Canonical inventory: mimeo-sites
       TEMPLATES/CLAUDE.md. `--force` is the only in-place replacement.
-- Netlify (Entries 72–73): mode A — Netlify writes the site records,
-      mimeo creates zone/attaches/switches NS; DNSSEC is the only
-      NS-switch refusal; `netlify.toml` carries repo-side config.
+- Netlify (Entries 72–75): host selection is recorded on the repo
+      topic (`github-pages` today, unread; `netlify` for Netlify
+      sites); mode A — Netlify writes the site records, DNSSEC is the
+      only NS-switch refusal; `netlify.toml` carries repo-side config.
 - Org model: `github.template_org` (tepiton) holds templates;
       `github.default_org` receives site repos; `--template-org`/
       `--deploy-org` override per invocation.
-- Doc style: the Entry 67 gist governs all prose docs (Entries
-      73–74); chronicles/DECISIONS/CODE_REVIEW are never rewritten.
+- Doc style: the Entry 67 gist governs all prose docs; explain the
+      mechanism, do not coin a label for it (user, Entry 75);
+      chronicles/DECISIONS/CODE_REVIEW are never rewritten.
 - Exit codes (DEC-027/028): only confirmed-transient exits 5.
       Tests building 404/422 `HostError`s must pass `status_code=`.
 - Repo is public-as-visible; live usage is the E2E hedge

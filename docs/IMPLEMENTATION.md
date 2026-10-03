@@ -553,6 +553,14 @@ front-door verbs than it started with. See DEC-021.
         point-in-time records, never rewritten;
         ARCHITECTURE/TROUBLESHOOTING/INSTALLATION/docs index
         audited and already compliant
+- [x] NETLIFY.md host selection rewritten: discovery -> repo topic
+      (2026-10-02, Entry 75)
+  - [x] `--host` writes the host as a repo topic (`netlify` in
+        place of the existing, unread `github-pages` tag);
+        status/sync/delete keep the single GitHub enumeration and
+        read the host from it; the cross-provider join and
+        `GET /domains` dropped; OD #8 now "Where the host choice
+        lives"
 
 ---
 

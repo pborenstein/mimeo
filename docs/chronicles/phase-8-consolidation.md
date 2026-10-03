@@ -893,3 +893,15 @@ removal, not an architectural choice.
 **Decisions**: none new (style only). Policy recorded: the gist governs all prose docs going forward; point-in-time records are never rewritten retroactively.
 
 **Files**: `docs/SITE_ADDRESS.md`, `docs/SUBDOMAINS.md`, `README.md`; IMPLEMENTATION.md, CONTEXT.md, this entry; this commit.
+
+## Entry 75: NETLIFY.md host selection moves from discovery to the repo topic (2026-10-02)
+
+**What**: The user questioned whether the design had grown too much machinery for the job -- managing template repos, the content repo, the host (GitHub or Netlify, maybe Tumblr someday), and one registrar that writes records and nameservers. NETLIFY.md's changes 3 and 5 were rewritten around a simpler answer: the host is recorded on the repository topic when the site is created, and later commands read it.
+
+**Why**: The weight was not the four concerns -- changes 1 and 2 (repo/host split, NetlifyHost) state them and are needed either way. The weight was how a command would learn which host serves a domain: the design had every command ask both providers and match on the domain, which needs two fleet sweeps per run, a rule for a domain that appears on both hosts mid-migration, and host-specific branching in every command. The record already exists: `create` tags repos `mimeo, landing-page, github-pages`, and the third topic names the host -- nothing reads it. En route the user called out "declare-don't-discover" as a slogan standing in for an explanation; the rewritten change 3 now states the thing (record the choice at creation, read it at use) instead of naming it.
+
+**How**: Change 3 is "Host selection, recorded on the repo" -- `--host {github,netlify}` writes `netlify` in place of `github-pages`; the fleet commands keep their single GitHub enumeration and read the host from the topic list (`list_mimeo_repositories` adds `topics` to its requested fields); switching hosts is `create --force --host <other>`. Change 5 reads the topic first and then applies that host's answers -- the per-host health classifiers, NS expectations, and the DEC-031 amendment remain, because those differences are real. `GET /domains` left the flow table, `NetlifyHost.deploy_site` tags the repo, and OD #8 became "Where the host choice lives". The design's shape now matches the user's decomposition: content pipeline host-independent (1-2), choice recorded at creation (3), registrar is two operations with host-specific values (4), host differences surface in one place (5). Tumblr noted as the case that checks the interface: a host with no API is a DNS record set plus "unknown".
+
+**Decisions**: none new -- still a proposed design. OD #8's question and recommendation rewritten.
+
+**Files**: `docs/NETLIFY.md`; IMPLEMENTATION.md, CONTEXT.md, this entry; this commit.

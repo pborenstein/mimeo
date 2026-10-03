@@ -65,7 +65,6 @@ be done through the API:
 | Ensure site records exist | `GET`/`POST /dns_zones/{zone_id}/dns_records` | Netlify writes the apex/www records itself when the domain is attached; this is the fallback if the API path does not (verify during implementation) |
 | Check / provision cert | `GET`/`POST /sites/{site_id}/ssl` | empty POST body = Let's Encrypt |
 | Force HTTPS | `PATCH /sites/{site_id}` | `{"force_ssl": true}` |
-| List served domains | `GET /domains` | the `list_mimeo_repositories` equivalent |
 
 Repo association has no non-interactive CLI command (`netlify init` is
 an interactive wizard); the API `PUT` is the automation path.
@@ -126,20 +125,28 @@ doing it over again.
 wrapper around `netlify api`, built like `_run_gh_command`/`_gh_api`
 (`github.py:107,158`) — including pulling the HTTP status out of error
 output into `HostError.status_code`, so the DEC-027/028 exit-code
-mapping works unchanged. `deploy_site`: create the repo (change 1),
-create the site, link the repo, add the custom domain, attempt
-force-HTTPS. `teardown_site`: delete the site; the custom domain is
-deleted with it. Health: `GET /sites/{id}/ssl` plus deploy state behind
-a classifier like `health_status`. Fleet listing: `GET /domains`.
+mapping works unchanged. `deploy_site`: create the repo with the
+`netlify` host topic (changes 1 and 3), create the site, link the repo,
+add the custom domain, attempt force-HTTPS. `teardown_site`: delete the
+site; the custom domain is deleted with it. Health: `GET /sites/{id}/ssl`
+plus deploy state behind a classifier like `health_status`.
 `required_dns_records`: mode B returns the two load-balancer records;
 mode A returns none, because the zone records are Netlify-internal.
 
-**3. Host selection.** `--host {github,netlify}` on `create`, default
-github. `status`/`sync`/`delete` find which host serves a domain by
-asking both providers and joining on the domain — GitHub via the
-`mimeo` topic, Netlify via `GET /domains`. No local state file (Open
-Decision #8). A domain claimed by both (mid-migration) is reported,
-not guessed.
+**3. Host selection, recorded on the repo.** `--host {github,netlify}`
+on `create`, default github. The choice is written where later
+commands can read it: the repository topics. Every site already
+carries its host as a topic — `create` tags repos `mimeo,
+landing-page, github-pages` — and a Netlify site gets `netlify` in
+place of `github-pages`. The record exists today and nothing reads it.
+`status`/`sync`/`delete` keep their single-source enumeration (repos
+tagged `mimeo`, one API call they already make), read the host from
+the topic list, and talk to exactly one host provider;
+`list_mimeo_repositories` adds `topics` to the fields it requests. No
+second provider sweep, no domain matching across providers, and a
+domain cannot be claimed by both hosts — the topic is the record.
+Switching hosts is `create --force --host <other>`, which recreates
+the repo and rewrites the topics. No local state file.
 
 **4. Registrar nameserver update + Netlify zone (mode A only).**
 `PorkbunRegistrar.set_nameservers(domain, ns)` wrapping
@@ -152,8 +159,9 @@ Netlify did not (see the flow table). Record-level drift checking does
 not apply on this host: Netlify owns the records it serves, so drift
 becomes "NS still Netlify's, domain still attached."
 
-**5. Update the fleet commands for two hosts.** `status`: host column,
-per-host health classifiers, host-correct NS expectations. `sync`: NS
+**5. Update the fleet commands for two hosts.** Each command reads the
+host from the repo topic and then applies that host's answers.
+`status`: host column and a health classifier per host. `sync`: NS
 check against the serving host's expectation; record drift for
 github-hosted domains, NS-and-attachment for netlify-hosted ones;
 `force_ssl` when the certificate is ready. `delete`:
@@ -205,7 +213,7 @@ them.
 | 5 | Where build configuration lives | `netlify.toml` in templates | Netlify reads it from the repository after generate; keeps the manifest single-purpose |
 | 6 | pandoc-resume on Netlify | Out of scope initially; covered by the change-7 rejection gate | Netlify's build image has no pandoc, but `netlify.toml` build plugins are the documented way to add one; validating a pandoc plugin is its own investigation. 10 of 11 templates are npm-build or static |
 | 7 | Certificate convergence | Copy the Pages lifecycle: `create` attempts force-HTTPS and reports `https_pending`; `sync` finishes when the certificate state says ready | The `https_pending`/`fixable` handling already exists; only the state names differ |
-| 8 | Host selection state: config field, flag only, or live lookup | `--host` flag now; `[defaults] host` returns together with the factory; per-domain host always resolved by asking both providers | DEC-030's rule — no config field until it works; mimeo reads state live rather than storing it |
+| 8 | Where the host choice lives | On the repository topic, written by `create`: `github-pages` today, `netlify` for Netlify sites; `[defaults] host` returns together with the factory | The record is already on every repo, unread; fleet commands keep one enumeration source and no local state file is needed. The config field waits for the factory per DEC-030's rule — no config option until it works |
 
 ## Suggested Staging
 
@@ -235,9 +243,9 @@ against `main` at `4f6c03b`.
 |--------|-------|-------|
 | 1 — repo/host split | `providers/host/github.py` → `providers/repo/github.py` (new) + `github.py` | move `_create_from_template` (:275) plus manifest/dev-strip/topics/homepage/rename/delete; `deploy_site` (:753) composes them; template constants leave the host module (`config.py:12` import) |
 | 2 — `NetlifyHost` | `providers/host/netlify.py` (new) + `tests/providers/host/test_netlify.py` | wrapper built like `_run_gh_command`/`_gh_api` (:107, :158); health classifier like `health_status` (:38); teardown like `teardown_site` (:830) |
-| 3 — host selection | `cli/create.py:130,303`; factory in `cli/_processing.py` | `--host` flag; `status.py:480,631,879`, `sync.py:167`, `delete.py:112` resolve the per-domain host |
+| 3 — host selection | `cli/create.py:130,303`; factory in `cli/_processing.py` | `--host` flag; repo topics gain the host tag; `list_mimeo_repositories` requests `topics`; `status.py:480,631,879`, `sync.py:167`, `delete.py:112` read the host from the repo data |
 | 4 — NS update + zone | `providers/registrar/porkbun.py`; `providers/dns/netlify.py` (new) | `set_nameservers` → `POST /domain/updateNameServers/{domain}`; expected-NS parameter on `check_nameservers` |
-| 5 — fleet commands | `cli/status.py`, `cli/sync.py`, `cli/delete.py`, `cli/doctor.py` | host column, per-host NS expectation, DEC-031 amendment, netlify doctor checks |
+| 5 — fleet commands | `cli/status.py`, `cli/sync.py`, `cli/delete.py`, `cli/doctor.py` | host read from the topic; host column, per-host NS expectation, DEC-031 amendment, netlify doctor checks |
 | 6 — config | `mimeo/config.py`, `config.toml.example` | `[netlify]` section, schema_version 2, env overrides |
 | 7 — templates | tepiton template repos + TEMPLATES/CLAUDE.md inventory | `netlify.toml` per template; rejection gate list |
 | tests | `tests/` | Regression: github-hosted fixtures unchanged. New: netlify deploy/teardown against mocked `netlify api` output, NS switch ordering, MX gate |

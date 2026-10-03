@@ -637,6 +637,20 @@ A fourth, related fix landed in the same session at the provider layer (`mimeo/p
 
 ---
 
+### DEC-033: Netlify Host Uses Netlify DNS — Nameserver Delegation (2026-10-02)
+
+**Status**: Decided (Phase 8); implementation not scheduled. The full design is `docs/NETLIFY.md` (proposed).
+
+**Context**: The Netlify design (Entries 72–75) offered two DNS modes. Mode A delegates the domain's nameservers to Netlify; mode B keeps DNS at Porkbun and points records at Netlify's load balancer. Mode B reuses all existing DNS code, has no nameserver-move risks, and was staged as the easier first pass. The user chose mode A: the reason to move the nameservers to Netlify is that Netlify then manages the DNS.
+
+**Decision**: Netlify-hosted sites use Netlify DNS (mode A). `create` creates the zone, attaches the domain to the site (Netlify writes the apex/www records itself), then switches the domain's nameservers at Porkbun (`POST /domain/updateNameServers/{domain}`). Before switching, `create` prints the Porkbun-zone records that will stop being served and proceeds unless DNSSEC is enabled at Porkbun — the registry's DS records point at Porkbun's keys, and switching without updating them stops the whole domain resolving. Mode B is rejected and drops out of the staging. `delete` restores Porkbun's nameservers, amending DEC-031's "nameservers are never touched" for hosts that own the zone.
+
+**Alternatives considered**: Mode B (rejected — leaves mimeo writing and checking DNS records, and certificate issuance waits on record propagation); mode B as a first pass with mode A later (rejected — a temporary path that would be partly discarded, and the goal is Netlify-managed DNS).
+
+**Consequences**: The registrar work is in scope: `set_nameservers`, Netlify zone handling, and host-aware fleet checks (NETLIFY.md changes 4–5). Record-level drift checking does not apply to Netlify-hosted sites — drift is "NS still Netlify's, domain still attached." Unmanaged records left in the Porkbun zone are abandoned, not deleted; switching the NS back restores them. GitHub-hosted sites are unaffected: Porkbun DNS, unchanged.
+
+---
+
 ## Superseded/Deprecated
 
 [No superseded decisions yet]

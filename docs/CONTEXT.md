@@ -2,19 +2,21 @@
 phase: 8
 phase_name: Consolidation
 updated: 2026-10-02
-last_commit: bc4720a
+last_commit: a943ebb
 ---
 
 ## Current Focus
 
-Command-model work: `docs/SITE_ADDRESS.md` and `docs/NETLIFY.md`
-(second host) both proposed; `delete` (DEC-031) + Website field
-(DEC-032) shipped at v1.3.0.
+Command-model work: `docs/SITE_ADDRESS.md` proposed and
+`docs/NETLIFY.md` (second host; DNS decided, DEC-033) proposed but
+unscheduled. `delete` (DEC-031) + Website field (DEC-032) shipped at
+v1.3.0.
 
 ## Active Tasks
 
-- [ ] **Netlify second host**: `docs/NETLIFY.md` proposed,
-      undecided; first decision is the DNS mode (OD #1).
+- [ ] **Netlify second host**: DNS decided (DEC-033 — Netlify
+      nameservers); remaining open decisions #2–#8; staging pass 1
+      (repo/host split) is a pure refactor, landable on its own.
 - [ ] **Command model**: `docs/SITE_ADDRESS.md` proposed,
       undecided; more command questions queued from the user.
 - [ ] **Backlog**: rec #6 long-termers — Pages IPs from
@@ -34,10 +36,11 @@ None.
 - Templates: 11 repos in `tepiton` (7 Eleventy starters, 3
       single-page, pandoc-resume). Canonical inventory: mimeo-sites
       TEMPLATES/CLAUDE.md. `--force` is the only in-place replacement.
-- Netlify (Entries 72–75): host selection is recorded on the repo
-      topic (`github-pages` today, unread; `netlify` for Netlify
-      sites); mode A — Netlify writes the site records, DNSSEC is the
-      only NS-switch refusal; `netlify.toml` carries repo-side config.
+- Netlify (Entries 72–76): DNS decided — Netlify nameservers
+      (DEC-033); host selection recorded on the repo topic;
+      `delete` restores Porkbun NS (DEC-031 amendment); DNSSEC is
+      the only NS-switch refusal; `netlify.toml` carries repo-side
+      config.
 - Org model: `github.template_org` (tepiton) holds templates;
       `github.default_org` receives site repos; `--template-org`/
       `--deploy-org` override per invocation.
@@ -52,5 +55,6 @@ None.
 
 ## Next Session
 
-User's decision on NETLIFY.md's DNS mode, or the queued command
-questions (SITE_ADDRESS also pending); On Ice unchanged.
+Build NETLIFY.md pass 1 (repo/host split — useful even if Netlify
+stalls), or settle remaining open decisions #2–#8; SITE_ADDRESS and
+the command questions still queued.

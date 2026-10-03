@@ -561,6 +561,14 @@ front-door verbs than it started with. See DEC-021.
         read the host from it; the cross-provider join and
         `GET /domains` dropped; OD #8 now "Where the host choice
         lives"
+- [x] Netlify DNS mode decided: Netlify nameservers; DEC-033
+      (2026-10-02, Entry 76)
+  - [x] Mode B (keep DNS at Porkbun) rejected; mode-conditional
+        language removed from NETLIFY.md; staging rebuilt as three
+        passes (repo/host split; full create path with zone, NS
+        switch, record warning, DNSSEC refusal; fleet correctness);
+        OD #1 marked Decided, numbering intact; DEC-031 amendment
+        recorded (delete restores Porkbun NS)
 
 ---
 

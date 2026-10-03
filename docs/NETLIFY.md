@@ -5,9 +5,8 @@ are listed at the end; once settled they should be promoted to
 `DECISIONS.md`. This is the second host that DEC-030 anticipated ("revisit
 the factory if a second registrar or host lands"). Sibling of
 `docs/SITE_ADDRESS.md` (proposed); the two share the repo-provisioning
-work but do not depend on each other. Decide the DNS mode first (Open
-Decision #1) — it determines whether the registrar changes are in scope
-at all.
+work but do not depend on each other. The DNS mode is decided (DEC-033):
+Netlify's nameservers. The remaining open questions are listed at the end.
 
 ## Goal
 
@@ -69,28 +68,29 @@ be done through the API:
 Repo association has no non-interactive CLI command (`netlify init` is
 an interactive wizard); the API `PUT` is the automation path.
 
-### The DNS mode choice
+### The DNS setup
 
-**Mode A — move the nameservers to Netlify.** This is Netlify's
-recommended path and the original motivation. Mimeo creates the zone,
-attaches the domain to the site, then updates the domain's NS at
-Porkbun (`POST /domain/updateNameServers/{domain}`; the request
-replaces the whole list). Netlify writes the site records (apex and
-www) itself when the domain is attached, so mimeo does not write them,
-and the certificate is issued automatically once the zone answers. Any
-other records in the Porkbun zone are left in place but stop being
-served; switching NS back restores them. The failure mode is a quiet
-outage. Porkbun email forwarding, for example, stops working with no
-error until someone notices. `delete` should restore Porkbun's
-nameservers; otherwise the domain stops resolving entirely.
+**The design: move the nameservers to Netlify (decided, DEC-033).**
+Mimeo creates the zone, attaches the domain to the site, then updates
+the domain's NS at Porkbun (`POST /domain/updateNameServers/{domain}`;
+the request replaces the whole list). Netlify writes the site records
+(apex and www) itself when the domain is attached, so mimeo does not
+write them, and the certificate is issued automatically once the zone
+answers. Any other records in the Porkbun zone are left in place but
+stop being served; switching NS back restores them. The failure mode
+is a quiet outage. Porkbun email forwarding, for example, stops
+working with no error until someone notices. `delete` should restore
+Porkbun's nameservers; otherwise the domain stops resolving entirely.
 
-**Mode B — keep DNS at Porkbun.** The existing DNS code is reused
-unchanged; only the record values change (apex A → `104.198.14.52`,
-www CNAME → `{site}.netlify.app`). No nameserver move, no email risk,
-`delete` unchanged. The certificate is issued only after the records
-propagate, so `create` ends `https_pending` and `sync` finishes the
-job — the same loop as today's Pages certificate handling, with more
-waiting.
+**Rejected: keep DNS at Porkbun (mode B).** The existing DNS code
+would be reused unchanged, with only the record values changed (apex
+A → `104.198.14.52`, www CNAME → `{site}.netlify.app`), and the
+nameserver move and its risks would not exist. Rejected because it
+leaves mimeo writing and checking DNS records, and because the
+certificate is issued only after the records propagate — `create`
+would end `https_pending` and `sync` would finish the job, the same
+loop as today's Pages certificate handling with more waiting. The
+point of moving to Netlify is that Netlify manages the DNS.
 
 ## Prerequisites and Constraints
 
@@ -99,16 +99,16 @@ waiting.
 | Netlify GitHub App installed on the site-repos org | One-time, in the browser, per org — the one step that cannot be scripted. Without it the repos do not appear in `GET /{account_slug}/repos` and linking fails |
 | DNS zones are unique across all Netlify accounts | One NS1 namespace. If the domain's zone exists under any account, `POST /dns_zones` fails and the fix is a Netlify support ticket |
 | Site subdomains are globally unique | The domain with dots as dashes can collide; take the suffix Netlify assigns |
-| Mode A order: zone and domain attachment, then NS switch, then certificate | An NS switch before the zone exists stops the whole domain resolving; each partial state must be fixable by `sync`, as with today's deploy ordering |
+| Deploy order: zone and domain attachment, then NS switch, then certificate | An NS switch before the zone exists stops the whole domain resolving; each partial state must be fixable by `sync`, as with today's deploy ordering |
 | DNSSEC enabled at Porkbun blocks the NS switch | The registry's DS records point at Porkbun's keys; switching NS without updating them stops the whole domain resolving for validating resolvers, and this breaks the site as well as the leftover records |
 | Free-tier build minutes are shared — 300/month across all sites | Pages builds are unmetered. Not an issue for landing pages; a ceiling for a large fleet |
 | Netlify tokens are account-wide | No per-operation scopes like `gh`'s `repo`/`workflow` |
 
 ## What Needs to Happen
 
-Seven changes, in dependency order. Changes 1–3 plus mode B deliver a
-working second host; 4–5 are the mode A work and the fleet updates;
-6–7 are the config and template work both modes need.
+Seven changes, in dependency order: 1–3 deliver a working second host;
+4–5 are the registrar work and the fleet updates; 6–7 are the config
+and template work.
 
 **1. Split `GitHubHost` into a repo provider and a Pages host.** Move
 the repository half — `_create_from_template` (`github.py:275`) with
@@ -130,8 +130,8 @@ mapping works unchanged. `deploy_site`: create the repo with the
 add the custom domain, attempt force-HTTPS. `teardown_site`: delete the
 site; the custom domain is deleted with it. Health: `GET /sites/{id}/ssl`
 plus deploy state behind a classifier like `health_status`.
-`required_dns_records`: mode B returns the two load-balancer records;
-mode A returns none, because the zone records are Netlify-internal.
+`required_dns_records`: returns none — the zone records are
+Netlify-internal.
 
 **3. Host selection, recorded on the repo.** `--host {github,netlify}`
 on `create`, default github. The choice is written where later
@@ -148,7 +148,7 @@ domain cannot be claimed by both hosts — the topic is the record.
 Switching hosts is `create --force --host <other>`, which recreates
 the repo and rewrites the topics. No local state file.
 
-**4. Registrar nameserver update + Netlify zone (mode A only).**
+**4. Registrar nameserver update + Netlify zone.**
 `PorkbunRegistrar.set_nameservers(domain, ns)` wrapping
 `POST /domain/updateNameServers/{domain}`; `check_nameservers` takes
 the expected nameservers as a parameter (Porkbun defaults for
@@ -206,8 +206,8 @@ them.
 
 | # | Question | Recommendation | Rationale |
 |---|----------|----------------|-----------|
-| 1 | DNS mode: A (delegate NS), B (external), or B then A | A is the stated destination; do B first only if the registrar work would delay the first Netlify site | B reuses the existing DNS code and is easy to undo; A is Netlify's recommended path with automatic certificates, but it moves the zone, brings the email risk, and changes delete semantics and NS checks. Decide before scheduling change 4 |
-| 2 | Unmanaged records at the NS switch (mode A) | Print the Porkbun-zone records the switch will stop serving, then proceed (skippable with `--yes`); refuse only when DNSSEC is enabled at Porkbun | The records are not deleted — switching NS back restores them — so the failure is a quiet outage, not a loss, and a warning is enough. DNSSEC is the only case where the switch breaks the site as well (the registry's DS records point at Porkbun's keys) |
+| 1 | DNS mode | **Decided (2026-10-02)**: A — delegate the nameservers to Netlify (DEC-033) | Netlify owns the records and the certificate; mode B rejected — see "The DNS setup" |
+| 2 | Unmanaged records at the NS switch | Print the Porkbun-zone records the switch will stop serving, then proceed (skippable with `--yes`); refuse only when DNSSEC is enabled at Porkbun | The records are not deleted — switching NS back restores them — so the failure is a quiet outage, not a loss, and a warning is enough. DNSSEC is the only case where the switch breaks the site as well (the registry's DS records point at Porkbun's keys) |
 | 3 | `delete` on a Netlify-DNS domain | Restore Porkbun NS and delete the site by default; zone deletion behind a flag | Leaving NS at a deleted zone breaks resolution; a leftover zone is only clutter, and may carry email someone still wants |
 | 4 | Netlify site naming | Domain with dots as dashes; accept Netlify's suffix on collision | The site name is an implementation detail (same reasoning as SITE_ADDRESS #7's `--repo`); the domain is the identity and join key |
 | 5 | Where build configuration lives | `netlify.toml` in templates | Netlify reads it from the repository after generate; keeps the manifest single-purpose |
@@ -217,18 +217,20 @@ them.
 
 ## Suggested Staging
 
-Two passes, each independently landable and testable:
+Three passes, each independently landable and testable:
 
-1. **Second host, familiar DNS** — changes 1, 2, 3 (create side), 6,
-   7, with mode B records. `create --host netlify` works end to end on
-   external DNS; the GitHub path is unchanged; change 1 lands as a pure
-   refactor with the existing tests as the check.
-2. **Netlify DNS (mode A) and fleet correctness** — changes 4, 5: the
-   NS move, the Netlify zone, the MX gate, host-aware
-   `status`/`sync`/`delete`, and the DEC-031 amendment.
+1. **Repo/host split** — change 1 alone: a pure refactor with no
+   behavior change, the existing tests as the check.
+2. **Netlify create path** — changes 2, 3, 6, 7, and the zone and NS
+   parts of change 4. `create --host netlify` works end to end: site,
+   repo link, custom domain, zone, NS switch with the record warning
+   and the DNSSEC refusal, certificate attempt.
+3. **Fleet correctness** — the rest of change 4 (expected NS in
+   checks) and change 5: host-aware `status`/`sync`/`delete` and the
+   DEC-031 amendment.
 
-Smallest slice worth shipping: change 1 + `NetlifyHost` + `--host` on
-`create`, for one static template.
+Smallest slice worth shipping: passes 1 and 2, for one static
+template — everything `create` needs.
 
 Change 1 is worth landing even if the Netlify work stops:
 `SITE_ADDRESS.md` needs the same split, and it turns `github.py` — the
@@ -248,4 +250,4 @@ against `main` at `4f6c03b`.
 | 5 — fleet commands | `cli/status.py`, `cli/sync.py`, `cli/delete.py`, `cli/doctor.py` | host read from the topic; host column, per-host NS expectation, DEC-031 amendment, netlify doctor checks |
 | 6 — config | `mimeo/config.py`, `config.toml.example` | `[netlify]` section, schema_version 2, env overrides |
 | 7 — templates | tepiton template repos + TEMPLATES/CLAUDE.md inventory | `netlify.toml` per template; rejection gate list |
-| tests | `tests/` | Regression: github-hosted fixtures unchanged. New: netlify deploy/teardown against mocked `netlify api` output, NS switch ordering, MX gate |
+| tests | `tests/` | Regression: github-hosted fixtures unchanged. New: netlify deploy/teardown against mocked `netlify api` output, NS switch ordering, record warning, DNSSEC refusal |

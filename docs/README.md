@@ -11,12 +11,12 @@ Navigation index for all Mimeo documentation files.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Developers | Component map, data flows, ASCII workflow diagrams |
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Operators | Failure diagnosis and remediation by category |
 | [IMPLEMENTATION.md](IMPLEMENTATION.md) | Contributors | Phase tracker, current tasks, completed work |
-| [DECISIONS.md](DECISIONS.md) | Contributors | Architectural decision registry (DEC-001 through DEC-032) |
+| [DECISIONS.md](DECISIONS.md) | Contributors | Architectural decision registry (DEC-001 through DEC-033) |
 | [CONTEXT.md](CONTEXT.md) | Contributors | Current session state, active tasks, blockers |
 | [CODE_REVIEW.md](CODE_REVIEW.md) | Contributors | Critical code review: verified bugs, design concerns, priorities |
 | [SUBDOMAINS.md](SUBDOMAINS.md) | Contributors | Proposed design: sites on subdomains (hostname vs. DNS zone split) |
 | [SITE_ADDRESS.md](SITE_ADDRESS.md) | Contributors | Proposed design: site addresses — builtin `*.github.io` sites, `--repo` |
-| [NETLIFY.md](NETLIFY.md) | Contributors | Proposed design: Netlify as a second host (DNS mode fork, repo/host split) |
+| [NETLIFY.md](NETLIFY.md) | Contributors | Proposed design: Netlify as a second host (DNS decided: Netlify nameservers, DEC-033) |
 
 ## Contributor Entry Points
 

@@ -905,3 +905,15 @@ removal, not an architectural choice.
 **Decisions**: none new -- still a proposed design. OD #8's question and recommendation rewritten.
 
 **Files**: `docs/NETLIFY.md`; IMPLEMENTATION.md, CONTEXT.md, this entry; this commit.
+
+## Entry 76: DNS mode decided -- Netlify nameservers (DEC-033) (2026-10-02)
+
+**What**: The user decided the Netlify design's gating question: mode A, delegate the domain's nameservers to Netlify. NETLIFY.md rewritten around the single design; DEC-033 added.
+
+**Why**: Mode B (keep DNS at Porkbun) had been staged as the easier first pass, but the reason to move the nameservers is that Netlify then manages the DNS. Mode B would leave mimeo writing and checking records and waiting on propagation for certificates. With the mode decided, every conditional in the design ("mode A only", "mode B records") resolved to one path.
+
+**How**: NETLIFY.md's DNS section retitled "The DNS setup" and led by the decided design, with mode B kept one paragraph as the rejected alternative and the reason stated. Mode-conditional language removed throughout (change 4's header, `required_dns_records`, the deploy-order constraint). Staging rebuilt from two mode-based passes to three: repo/host split (pure refactor), the full Netlify create path (site, repo link, domain, zone, NS switch with the record warning and the DNSSEC refusal, certificate attempt), then fleet correctness. OD #1 marked Decided with numbering intact so existing references resolve. DEC-033 records the decision, alternatives, and consequences: the DEC-031 amendment (`delete` restores Porkbun nameservers for hosts that own the zone), drift becoming NS-and-attachment, and unmanaged Porkbun-zone records being abandoned rather than deleted. docs index rows updated (DEC range 033).
+
+**Decisions**: DEC-033.
+
+**Files**: `docs/NETLIFY.md`, `docs/DECISIONS.md`, `docs/README.md`; IMPLEMENTATION.md, CONTEXT.md, this entry; this commit.

@@ -125,81 +125,108 @@ working second host; the [registrar nameserver work](#change-4) and the
 
 <a id="change-1"></a>
 
-**1. Split `GitHubHost` into a repo provider and a Pages host.** Move
-the repository half — `_create_from_template` (`github.py:275`) with
-its force and rename-recovery handling, manifest fetch and apply,
-dev-file strip, topics, Website field, repo delete/rename — into a repo
-provider (e.g. `providers/repo/github.py`). `GitHubHost` keeps Pages
-enable, custom domain, HTTPS, and health. `NetlifyHost` uses the same
-repo provider: a Netlify deploy still creates a GitHub repository from
-the same tepiton template. The pipeline-branch change in
-`SITE_ADDRESS.md` needs the same
-split, so doing it first means that design lands on it instead of
-doing it over again.
+**1. Split `GitHubHost` into a repo provider and a Pages host.**
+
+`GitHubHost` currently does two jobs; separate them.
+
+Moves to a repo provider (`providers/repo/github.py`):
+
+- `_create_from_template` (`github.py:275`), including force and
+  rename-recovery handling
+- manifest fetch and apply
+- dev-file strip
+- topics and the Website field
+- repo delete and rename
+
+Stays in `GitHubHost`:
+
+- Pages enable
+- custom domain
+- HTTPS enforcement
+- health
+
+`NetlifyHost` uses the same repo provider: a Netlify deploy still
+creates a GitHub repository from the same tepiton template. The
+pipeline-branch change in `SITE_ADDRESS.md` needs the same split, so
+doing it first means that design lands on it instead of doing it over
+again.
 
 <a id="change-2"></a>
 
-**2. Add `NetlifyHost`** (`providers/host/netlify.py`). A subprocess
-wrapper around `netlify api`, built like `_run_gh_command`/`_gh_api`
-(`github.py:107,158`) — including pulling the HTTP status out of error
-output into `HostError.status_code`, so the DEC-027/028 exit-code
-mapping works unchanged. `deploy_site`: create the repo with the
-`netlify` host topic (repo provider from [change 1](#change-1), topic
-from [change 3](#change-3)), create the site, link the repo,
-add the custom domain, attempt force-HTTPS. `teardown_site`: delete the
-site; the custom domain is deleted with it. Health: `GET /sites/{id}/ssl`
-plus deploy state behind a classifier like `health_status`.
-`required_dns_records`: returns none — the zone records are
-Netlify-internal.
+**2. Add `NetlifyHost`** (`providers/host/netlify.py`).
+
+A subprocess wrapper around `netlify api`, built like
+`_run_gh_command`/`_gh_api` (`github.py:107,158`), including pulling
+the HTTP status out of error output into `HostError.status_code` — the
+DEC-027/028 exit-code mapping then works unchanged.
+
+- `deploy_site`: create the repo with the `netlify` host topic (repo
+  provider from [change 1](#change-1), topic from [change 3](#change-3)),
+  create the site, link the repo, add the custom domain, attempt
+  force-HTTPS
+- `teardown_site`: delete the site; the custom domain goes with it
+- health: `GET /sites/{id}/ssl` plus deploy state, behind a classifier
+  like `health_status`
+- `required_dns_records`: none — the zone records are Netlify-internal
 
 <a id="change-3"></a>
 
-**3. Host selection, recorded on the repo.** `--host {github,netlify}`
-on `create`, default github. The choice is written where later
-commands can read it: the repository topics. Every site already
-carries its host as a topic — `create` tags repos `mimeo,
-landing-page, github-pages` — and a Netlify site gets `netlify` in
-place of `github-pages`. The record exists today and nothing reads it.
-`status`/`sync`/`delete` keep their single-source enumeration (repos
-tagged `mimeo`, one API call they already make), read the host from
-the topic list, and talk to exactly one host provider.
-`list_mimeo_repositories` moves from `gh search repos --json`, which
-has no `topics` field (checked against gh 2.102), to
+**3. Host selection, recorded on the repo.**
+
+`--host {github,netlify}` on `create`, default github. The choice is
+written where later commands can read it: the repository topics.
+`create` already tags repos `mimeo, landing-page, github-pages`; a
+Netlify site gets `netlify` in place of `github-pages`. The record
+exists today and nothing reads it.
+
+To read it, `status`/`sync`/`delete` keep their single-source
+enumeration (repos tagged `mimeo`, one API call they already make),
+take the host from the topic list, and talk to exactly one host
+provider. `list_mimeo_repositories` moves from `gh search repos --json`,
+which has no `topics` field (checked against gh 2.102), to
 `gh api search/repositories`, which returns `topics` per repo
-(verified against tepiton 2026-10-02). No
-second provider sweep, no domain matching across providers, and a
-domain cannot be claimed by both hosts — the topic is the record.
-Switching hosts is `create --force --host <other>`, which recreates
-the repo and rewrites the topics. No local state file.
+(verified against tepiton 2026-10-02).
+
+There is no second provider sweep and no domain matching across
+providers, and a domain cannot be claimed by both hosts — the topic is
+the record. Switching hosts is `create --force --host <other>`, which
+recreates the repo and rewrites the topics. No local state file.
 
 <a id="change-4"></a>
 
 **4. Registrar nameserver update + Netlify zone.**
-`PorkbunRegistrar.set_nameservers(domain, ns)` wrapping
-`POST /domain/updateNameServers/{domain}`; `check_nameservers` takes
-the expected nameservers as a parameter (Porkbun defaults for
-github-hosted domains, the zone's assigned NS for netlify-hosted
-ones). A Netlify DNS provider creates the zone, attaches the domain,
-and verifies the site records are present, creating the two only if
-Netlify did not (see the flow table). Record-level drift checking does
-not apply on this host: Netlify owns the records it serves, so drift
-becomes "NS still Netlify's, domain still attached."
+
+- `PorkbunRegistrar.set_nameservers(domain, ns)` — wraps
+  `POST /domain/updateNameServers/{domain}`
+- `check_nameservers` takes the expected nameservers as a parameter —
+  Porkbun defaults for github-hosted domains, the zone's assigned NS
+  for netlify-hosted ones
+- a Netlify DNS provider — creates the zone, attaches the domain, and
+  verifies the site records are present, creating the two only if
+  Netlify did not (see the flow table)
+
+Record-level drift checking does not apply on this host: Netlify owns
+the records it serves, so drift becomes "NS still Netlify's, domain
+still attached."
 
 <a id="change-5"></a>
 
-**5. Update the fleet commands for two hosts.** Each command reads the
-host from the repo topic and then applies that host's answers.
-`status`: host column and a health classifier per host. `sync`: NS
-check against the serving host's expectation; record drift for
-github-hosted domains, NS-and-attachment for netlify-hosted ones;
-`force_ssl` when the certificate is ready. `delete`:
-amend DEC-031's "nameservers are never touched" to "restored to
-registrar defaults for hosts that own the zone" — restore the Porkbun
-NS and delete the Netlify project. Deleting the project removes the
-site, its custom domains, and the DNS zone; there is nothing else to
-clean up on the Netlify side. `doctor`:
-check that `netlify` is installed and authenticated when that host is
-selected, plus remediation text for the GitHub App prerequisite.
+**5. Update the fleet commands for two hosts.**
+
+Each command reads the host from the repo topic and then applies that
+host's answers.
+
+- `status`: host column; a health classifier per host
+- `sync`: NS check against the serving host's expectation; record
+  drift for github-hosted domains, NS-and-attachment for netlify-hosted
+  ones; `force_ssl` when the certificate is ready
+- `delete`: restore the Porkbun NS and delete the Netlify project —
+  amends DEC-031's "nameservers are never touched" to "restored to
+  registrar defaults for hosts that own the zone." Deleting the project
+  removes the site, its custom domains, and the DNS zone; there is
+  nothing else to clean up on the Netlify side
+- `doctor`: `netlify` installed and authenticated when that host is
+  selected; remediation text for the GitHub App prerequisite
 
 <a id="change-6"></a>
 
@@ -211,18 +238,24 @@ module as part of the [repo/host split](#change-1).
 
 <a id="change-7"></a>
 
-**7. Give templates a `netlify.toml`.** Netlify ignores the Pages
-workflow files; per-repository configuration lives in a
-`netlify.toml` at the repo root, which Netlify reads from the linked
-repo at build time. Besides the build command and publish directory it
-carries the build environment (`NODE_VERSION`), build plugins,
-redirects (e.g. www to apex), and custom headers — most of the
-per-template configuration the host needs, with no mimeo code: the
-generate copies the file into every site repo. When the repo has a
-`netlify.toml`, the repo-link call can omit `cmd`/`dir`.
-Keep `mimeo.template.json` for domain substitution only (DEC-024).
-`--host netlify` rejects templates with no `netlify.toml`, naming
-them.
+**7. Give templates a `netlify.toml`.**
+
+Netlify ignores the Pages workflow files. Per-repository configuration
+lives in a `netlify.toml` at the repo root, which Netlify reads from
+the linked repo at build time. It carries:
+
+- the build command and publish directory
+- the build environment (`NODE_VERSION`)
+- build plugins
+- redirects (e.g. www to apex)
+- custom headers
+
+That is most of the per-template configuration the host needs, with no
+mimeo code — the generate copies the file into every site repo. When
+the repo has a `netlify.toml`, the repo-link call can omit
+`cmd`/`dir`. Keep `mimeo.template.json` for domain substitution only
+(DEC-024). `--host netlify` rejects templates with no `netlify.toml`,
+naming them.
 
 ## What Does NOT Need to Change
 

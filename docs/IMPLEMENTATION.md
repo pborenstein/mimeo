@@ -569,6 +569,18 @@ front-door verbs than it started with. See DEC-021.
         switch, record warning, DNSSEC refusal; fleet correctness);
         OD #1 marked Decided, numbering intact; DEC-031 amendment
         recorded (delete restores Porkbun NS)
+- [x] NETLIFY.md delete mechanics settled + invented-fact audit
+      (2026-10-02, Entry 77)
+  - [x] OD #3 decided (user, live-verified on pborenstein.dev):
+        delete = delete the Netlify project + restore the Porkbun
+        NS; the project's deletion removes site, domains, and DNS
+        zone together. Audit fixed two invented facts (gh search
+        --json has no topics field -> gh api search/repositories;
+        pandoc IS in the build image -> OD #6 reversed), dropped
+        invented precision (build-minute figure, auto-suffix,
+        support-ticket remedy), verified netlify.toml precedence and
+        unscoped PATs, and added a To Verify at Implementation table
+        (3 rows)
 
 ---
 

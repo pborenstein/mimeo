@@ -917,3 +917,15 @@ removal, not an architectural choice.
 **Decisions**: DEC-033.
 
 **Files**: `docs/NETLIFY.md`, `docs/DECISIONS.md`, `docs/README.md`; IMPLEMENTATION.md, CONTEXT.md, this entry; this commit.
+
+## Entry 77: delete mechanics settled; invented-fact audit of NETLIFY.md (2026-10-02)
+
+**What**: Two open decisions settled from the user's live Netlify testing (pborenstein.dev), followed by a hypercritical audit of NETLIFY.md for invented facts after the user called out the pattern. The audit found two.
+
+**Why**: The user migrated pborenstein.dev to Netlify by hand and reported the observable behavior: deleting the project removes the site, its custom domains, the redirects, and the DNS zone together -- nothing on the Netlify side needs separate cleanup. Two doc claims had contradicted that in opposite directions (zone deletion "behind a flag", then "the zone stays, account-level"), both wrong. The broader critique was accurate: vendor-behavior details recalled from memory were written in the same voice as verified facts and defended before being conceded.
+
+**How**: OD #3 decided: delete on a netlify-tagged repo is two steps -- delete the Netlify project, restore the Porkbun nameservers. The audit then checked every vendor claim in the doc, from this machine where possible. Two invented facts, fixed: `gh search repos --json` has no `topics` field (checked against gh 2.102), so change 3 now uses `gh api search/repositories`, which returns topics per repo (verified against tepiton); and the Netlify build image ships pandoc, reversing OD #6 -- pandoc-resume now builds like the others with a netlify.toml, no plugin. Invented details dropped: the 300-minute build figure, the auto-suffix on site-name collision, the support-ticket remedy for zone collisions. Verified and kept: netlify.toml overrides site build settings; Netlify personal access tokens are unscoped. A "To Verify at Implementation" table now holds the three claims that need API access to check (API-path record creation on domain attach, DNSSEC detection before the NS switch, build-image pandoc version). The doc's rule going forward: vendor behavior is either marked verified with a date or sits in the To Verify table.
+
+**Decisions**: OD #3 and OD #6 decided in-doc; this entry is the record. DEC-033 needed no correction -- it never claimed the zone survives.
+
+**Files**: `docs/NETLIFY.md`; IMPLEMENTATION.md, CONTEXT.md, this entry; this commit.

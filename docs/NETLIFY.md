@@ -65,8 +65,8 @@ be done through the API:
 | Check / provision cert | `GET`/`POST /sites/{site_id}/ssl` | empty POST body = Let's Encrypt |
 | Force HTTPS | `PATCH /sites/{site_id}` | `{"force_ssl": true}` |
 
-Repo association has no non-interactive CLI command (`netlify init` is
-an interactive wizard); the API `PUT` is the automation path.
+The CLI documents no command for repo association — `netlify init` is
+an interactive wizard — so the API `PUT` is the automation path.
 
 ### The DNS setup
 
@@ -97,12 +97,23 @@ point of moving to Netlify is that Netlify manages the DNS.
 | Constraint | What it means |
 |------------|---------------|
 | Netlify GitHub App installed on the site-repos org | One-time, in the browser, per org — the one step that cannot be scripted. Without it the repos do not appear in `GET /{account_slug}/repos` and linking fails |
-| DNS zones are unique across all Netlify accounts | One NS1 namespace. If the domain's zone exists under any account, `POST /dns_zones` fails and the fix is a Netlify support ticket |
-| Site subdomains are globally unique | The domain with dots as dashes can collide; take the suffix Netlify assigns |
+| DNS zones are unique across all Netlify accounts | One NS1 namespace. If the domain's zone exists under any Netlify account, `POST /dns_zones` fails |
+| Site subdomains are globally unique | The domain with dots as dashes can collide; on collision, use another name |
 | Deploy order: zone and domain attachment, then NS switch, then certificate | An NS switch before the zone exists stops the whole domain resolving; each partial state must be fixable by `sync`, as with today's deploy ordering |
 | DNSSEC enabled at Porkbun blocks the NS switch | The registry's DS records point at Porkbun's keys; switching NS without updating them stops the whole domain resolving for validating resolvers, and this breaks the site as well as the leftover records |
-| Free-tier build minutes are shared — 300/month across all sites | Pages builds are unmetered. Not an issue for landing pages; a ceiling for a large fleet |
+| Free-tier build minutes are a shared monthly pool | Pages builds are unmetered. Not an issue for landing pages; a ceiling for a large fleet |
 | Netlify tokens are account-wide | No per-operation scopes like `gh`'s `repo`/`workflow` |
+
+## To Verify at Implementation
+
+Claims this design uses but has not verified. Verified vendor behavior
+cited in the text says so; anything below is still an assumption.
+
+| Claim | How to check |
+|-------|--------------|
+| Attaching a domain to a site creates the apex/www zone records through the API, with no browser step (the UI flow does this; the user confirmed the end state 2026-10-02) | Add a domain to a scratch site via `netlify api`, then read the zone's records |
+| A way exists to detect DNSSEC state before refusing the NS switch — the Porkbun API may not expose it | Check the Porkbun API docs; fallback is a DNS query for the domain's DS records |
+| The build image's pandoc version runs pandoc-resume's build | Deploy pandoc-resume to a scratch site |
 
 ## What Needs to Happen
 
@@ -141,8 +152,11 @@ landing-page, github-pages` — and a Netlify site gets `netlify` in
 place of `github-pages`. The record exists today and nothing reads it.
 `status`/`sync`/`delete` keep their single-source enumeration (repos
 tagged `mimeo`, one API call they already make), read the host from
-the topic list, and talk to exactly one host provider;
-`list_mimeo_repositories` adds `topics` to the fields it requests. No
+the topic list, and talk to exactly one host provider.
+`list_mimeo_repositories` moves from `gh search repos --json`, which
+has no `topics` field (checked against gh 2.102), to
+`gh api search/repositories`, which returns `topics` per repo
+(verified against tepiton 2026-10-02). No
 second provider sweep, no domain matching across providers, and a
 domain cannot be claimed by both hosts — the topic is the record.
 Switching hosts is `create --force --host <other>`, which recreates
@@ -167,8 +181,9 @@ github-hosted domains, NS-and-attachment for netlify-hosted ones;
 `force_ssl` when the certificate is ready. `delete`:
 amend DEC-031's "nameservers are never touched" to "restored to
 registrar defaults for hosts that own the zone" — restore the Porkbun
-NS and delete the site; the leftover Netlify zone is harmless, and
-deleting it goes behind a flag because it may carry email. `doctor`:
+NS and delete the Netlify project. Deleting the project removes the
+site, its custom domains, and the DNS zone; there is nothing else to
+clean up on the Netlify side. `doctor`:
 check that `netlify` is installed and authenticated when that host is
 selected, plus remediation text for the GitHub App prerequisite.
 
@@ -208,10 +223,10 @@ them.
 |---|----------|----------------|-----------|
 | 1 | DNS mode | **Decided (2026-10-02)**: A — delegate the nameservers to Netlify (DEC-033) | Netlify owns the records and the certificate; mode B rejected — see "The DNS setup" |
 | 2 | Unmanaged records at the NS switch | Print the Porkbun-zone records the switch will stop serving, then proceed (skippable with `--yes`); refuse only when DNSSEC is enabled at Porkbun | The records are not deleted — switching NS back restores them — so the failure is a quiet outage, not a loss, and a warning is enough. DNSSEC is the only case where the switch breaks the site as well (the registry's DS records point at Porkbun's keys) |
-| 3 | `delete` on a Netlify-DNS domain | Restore Porkbun NS and delete the site by default; zone deletion behind a flag | Leaving NS at a deleted zone breaks resolution; a leftover zone is only clutter, and may carry email someone still wants |
+| 3 | `delete` on a Netlify-DNS domain | **Decided (2026-10-02)**: delete the Netlify project, restore the Porkbun NS | Deleting the project removes the site, its custom domains, and the DNS zone together (user-verified 2026-10-02) — nothing else to clean up on the Netlify side. The NS restore is required: once the zone is deleted, nameservers still pointing at Netlify stop the domain resolving |
 | 4 | Netlify site naming | Domain with dots as dashes; accept Netlify's suffix on collision | The site name is an implementation detail (same reasoning as SITE_ADDRESS #7's `--repo`); the domain is the identity and join key |
 | 5 | Where build configuration lives | `netlify.toml` in templates | Netlify reads it from the repository after generate; keeps the manifest single-purpose |
-| 6 | pandoc-resume on Netlify | Out of scope initially; covered by the change-7 rejection gate | Netlify's build image has no pandoc, but `netlify.toml` build plugins are the documented way to add one; validating a pandoc plugin is its own investigation. 10 of 11 templates are npm-build or static |
+| 6 | pandoc-resume on Netlify | **Decided (2026-10-02)**: build it like the others — a `netlify.toml` with the build command, no plugin | The build image ships pandoc (verified against Netlify's build-image docs 2026-10-02; an earlier draft of this row claimed the opposite). Check at implementation that the installed version runs pandoc-resume's build |
 | 7 | Certificate convergence | Copy the Pages lifecycle: `create` attempts force-HTTPS and reports `https_pending`; `sync` finishes when the certificate state says ready | The `https_pending`/`fixable` handling already exists; only the state names differ |
 | 8 | Where the host choice lives | On the repository topic, written by `create`: `github-pages` today, `netlify` for Netlify sites; `[defaults] host` returns together with the factory | The record is already on every repo, unread; fleet commands keep one enumeration source and no local state file is needed. The config field waits for the factory per DEC-030's rule — no config option until it works |
 
@@ -245,7 +260,7 @@ against `main` at `4f6c03b`.
 |--------|-------|-------|
 | 1 — repo/host split | `providers/host/github.py` → `providers/repo/github.py` (new) + `github.py` | move `_create_from_template` (:275) plus manifest/dev-strip/topics/homepage/rename/delete; `deploy_site` (:753) composes them; template constants leave the host module (`config.py:12` import) |
 | 2 — `NetlifyHost` | `providers/host/netlify.py` (new) + `tests/providers/host/test_netlify.py` | wrapper built like `_run_gh_command`/`_gh_api` (:107, :158); health classifier like `health_status` (:38); teardown like `teardown_site` (:830) |
-| 3 — host selection | `cli/create.py:130,303`; factory in `cli/_processing.py` | `--host` flag; repo topics gain the host tag; `list_mimeo_repositories` requests `topics`; `status.py:480,631,879`, `sync.py:167`, `delete.py:112` read the host from the repo data |
+| 3 — host selection | `cli/create.py:130,303`; factory in `cli/_processing.py` | `--host` flag; repo topics gain the host tag; `list_mimeo_repositories` switches to `gh api search/repositories` for topics; `status.py:480,631,879`, `sync.py:167`, `delete.py:112` read the host from the repo data |
 | 4 — NS update + zone | `providers/registrar/porkbun.py`; `providers/dns/netlify.py` (new) | `set_nameservers` → `POST /domain/updateNameServers/{domain}`; expected-NS parameter on `check_nameservers` |
 | 5 — fleet commands | `cli/status.py`, `cli/sync.py`, `cli/delete.py`, `cli/doctor.py` | host read from the topic; host column, per-host NS expectation, DEC-031 amendment, netlify doctor checks |
 | 6 — config | `mimeo/config.py`, `config.toml.example` | `[netlify]` section, schema_version 2, env overrides |

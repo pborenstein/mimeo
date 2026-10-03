@@ -581,6 +581,12 @@ front-door verbs than it started with. See DEC-021.
         support-ticket remedy), verified netlify.toml precedence and
         unscoped PATs, and added a To Verify at Implementation table
         (3 rows)
+- [x] NETLIFY.md cross-references converted to links (2026-10-03,
+      Entry 78)
+  - [x] Anchors on the seven changes; every reference links to its
+        target (23 links, no bare "change N" left); references with
+        no navigational value dropped. New doc-style rule: link to
+        what you reference
 
 ---
 

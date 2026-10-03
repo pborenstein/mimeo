@@ -58,7 +58,7 @@ be done through the API:
 | Verify auth | `netlify status` | the `gh auth status` equivalent |
 | Create site | `POST /sites` | in the team's account slug |
 | List linkable repos | `GET /{account_slug}/repos` | only repos the Netlify GitHub App can see |
-| Link site to repo | `PUT /sites/{site_id}/repo` | `{repo_id, branch}`; `cmd`/`dir` optional when the repo has a `netlify.toml` (change 7) |
+| Link site to repo | `PUT /sites/{site_id}/repo` | `{repo_id, branch}`; `cmd`/`dir` optional when the repo has a `netlify.toml` |
 | Add custom domain | `POST /sites/{site_id}/domains` | apex and www separately |
 | Create DNS zone | `POST /dns_zones` | response includes the assigned nameservers (NS1: `dns1.pXX.nsone.net` ...) |
 | Ensure site records exist | `GET`/`POST /dns_zones/{zone_id}/dns_records` | Netlify writes the apex/www records itself when the domain is attached; this is the fallback if the API path does not (verify during implementation) |
@@ -117,9 +117,13 @@ cited in the text says so; anything below is still an assumption.
 
 ## What Needs to Happen
 
-Seven changes, in dependency order: 1–3 deliver a working second host;
-4–5 are the registrar work and the fleet updates; 6–7 are the config
-and template work.
+Seven changes, in dependency order: the [repo/host split](#change-1),
+[`NetlifyHost`](#change-2), and [host selection](#change-3) deliver a
+working second host; the [registrar nameserver work](#change-4) and the
+[fleet-command updates](#change-5) follow; [config](#change-6) and
+[templates](#change-7) support both.
+
+<a id="change-1"></a>
 
 **1. Split `GitHubHost` into a repo provider and a Pages host.** Move
 the repository half — `_create_from_template` (`github.py:275`) with
@@ -128,21 +132,27 @@ dev-file strip, topics, Website field, repo delete/rename — into a repo
 provider (e.g. `providers/repo/github.py`). `GitHubHost` keeps Pages
 enable, custom domain, HTTPS, and health. `NetlifyHost` uses the same
 repo provider: a Netlify deploy still creates a GitHub repository from
-the same tepiton template. `SITE_ADDRESS.md` change 2 needs the same
+the same tepiton template. The pipeline-branch change in
+`SITE_ADDRESS.md` needs the same
 split, so doing it first means that design lands on it instead of
 doing it over again.
+
+<a id="change-2"></a>
 
 **2. Add `NetlifyHost`** (`providers/host/netlify.py`). A subprocess
 wrapper around `netlify api`, built like `_run_gh_command`/`_gh_api`
 (`github.py:107,158`) — including pulling the HTTP status out of error
 output into `HostError.status_code`, so the DEC-027/028 exit-code
 mapping works unchanged. `deploy_site`: create the repo with the
-`netlify` host topic (changes 1 and 3), create the site, link the repo,
+`netlify` host topic (repo provider from [change 1](#change-1), topic
+from [change 3](#change-3)), create the site, link the repo,
 add the custom domain, attempt force-HTTPS. `teardown_site`: delete the
 site; the custom domain is deleted with it. Health: `GET /sites/{id}/ssl`
 plus deploy state behind a classifier like `health_status`.
 `required_dns_records`: returns none — the zone records are
 Netlify-internal.
+
+<a id="change-3"></a>
 
 **3. Host selection, recorded on the repo.** `--host {github,netlify}`
 on `create`, default github. The choice is written where later
@@ -162,6 +172,8 @@ domain cannot be claimed by both hosts — the topic is the record.
 Switching hosts is `create --force --host <other>`, which recreates
 the repo and rewrites the topics. No local state file.
 
+<a id="change-4"></a>
+
 **4. Registrar nameserver update + Netlify zone.**
 `PorkbunRegistrar.set_nameservers(domain, ns)` wrapping
 `POST /domain/updateNameServers/{domain}`; `check_nameservers` takes
@@ -172,6 +184,8 @@ and verifies the site records are present, creating the two only if
 Netlify did not (see the flow table). Record-level drift checking does
 not apply on this host: Netlify owns the records it serves, so drift
 becomes "NS still Netlify's, domain still attached."
+
+<a id="change-5"></a>
 
 **5. Update the fleet commands for two hosts.** Each command reads the
 host from the repo topic and then applies that host's answers.
@@ -187,11 +201,15 @@ clean up on the Netlify side. `doctor`:
 check that `netlify` is installed and authenticated when that host is
 selected, plus remediation text for the GitHub App prerequisite.
 
+<a id="change-6"></a>
+
 **6. Config and auth.** `[netlify]` section (`account_slug`; token
 from `MIMEO_NETLIFY_AUTH_TOKEN`/`NETLIFY_AUTH_TOKEN` or
 `netlify login`), schema_version 2. `config.py:12` imports template
 defaults from the GitHub provider; those constants move to a neutral
-module as part of change 1.
+module as part of the [repo/host split](#change-1).
+
+<a id="change-7"></a>
 
 **7. Give templates a `netlify.toml`.** Netlify ignores the Pages
 workflow files; per-repository configuration lives in a
@@ -201,7 +219,7 @@ carries the build environment (`NODE_VERSION`), build plugins,
 redirects (e.g. www to apex), and custom headers — most of the
 per-template configuration the host needs, with no mimeo code: the
 generate copies the file into every site repo. When the repo has a
-`netlify.toml`, the repo-link call can omit `cmd`/`dir` (change 2).
+`netlify.toml`, the repo-link call can omit `cmd`/`dir`.
 Keep `mimeo.template.json` for domain substitution only (DEC-024).
 `--host netlify` rejects templates with no `netlify.toml`, naming
 them.
@@ -210,7 +228,7 @@ them.
 
 - **The content pipeline.** Template generate, manifest substitution,
   and dev-file strip run the same way for both hosts; that is the
-  result of change 1.
+  result of the [repo/host split](#change-1).
 - **Error handling and exit codes.** `HostError.status_code` carries
   Netlify API failures through the existing mapping.
 - **The registrar ABC** — `set_nameservers` is additive.
@@ -234,15 +252,17 @@ them.
 
 Three passes, each independently landable and testable:
 
-1. **Repo/host split** — change 1 alone: a pure refactor with no
-   behavior change, the existing tests as the check.
-2. **Netlify create path** — changes 2, 3, 6, 7, and the zone and NS
-   parts of change 4. `create --host netlify` works end to end: site,
-   repo link, custom domain, zone, NS switch with the record warning
-   and the DNSSEC refusal, certificate attempt.
-3. **Fleet correctness** — the rest of change 4 (expected NS in
-   checks) and change 5: host-aware `status`/`sync`/`delete` and the
-   DEC-031 amendment.
+1. **[Repo/host split](#change-1)**: a pure refactor with no behavior
+   change; the existing tests are the check.
+2. **Netlify create path** — [`NetlifyHost`](#change-2), the [host
+   topic](#change-3), [config](#change-6), the templates'
+   [`netlify.toml`](#change-7), and the zone and nameserver steps of
+   the [registrar work](#change-4). `create --host netlify` works end
+   to end: site, repo link, custom domain, zone, NS switch with the
+   record warning and the DNSSEC refusal, certificate attempt.
+3. **Fleet correctness** — the rest of the [registrar work](#change-4)
+   (expected NS in checks) and the [fleet commands](#change-5):
+   host-aware `status`/`sync`/`delete` and the DEC-031 amendment.
 
 Smallest slice worth shipping: passes 1 and 2, for one static
 template — everything `create` needs.
@@ -258,11 +278,11 @@ against `main` at `4f6c03b`.
 
 | Change | Where | Notes |
 |--------|-------|-------|
-| 1 — repo/host split | `providers/host/github.py` → `providers/repo/github.py` (new) + `github.py` | move `_create_from_template` (:275) plus manifest/dev-strip/topics/homepage/rename/delete; `deploy_site` (:753) composes them; template constants leave the host module (`config.py:12` import) |
-| 2 — `NetlifyHost` | `providers/host/netlify.py` (new) + `tests/providers/host/test_netlify.py` | wrapper built like `_run_gh_command`/`_gh_api` (:107, :158); health classifier like `health_status` (:38); teardown like `teardown_site` (:830) |
-| 3 — host selection | `cli/create.py:130,303`; factory in `cli/_processing.py` | `--host` flag; repo topics gain the host tag; `list_mimeo_repositories` switches to `gh api search/repositories` for topics; `status.py:480,631,879`, `sync.py:167`, `delete.py:112` read the host from the repo data |
-| 4 — NS update + zone | `providers/registrar/porkbun.py`; `providers/dns/netlify.py` (new) | `set_nameservers` → `POST /domain/updateNameServers/{domain}`; expected-NS parameter on `check_nameservers` |
-| 5 — fleet commands | `cli/status.py`, `cli/sync.py`, `cli/delete.py`, `cli/doctor.py` | host read from the topic; host column, per-host NS expectation, DEC-031 amendment, netlify doctor checks |
-| 6 — config | `mimeo/config.py`, `config.toml.example` | `[netlify]` section, schema_version 2, env overrides |
-| 7 — templates | tepiton template repos + TEMPLATES/CLAUDE.md inventory | `netlify.toml` per template; rejection gate list |
+| [1 — repo/host split](#change-1) | `providers/host/github.py` → `providers/repo/github.py` (new) + `github.py` | move `_create_from_template` (:275) plus manifest/dev-strip/topics/homepage/rename/delete; `deploy_site` (:753) composes them; template constants leave the host module (`config.py:12` import) |
+| [2 — `NetlifyHost`](#change-2) | `providers/host/netlify.py` (new) + `tests/providers/host/test_netlify.py` | wrapper built like `_run_gh_command`/`_gh_api` (:107, :158); health classifier like `health_status` (:38); teardown like `teardown_site` (:830) |
+| [3 — host selection](#change-3) | `cli/create.py:130,303`; factory in `cli/_processing.py` | `--host` flag; repo topics gain the host tag; `list_mimeo_repositories` switches to `gh api search/repositories` for topics; `status.py:480,631,879`, `sync.py:167`, `delete.py:112` read the host from the repo data |
+| [4 — NS update + zone](#change-4) | `providers/registrar/porkbun.py`; `providers/dns/netlify.py` (new) | `set_nameservers` → `POST /domain/updateNameServers/{domain}`; expected-NS parameter on `check_nameservers` |
+| [5 — fleet commands](#change-5) | `cli/status.py`, `cli/sync.py`, `cli/delete.py`, `cli/doctor.py` | host read from the topic; host column, per-host NS expectation, DEC-031 amendment, netlify doctor checks |
+| [6 — config](#change-6) | `mimeo/config.py`, `config.toml.example` | `[netlify]` section, schema_version 2, env overrides |
+| [7 — templates](#change-7) | tepiton template repos + TEMPLATES/CLAUDE.md inventory | `netlify.toml` per template; rejection gate list |
 | tests | `tests/` | Regression: github-hosted fixtures unchanged. New: netlify deploy/teardown against mocked `netlify api` output, NS switch ordering, record warning, DNSSEC refusal |

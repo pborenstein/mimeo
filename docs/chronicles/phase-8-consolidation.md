@@ -929,3 +929,15 @@ removal, not an architectural choice.
 **Decisions**: OD #3 and OD #6 decided in-doc; this entry is the record. DEC-033 needed no correction -- it never claimed the zone survives.
 
 **Files**: `docs/NETLIFY.md`; IMPLEMENTATION.md, CONTEXT.md, this entry; this commit.
+
+## Entry 78: NETLIFY.md cross-references became links (2026-10-03)
+
+**What**: The staging section and six other spots referred to the seven changes by bare number ("changes 2, 3, 6, 7"), forcing the reader to scroll up and match numbers against the list. Each change now carries an anchor, and every reference links to it -- 23 links, no bare references remain.
+
+**Why**: The user's two-step correction: bare numbers are unreadable without the list in view, and the fix is hypertext -- link to the target instead of restating it. Both are now standing rules for this repo's docs: name what you reference, and link to it.
+
+**How**: `<a id="change-N"></a>` anchors before each change (stable against rewording, unlike heading-derived anchors), links in the changes intro, the staging passes, the in-change cross-references, the What-Does-NOT-Change note, and the appendix table's first column. Two references that pointed at changes for no navigational value (the flow table's cmd/dir note, change 7's repo-link note) were dropped rather than linked.
+
+**Decisions**: none (style).
+
+**Files**: `docs/NETLIFY.md`; IMPLEMENTATION.md, CONTEXT.md, this entry; this commit.

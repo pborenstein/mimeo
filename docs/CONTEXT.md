@@ -1,8 +1,8 @@
 ---
 phase: 8
 phase_name: Consolidation
-updated: 2026-10-02
-last_commit: b169e6c
+updated: 2026-10-03
+last_commit: PENDING
 ---
 
 ## Current Focus
@@ -47,8 +47,8 @@ None.
       `--deploy-org` override per invocation.
 - Doc style: the Entry 67 gist governs all prose docs; explain the
       mechanism, do not coin a label; answer the question asked —
-      yes/no gets yes/no; chronicles/DECISIONS/CODE_REVIEW are never
-      rewritten.
+      yes/no gets yes/no; link to what you reference; chronicles/
+      DECISIONS/CODE_REVIEW are never rewritten.
 - Exit codes (DEC-027/028): only confirmed-transient exits 5.
       Tests building 404/422 `HostError`s must pass `status_code=`.
 - Repo is public-as-visible; live usage is the E2E hedge

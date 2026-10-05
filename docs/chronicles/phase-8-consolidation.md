@@ -979,3 +979,33 @@ plan's decisions are its own.
 
 **Files**: `docs/TEMPLATE_CONSOLIDATION.md` (new); IMPLEMENTATION.md,
 CONTEXT.md, this entry; this commit.
+
+## Entry 80: TEMPLATE_CONSOLIDATION.md decision 4 -- chapbook drops its unused image transform (2026-10-04)
+
+**What**: Plan amendment, no code. Change 1 now removes chapbook's
+eleventy-img transform along with porting `dek`; the content
+contract's image row becomes blogs-only; a sixth open decision asks
+whether chapbook's engines floor reverts.
+
+**Why**: The user, reading the plan, asked whether image optimization
+earns its weight. Measured against the trees: chapbook's demo content
+contains no image files, so the transform processes nothing -- 18MB of
+`@img/` prebuilts plus 1MB `sharp` per install for an unused feature.
+The blogs optimize real demo images (prose-blog's history records
+verified avif/webp output) and product/service use sharp to generate
+the favicon, apple-touch icon, and OG image, so optimization stays
+where it runs on real content.
+
+**How**: Decision 4 added with the measurements; change 1 retitled and
+extended (config import and addPlugin removal, devDependency drop,
+lock refresh toward folio's measured 137 packages; chapbook is 159
+with it); the contract now states optimization exists only in the
+blogs and names the remedy for a site that wants it (an import and one
+`addPlugin` call); the to-verify pass-through row covers chapbook and
+pamphlet; OD 6 records the engines question (recommendation: keep
+`>=22` for one floor across the six templates).
+
+**Decisions**: none new for mimeo -- decision 4 is the plan's own.
+
+**Files**: `docs/TEMPLATE_CONSOLIDATION.md` (639f892);
+IMPLEMENTATION.md, CONTEXT.md, this entry; this commit.

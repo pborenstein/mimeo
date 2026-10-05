@@ -597,6 +597,15 @@ front-door verbs than it started with. See DEC-021.
         whose Actions build one corpus against each template;
         product/service and non-eleventy out of scope by structure;
         two-pass staging, retirement landable alone
+- [x] TEMPLATE_CONSOLIDATION decision 4: chapbook drops its unused
+      image transform (2026-10-04, Entry 80)
+  - [x] Measured basis recorded: no images in chapbook's demo content,
+        18MB `@img/` + 1MB `sharp` per install for a transform that
+        processes nothing; blogs keep optimization (real demo images,
+        verified avif/webp), product/service keep sharp icon/OG
+        generation; contract image row now blogs-only with the
+        add-it-back remedy; OD 6: engines floor keep `>=22` vs revert
+        (recommendation: keep)
 
 ---
 

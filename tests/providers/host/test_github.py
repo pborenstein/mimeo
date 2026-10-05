@@ -362,30 +362,55 @@ class TestGitHubHost:
 
             assert "template" in str(exc_info.value).lower()
 
-    def test_ensure_is_template_sets_flag_when_false(self, host: GitHubHost) -> None:
-        """Test that a template repo missing is_template gets it set automatically."""
+    def test_require_is_template_rejects_when_flag_false(self, host: GitHubHost) -> None:
+        """An unflagged template repo is rejected, never re-flagged by mimeo."""
         with patch.object(host, "_gh_api") as mock_api:
-            mock_api.side_effect = [
-                {"full_name": "tepiton/example.com", "is_template": False},  # read
-                {"is_template": True},  # PATCH
-            ]
+            mock_api.return_value = {"full_name": "tepiton/example.com", "is_template": False}
 
-            host._ensure_is_template("tepiton/example.com")
+            with pytest.raises(HostError) as exc_info:
+                host._require_is_template("tepiton/example.com")
 
-            assert mock_api.call_count == 2
-            patch_call = mock_api.call_args_list[1]
-            assert patch_call[0][0] == "repos/tepiton/example.com"
-            assert patch_call[1]["method"] == "PATCH"
-            assert patch_call[1]["data"] == {"is_template": True}
+            assert "retired" in str(exc_info.value)
+            assert mock_api.call_count == 1  # read only, no PATCH
 
-    def test_ensure_is_template_noop_when_already_true(self, host: GitHubHost) -> None:
-        """Test that an already-flagged template repo is left alone."""
+    def test_require_is_template_passes_when_already_true(self, host: GitHubHost) -> None:
+        """Test that an already-flagged template repo passes the check."""
         with patch.object(host, "_gh_api") as mock_api:
             mock_api.return_value = {"full_name": "tepiton/example.com", "is_template": True}
 
-            host._ensure_is_template("tepiton/example.com")
+            host._require_is_template("tepiton/example.com")
 
             assert mock_api.call_count == 1  # read only, no PATCH
+
+    def test_validate_template_rejects_unflagged_repo(self, host: GitHubHost) -> None:
+        """A repo that exists but lacks is_template is retired -- reject it."""
+        with patch.object(host, "_gh_api") as mock_api:
+            mock_api.return_value = {"full_name": "tepiton/example.com", "is_template": False}
+
+            with pytest.raises(HostError) as exc_info:
+                host.validate_template("example.com")
+
+            assert "retired" in str(exc_info.value)
+
+    def test_validate_template_accepts_flagged_repo(self, host: GitHubHost) -> None:
+        """A repo flagged as a template validates cleanly."""
+        with patch.object(host, "_gh_api") as mock_api:
+            mock_api.return_value = {"full_name": "tepiton/example.com", "is_template": True}
+
+            host.validate_template("example.com")
+
+            mock_api.assert_called_once_with(f"repos/{TEMPLATE_ORG}/example.com")
+
+    def test_validate_template_not_found_message(self, host: GitHubHost) -> None:
+        """A missing template repo raises HostError with a spelling hint."""
+        with patch.object(host, "_gh_api") as mock_api:
+            mock_api.side_effect = HostError("gh: Not Found (HTTP 404)", status_code=404)
+
+            with pytest.raises(HostError) as exc_info:
+                host.validate_template("nope")
+
+            assert "not found" in str(exc_info.value)
+            assert "spelling" in str(exc_info.value)
 
     def test_fetch_template_manifest_parses_valid_manifest(self, host: GitHubHost) -> None:
         """A valid manifest is fetched from the template repo, decoded, and parsed."""

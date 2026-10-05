@@ -254,23 +254,25 @@ class GitHubHost(Host):
                     continue
                 raise
 
-    def _ensure_is_template(self, repo_full_name: str) -> None:
-        """Ensure a repository is flagged as a GitHub template repo.
+    def _require_is_template(self, repo_full_name: str) -> None:
+        """Require a repository to be flagged as a GitHub template repo.
 
-        GitHub's generate-from-template API 404s if the source repo doesn't
-        have is_template set, even though the repo otherwise exists and is
-        readable. Rather than surface that as a confusing "Not Found" error,
-        check the flag up front and set it if needed.
+        Generate-from-template 404s on a source repo without is_template.
+        An unset flag is how a template is retired, so mimeo rejects the
+        repo rather than setting the flag itself.
 
         Args:
             repo_full_name: Full repository name (owner/repo)
 
         Raises:
-            HostError: If the repo can't be read or the flag can't be set
+            HostError: If the repo can't be read or lacks the flag
         """
         repo = self._gh_api(f"repos/{repo_full_name}")
         if not repo.get("is_template"):
-            self._gh_api(f"repos/{repo_full_name}", method="PATCH", data={"is_template": True})
+            raise HostError(
+                f"Template repository {repo_full_name} is not flagged as a "
+                f"template (is_template unset); it may have been retired"
+            )
 
     def _create_from_template(
         self,
@@ -330,7 +332,7 @@ class GitHubHost(Host):
         }
 
         try:
-            self._ensure_is_template(f"{self.template_org}/{template_repo}")
+            self._require_is_template(f"{self.template_org}/{template_repo}")
             response = self._gh_api(
                 f"repos/{self.template_org}/{template_repo}/generate",
                 method="POST",
@@ -910,20 +912,27 @@ class GitHubHost(Host):
             }
 
     def validate_template(self, template_repo: str) -> None:
-        """Verify a template repository exists in the template org.
+        """Verify a template repository exists and is offered as a template.
 
         Args:
             template_repo: Template repository name (without org prefix)
 
         Raises:
             HostError: With a clear message if the template is not found
+                or not flagged as a template repository
         """
         try:
-            self._gh_api(f"repos/{self.template_org}/{template_repo}")
+            repo = self._gh_api(f"repos/{self.template_org}/{template_repo}")
         except HostError:
             raise HostError(
                 f"Template '{template_repo}' not found in {self.template_org}. "
                 f"Check the spelling and try again."
+            )
+        if not repo.get("is_template"):
+            raise HostError(
+                f"Template '{template_repo}' in {self.template_org} is not "
+                f"flagged as a template repository (is_template unset); "
+                f"it may have been retired"
             )
 
     def get_template_repository(self, repo_full_name: str) -> str | None:

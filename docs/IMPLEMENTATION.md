@@ -622,6 +622,22 @@ front-door verbs than it started with. See DEC-021.
         "may have been retired", nothing created; the plan's
         status/doctor topic row had nothing to verify (no code path
         enumerates templates)
+- [x] TEMPLATE_CONSOLIDATION pass 2 executed: contract + fixture
+      repo, first green four-way run (2026-10-04, Entry 82)
+  - [x] tepiton/content-fixture: `CONTENT-CONTRACT.md`, the corpus
+        (image at `content/img/`), four-template Actions matrix
+        (push, weekly Mon 06:17 UTC, dispatch; node 24; build success
+        only — OD 1–4 settled per the plan's recommendations)
+  - [x] Contract-required template changes, both verified unchanged
+        on the existing demos: pamphlet drafts preprocessor
+        (sub-repo DEC-010; production sites carry no `draft:` files),
+        chapbook `content/img` passthrough (sub-repo DEC-012;
+        Eleventy 3 copies a file only via templateFormats or explicit
+        passthrough)
+  - [x] All six to-verify rows resolved; the blogs' image
+        optimization claim rewritten as convention-dependent (their
+        verbatim dir is `public/`, demos never exercise markdown
+        image optimization)
 
 ---
 

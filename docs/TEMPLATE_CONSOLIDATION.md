@@ -1,14 +1,15 @@
 # Template Consolidation and the Shared Content Base
 
-Status: **Pass 1 executed 2026-10-04** (changes 1 and 2: `dek` in
-chapbook, folio retired and archived); pass 2 — the content contract
-and the fixture repo — remains open. One mimeo code change the
-outline did not forecast: DEC-034, `create` rejects unflagged
-template repos (the old `_ensure_is_template` self-heal would have
-re-flagged folio, un-retiring it on the next `create`). The grep
-claim holds: no template name appears in mimeo's source, config, or
-tests. Sibling of `NETLIFY.md` and `SITE_ADDRESS.md`; it shares no
-code with them.
+Status: **Executed, both passes, 2026-10-04** (Entries 81–82). Pass 1:
+`dek` in chapbook, folio retired and archived. Pass 2: the contract
+and the fixture, ending in the first green four-way run. Two mimeo
+code changes the outline did not forecast: DEC-034 (`create` rejects
+unflagged template repos — the old self-heal would have re-flagged
+folio) and two template changes the contract required: pamphlet's
+drafts preprocessor (sub-repo DEC-010) and chapbook's `content/img`
+passthrough (sub-repo DEC-012). The grep claim held throughout: no
+template name appears in mimeo's source, config, or tests. Sibling
+of `NETLIFY.md` and `SITE_ADDRESS.md`; it shares no code with them.
 
 ## Goal
 
@@ -134,6 +135,16 @@ In order, all reversible before the archive step:
 
 **3. The content contract.**
 
+Landed 2026-10-04 — `CONTENT-CONTRACT.md` at the root of
+[tepiton/content-fixture](https://github.com/tepiton/content-fixture),
+linked from TEMPLATES/CLAUDE.md. Two rows verified against the trees
+during implementation and written accordingly: `draft` exclusion
+required pamphlet to gain the preprocessor (sub-repo DEC-010), and
+the image row required a named directory — Eleventy 3 copies a file
+only via `templateFormats` or an explicit passthrough, so chapbook
+gained `content/img` (sub-repo DEC-012) and the blogs' optimization
+claim is stated as convention-dependent, not automatic.
+
 One page, `CONTENT-CONTRACT.md`, at the root of the fixture repo
 (change 4) — colocated with the thing that enforces it — linked from
 TEMPLATES/CLAUDE.md. Contents:
@@ -172,6 +183,10 @@ part of the contract too: add the transform plugin — an import and one
 <a id="change-4"></a>
 
 **4. The fixture repo and its CI.**
+
+Landed 2026-10-04 — tepiton/content-fixture; first four-way run
+green (both the push-triggered run and the manual dispatch, all four
+jobs).
 
 New tepiton repo (name: open decision 1) containing:
 
@@ -217,23 +232,23 @@ in the first version.
 
 ## To Verify at Implementation
 
-| Claim | How to check |
-|-------|--------------|
-| Eleventy ignores front matter keys a template does not use, so a chapter with `order`/`dek` builds as a post | The fixture's first run is the check |
-| Files in a directory a template has no collection for still build (under `content.11tydata.js`'s base layout) rather than erroring | Same |
+| Claim | How it checked out |
+|-------|--------------------|
+| Eleventy ignores front matter keys a template does not use, so a chapter with `order`/`dek` builds as a post | Verified — corpus chapters built in both blogs, corpus posts in both literary templates; first four-way run green |
+| Files in a directory a template has no collection for still build (under `content.11tydata.js`'s base layout) rather than erroring | Verified — same run; `posts/` in the literary pair and `chapters/` in the blogs build as plain pages |
 | `create --template eleventy-folio` fails cleanly once `is_template` is unchecked — a `HostError`, not a stack trace | Verified 2026-10-04, exit 1, "may have been retired", nothing created — but only after DEC-034: the old `_ensure_is_template` self-heal re-flagged the repo and created anyway |
 | Removing the `mimeo-template` topic drops folio from whatever enumerates by topic (`status`, doctor) | Nothing to verify: no mimeo code path enumerates templates by topic (`status` lists sites by `topic:mimeo` on the deploy org; `doctor` checks the environment). The topic is for humans browsing the org |
-| Footnote markdown in a template without `markdown-it-footnote` degrades to visible literal `[^1]` text, not a build failure | Fixture corpus's `notes.md`, built in chapbook and pamphlet |
-| An image referenced by portable content lands in `_site/` unchanged in the templates without the transform (chapbook, pamphlet) | Fixture corpus's `notes.md`, built in both |
+| Footnote markdown in a template without `markdown-it-footnote` degrades to visible literal `[^1]` text, not a build failure | Verified — chapbook's rendered `notes/` page shows the literal marker; all four builds green |
+| An image referenced by portable content lands in `_site/` unchanged in the templates without the transform (chapbook, pamphlet) | Verified with an amendment: true for `content/img/` only, and only after chapbook gained the passthrough (sub-repo DEC-012) — Eleventy 3 copies a file only via `templateFormats` or an explicit passthrough, so placement is part of the contract now; the blogs do not serve `content/img/` verbatim (their verbatim dir is `public/`) |
 
 ## Open Decisions
 
 | # | Question | Recommendation | Rationale |
 |---|----------|----------------|-----------|
-| 1 | Fixture repo name | `tepiton/content-fixture` | Says what it holds; matches the topic vocabulary (`mimeo`, `mimeo-template` optional on it) |
-| 2 | Corpus composition | As sketched in change 4 | Two chapters plus a fallback and a draft cover the literary fields; two posts cover date/tags/footnotes/image. Confirm at implementation against the contract text |
-| 3 | Actions cadence | Push + weekly + `workflow_dispatch` | Push catches corpus drift; weekly catches template drift, since template changes do not trigger the fixture's workflow |
-| 4 | Output assertions beyond build success | Not in pass one | Build failure is the contract's failure mode; path assertions duplicate each template's own demo expectations |
+| 1 | Fixture repo name | Settled 2026-10-04: `tepiton/content-fixture` | Says what it holds; matches the topic vocabulary (`mimeo`) |
+| 2 | Corpus composition | Settled 2026-10-04: as sketched, one amendment — the image lives at `content/img/`, not beside the posts | Arbitrary image placements never land: Eleventy 3 copies a file only via `templateFormats` or an explicit passthrough, so the contract names the directory |
+| 3 | Actions cadence | Settled 2026-10-04: push + weekly (Mon 06:17 UTC) + `workflow_dispatch` | Push catches corpus drift; weekly catches template drift, since template changes do not trigger the fixture's workflow |
+| 4 | Output assertions beyond build success | Settled 2026-10-04: not in pass one, and stated in the fixture README | Build failure is the contract's failure mode; path assertions duplicate each template's own demo expectations |
 | 5 | Edit folio's README before archiving | Settled 2026-10-04: yes — one line, in 34133ff | README is living documentation, not a point-in-time record; the archive's front page should not present folio as usable |
 | 6 | chapbook's `engines.node` after the transform drop | Settled 2026-10-04: keep `>=22` (chapbook DEC-011) | The floor was raised 2026-10-03 for img@7, which change 1 removes; chapbook's remaining tree needs no more than eleventy's `>=18`. Keeping `>=22` holds one floor across the six templates (`engines`, `.nvmrc` 24, CI 24) instead of five-and-one |
 
@@ -243,8 +258,8 @@ Two passes, each independently landable:
 
 1. **folio retirement** — landed 2026-10-04: `dek` in chapbook,
    folio cleaned, flagged, archived, inventories updated.
-2. **Contract and fixture** — the tepiton repo with the contract,
-   corpus, and workflow; ends with the first green four-way run.
+2. **Contract and fixture** — landed 2026-10-04: tepiton/content-fixture
+   with the contract, corpus, and workflow; first four-way run green.
 
 Smallest slice worth shipping: pass 1 alone. Pass 2 without pass 1
 would test a seven-template fleet that no longer exists.

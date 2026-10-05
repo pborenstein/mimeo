@@ -1,13 +1,13 @@
 # Template Consolidation and the Shared Content Base
 
-Status: **Approved in outline, not scheduled** — four decisions settled
-2026-10-04 (listed under Decisions). All work lands in the tepiton
-template repos plus one new tepiton repo; mimeo itself needs no code
-change. Verified 2026-10-04 by grep: no template name appears in
-mimeo's source, config, or tests (the two textual mentions of
-folio/chapbook are a point-in-time note in `docs/IMPLEMENTATION.md` and
-a test docstring whose fixtures are inline strings, not the live
-repos). Sibling of `NETLIFY.md` and `SITE_ADDRESS.md`; it shares no
+Status: **Pass 1 executed 2026-10-04** (changes 1 and 2: `dek` in
+chapbook, folio retired and archived); pass 2 — the content contract
+and the fixture repo — remains open. One mimeo code change the
+outline did not forecast: DEC-034, `create` rejects unflagged
+template repos (the old `_ensure_is_template` self-heal would have
+re-flagged folio, un-retiring it on the next `create`). The grep
+claim holds: no template name appears in mimeo's source, config, or
+tests. Sibling of `NETLIFY.md` and `SITE_ADDRESS.md`; it shares no
 code with them.
 
 ## Goal
@@ -79,6 +79,11 @@ Four changes, in dependency order. Changes 1 and 2 need nothing from
 
 **1. Port `dek` to chapbook; drop its unused image transform.**
 
+Landed 2026-10-04 — tepiton/eleventy-chapbook 89c7ad4 (`dek`) and
+dbfa114 (transform drop): build output verified byte-identical across
+the drop, install 159 → 141 packages, engines stays `>=22`
+(sub-repo DEC-011 — OD 6 settled).
+
 - `eleventy-chapbook/_includes/layouts/chapter.njk`: add
   `{% if dek %}<p class="chapter-dek">{{ dek }}</p>{% endif %}` where
   folio has it (`eleventy-folio/_includes/layouts/chapter.njk:8`), plus
@@ -99,6 +104,13 @@ Four changes, in dependency order. Changes 1 and 2 need nothing from
 <a id="change-2"></a>
 
 **2. Retire folio.**
+
+Landed 2026-10-04 — tepiton/eleventy-folio 34133ff (feed dir + README
+line, OD 5 settled as recommended); flags cleared, repo archived;
+inventories updated: TEMPLATES/CLAUDE.md, the TEMPLATES meta ledger
+(Entry 5), tepiton.github.io `index.md` (94c041e; fetched first — no
+new out-of-band push). The local `TEMPLATES/eleventy-folio` dir is
+removed; the archived repo is the record.
 
 In order, all reversible before the archive step:
 
@@ -209,8 +221,8 @@ in the first version.
 |-------|--------------|
 | Eleventy ignores front matter keys a template does not use, so a chapter with `order`/`dek` builds as a post | The fixture's first run is the check |
 | Files in a directory a template has no collection for still build (under `content.11tydata.js`'s base layout) rather than erroring | Same |
-| `create --template eleventy-folio` fails cleanly once `is_template` is unchecked — a `HostError`, not a stack trace | Run it after change 2 step 3 |
-| Removing the `mimeo-template` topic drops folio from whatever enumerates by topic (`status`, doctor) | Run `mimeo status` after change 2 step 3 |
+| `create --template eleventy-folio` fails cleanly once `is_template` is unchecked — a `HostError`, not a stack trace | Verified 2026-10-04, exit 1, "may have been retired", nothing created — but only after DEC-034: the old `_ensure_is_template` self-heal re-flagged the repo and created anyway |
+| Removing the `mimeo-template` topic drops folio from whatever enumerates by topic (`status`, doctor) | Nothing to verify: no mimeo code path enumerates templates by topic (`status` lists sites by `topic:mimeo` on the deploy org; `doctor` checks the environment). The topic is for humans browsing the org |
 | Footnote markdown in a template without `markdown-it-footnote` degrades to visible literal `[^1]` text, not a build failure | Fixture corpus's `notes.md`, built in chapbook and pamphlet |
 | An image referenced by portable content lands in `_site/` unchanged in the templates without the transform (chapbook, pamphlet) | Fixture corpus's `notes.md`, built in both |
 
@@ -222,16 +234,15 @@ in the first version.
 | 2 | Corpus composition | As sketched in change 4 | Two chapters plus a fallback and a draft cover the literary fields; two posts cover date/tags/footnotes/image. Confirm at implementation against the contract text |
 | 3 | Actions cadence | Push + weekly + `workflow_dispatch` | Push catches corpus drift; weekly catches template drift, since template changes do not trigger the fixture's workflow |
 | 4 | Output assertions beyond build success | Not in pass one | Build failure is the contract's failure mode; path assertions duplicate each template's own demo expectations |
-| 5 | Edit folio's README before archiving | Yes, one line pointing at chapbook | README is living documentation, not a point-in-time record; the archive's front page should not present folio as usable |
-| 6 | chapbook's `engines.node` after the transform drop | Keep `>=22` | The floor was raised 2026-10-03 for img@7, which change 1 removes; chapbook's remaining tree needs no more than eleventy's `>=18`. Keeping `>=22` holds one floor across the six templates (`engines`, `.nvmrc` 24, CI 24) instead of five-and-one |
+| 5 | Edit folio's README before archiving | Settled 2026-10-04: yes — one line, in 34133ff | README is living documentation, not a point-in-time record; the archive's front page should not present folio as usable |
+| 6 | chapbook's `engines.node` after the transform drop | Settled 2026-10-04: keep `>=22` (chapbook DEC-011) | The floor was raised 2026-10-03 for img@7, which change 1 removes; chapbook's remaining tree needs no more than eleventy's `>=18`. Keeping `>=22` holds one floor across the six templates (`engines`, `.nvmrc` 24, CI 24) instead of five-and-one |
 
 ## Suggested Staging
 
 Two passes, each independently landable:
 
-1. **folio retirement** — changes 1 and 2 complete: `dek` in chapbook,
-   folio cleaned, flagged, archived, inventories updated. Requires no
-   new repos.
+1. **folio retirement** — landed 2026-10-04: `dek` in chapbook,
+   folio cleaned, flagged, archived, inventories updated.
 2. **Contract and fixture** — the tepiton repo with the contract,
    corpus, and workflow; ends with the first green four-way run.
 

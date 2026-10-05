@@ -654,3 +654,16 @@ A fourth, related fix landed in the same session at the provider layer (`mimeo/p
 ## Superseded/Deprecated
 
 [No superseded decisions yet]
+### DEC-034: `create` Rejects Unflagged Template Repos Instead of Re-Flagging Them (2026-10-04)
+
+**Status**: Active (Phase 8). Prompted by folio's retirement exposing the self-heal: `_ensure_is_template` PATCHed `is_template` back on any template repo lacking the flag, so unchecking the flag — the retirement mechanism — was silently undone by the next `create` that named the repo.
+
+**Context**: The flag-set was added to avoid GitHub's confusing 404 from generate-from-template on an unflagged source repo. But the flag is the only offering switch mimeo respects: template selection is by name plus `is_template`, and mimeo hardcodes no template list. A tool that re-arms the switch the owner just threw off does not paper over a confusing error — it un-retires templates on the owner's behalf.
+
+**Decision**: Reject instead of repair. `_ensure_is_template` is now `_require_is_template`: one GET, then a HostError ("may have been retired") if the flag is unset. `validate_template` — which `create` calls before any mutation — checks the same flag with the same message, so an unflagged name fails before the `--force` rename or any repository work begins.
+
+**Alternatives considered**: Keep the self-heal and gate retirement on the archive alone (rejected — the uncheck-to-archive window re-arms the flag, and after archive the failure surfaces as a read-only PATCH error with no stated cause); a retire-list in mimeo config (rejected — the repo flag is the list; mimeo keeps no template registry).
+
+**Consequences**: A template-org owner retires a template by unchecking one box; `create` naming it exits 1 with a clear message. Verified live against tepiton/eleventy-folio after retirement: exit 1, "may have been retired", nothing created. Generate-from-template on a repo whose owner merely forgot the flag now fails too — the message names the mechanism to fix.
+
+---

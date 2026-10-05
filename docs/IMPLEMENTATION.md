@@ -606,6 +606,22 @@ front-door verbs than it started with. See DEC-021.
         generation; contract image row now blogs-only with the
         add-it-back remedy; OD 6: engines floor keep `>=22` vs revert
         (recommendation: keep)
+- [x] TEMPLATE_CONSOLIDATION pass 1 executed: folio retired, `dek` in
+      chapbook (2026-10-04, Entry 81)
+  - [x] chapbook: `dek` ported (chapter header, home TOC, CSS, demo,
+        README); eleventy-img transform dropped — output verified
+        byte-identical, install 159 → 141 packages; engines stays
+        `>=22` (sub-repo DEC-011, settles OD 6)
+  - [x] folio: orphaned feed dir removed, README pointer (OD 5),
+        `is_template` unchecked, topic dropped, repo archived;
+        inventories updated (TEMPLATES/CLAUDE.md seven→six, meta
+        Entry 5, org index 94c041e)
+  - [x] DEC-034: `create` rejects unflagged template repos instead of
+        re-flagging them (self-heal removed; `validate_template`
+        checks the flag before any mutation); verified live — exit 1,
+        "may have been retired", nothing created; the plan's
+        status/doctor topic row had nothing to verify (no code path
+        enumerates templates)
 
 ---
 

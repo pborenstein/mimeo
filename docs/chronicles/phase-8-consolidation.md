@@ -941,3 +941,41 @@ removal, not an architectural choice.
 **Decisions**: none (style).
 
 **Files**: `docs/NETLIFY.md`; IMPLEMENTATION.md, CONTEXT.md, this entry; this commit.
+
+## Entry 79: TEMPLATE_CONSOLIDATION.md written -- retire folio, shared content base, fixture CI (2026-10-04)
+
+**What**: A plan doc for the template fleet, not mimeo code: retire
+eleventy-folio after porting its one unique feature (`dek`) to
+eleventy-chapbook; define a shared content base for the four document
+templates (chapbook, pamphlet, prose-blog, tech-blog); enforce it with
+a tepiton fixture repo whose Actions build one corpus against each
+template. Nothing executed.
+
+**Why**: The three literary templates were one task given to three
+LLMs (THREE-TAKES.md in each repo); chapbook is the complete take,
+folio's is scored Partial, and pamphlet -- the minimal take -- is the
+only one in production (pesach.lol, amalgamedon.com, both
+single-page). The user asked to explore consolidation and a single
+content source, then settled the open decisions and asked for a plan
+in docs/.
+
+**How**: Facts verified against the trees before writing:
+chapters.11tydata.js is byte-identical in chapbook and pamphlet and
+folio's differs in whitespace only; dek exists only in folio
+(chapter.njk:8, the index TOC, two demo chapters); folio carries an
+orphaned content/feed/; mimeo hardcodes no template list (grep clean;
+tests use inline fixtures), so retiring folio is a repo-flag change
+(is_template plus the mimeo-template topic), not a mimeo change. An
+earlier brainstorm draft used a coined label and an unmeasured
+estimate; the user rejected that register and the plan is written to
+the Entry 67 gist. Three decisions recorded in the doc (2026-10-04):
+retire folio; extended portable field set (title, draft, order, date,
+tags, dek); fixture as a tepiton repo. Four changes, a six-row
+to-verify table, five open decisions with recommendations, two-pass
+staging (retirement landable alone).
+
+**Decisions**: none new for mimeo -- no code or behavior changes; the
+plan's decisions are its own.
+
+**Files**: `docs/TEMPLATE_CONSOLIDATION.md` (new); IMPLEMENTATION.md,
+CONTEXT.md, this entry; this commit.

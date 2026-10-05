@@ -587,6 +587,16 @@ front-door verbs than it started with. See DEC-021.
         target (23 links, no bare "change N" left); references with
         no navigational value dropped. New doc-style rule: link to
         what you reference
+- [x] Template-consolidation plan written (2026-10-04, Entry 79)
+  - [x] `docs/TEMPLATE_CONSOLIDATION.md` (approved in outline, not
+        scheduled): retire eleventy-folio after porting `dek` to
+        chapbook (a repo-flag change -- is_template plus topic; mimeo
+        hardcodes no template list); shared content base for the four
+        document templates with the extended portable field set
+        (title, draft, order, date, tags, dek); a tepiton fixture repo
+        whose Actions build one corpus against each template;
+        product/service and non-eleventy out of scope by structure;
+        two-pass staging, retirement landable alone
 
 ---
 

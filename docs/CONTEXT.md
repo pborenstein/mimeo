@@ -2,27 +2,28 @@
 phase: 8
 phase_name: Consolidation
 updated: 2026-10-04
-last_commit: ccf0cf4
+last_commit: 9904ea8
+last_entry: 81
 ---
 
 ## Current Focus
 
-`docs/TEMPLATE_CONSOLIDATION.md` (template fleet: retire folio,
-shared content base, fixture CI) approved in outline with four
-decisions settled, unscheduled — the next session starts with its
-pass 1. Command-model work: `docs/SITE_ADDRESS.md` and
-`docs/NETLIFY.md` (second host; DNS decided, DEC-033) also proposed
-but unscheduled. `delete` (DEC-031) + Website field (DEC-032)
-shipped at v1.3.0.
+`docs/TEMPLATE_CONSOLIDATION.md` pass 1 executed 2026-10-04 (Entry
+81): folio retired and archived, `dek` in chapbook, DEC-034 shipped
+(`create` rejects unflagged template repos). Pass 2 — the content
+contract and the tepiton fixture repo (OD 1–4) — is the next
+consolidation work, unscheduled. Command-model work:
+`docs/SITE_ADDRESS.md` and `docs/NETLIFY.md` (second host; DNS
+decided, DEC-033) also proposed but unscheduled.
 
 ## Active Tasks
 
-- [ ] **Template consolidation**: decisions settled 2026-10-04 —
-      retire folio; extended portable field set (title, draft, order,
-      date, tags, dek); tepiton fixture repo; chapbook drops its
-      unused image transform (Entry 80). Pass 1 (dek port + transform
-      drop + folio retirement) needs no new repos. Open: OD 1–6 in
-      the plan.
+- [ ] **Template consolidation pass 2**: the `CONTENT-CONTRACT.md`
+      + fixture-repo change — OD 1 (repo name, rec
+      `tepiton/content-fixture`), OD 2 (corpus), OD 3 (Actions
+      cadence), OD 4 (assertions) still open. The fixture's first run
+      is the check for the four unverified contract claims in the
+      plan's table.
 - [ ] **Netlify second host**: DNS decided (DEC-033); OD #1, #3, #6
       decided — open: #2, #4, #5, #7, #8; staging pass 1 (repo/host
       split) is a pure refactor, landable on its own.
@@ -42,17 +43,19 @@ None.
 
 ## Context
 
-- Templates: 11 repos in `tepiton` (7 Eleventy starters, 3
-      single-page, pandoc-resume); canonical inventory: mimeo-sites
-      TEMPLATES/CLAUDE.md. `--force` is the only in-place replacement.
-      Template fleet now installs silent under npm 12 (2026-10-03
-      pass; per-repo DECs + TEMPLATES meta DEC-004) — drop each
-      `audit=false` when eleventy 4 ships.
-- Template consolidation (Entries 79–80): folio retires after `dek`
-      ports to chapbook (repo flags only — mimeo hardcodes no
-      template list); chapbook's image transform goes with it
-      (processes nothing — demo has no images); image optimization
-      remains in the blogs and product/service icon/OG generation.
+- Templates: 10 repos in `tepiton` (6 eleventy starters, 3
+      single-page, pandoc-resume) — folio retired 2026-10-04,
+      archived; canonical inventory: mimeo-sites TEMPLATES/CLAUDE.md.
+      `--force` is the only in-place replacement.
+- Template offering is by repo flag: `is_template` unchecked = retired
+      (DEC-034 — `create` rejects unflagged repos; the self-heal that
+      re-flagged them is gone). The `mimeo-template` topic is for
+      humans; nothing in mimeo enumerates templates.
+- chapbook is the literary chaptered template (folio's `dek` ported;
+      no image transform, images copy through unchanged — chapbook
+      DEC-010/011; engines stays `>=22` across the six).
+- Template fleet installs silent under npm 12 (2026-10-03 pass) —
+      drop each `audit=false` when eleventy 4 ships.
 - Netlify (Entries 72–77): delete = delete the project + restore
       Porkbun NS (project deletion removes site, domains, and zone —
       user-verified); `gh api search/repositories` returns topics
@@ -74,8 +77,8 @@ None.
 
 ## Next Session
 
-Execute `docs/TEMPLATE_CONSOLIDATION.md` pass 1: port `dek` to
-chapbook and drop its unused image transform (change 1), then retire
-folio — feed-dir cleanup, README pointer, is_template/topic flags,
-archive, inventory updates (change 2). Settle OD 6 (chapbook engines
-floor) when change 1 lands.
+Nothing queued for mimeo itself. When consolidation resumes: execute
+`docs/TEMPLATE_CONSOLIDATION.md` pass 2 — settle OD 1–4, build the
+tepiton fixture repo (`CONTENT-CONTRACT.md`, the corpus, the
+four-template Actions matrix), and let its first run verify the
+contract claims still marked unverified.

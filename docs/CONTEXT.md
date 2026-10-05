@@ -1,14 +1,16 @@
 ---
 phase: 8
 phase_name: Consolidation
-updated: 2026-10-03
-last_commit: cb68117
+updated: 2026-10-04
+last_commit: cbafd8d
 ---
 
 ## Current Focus
 
 Command-model work: `docs/SITE_ADDRESS.md` proposed and
 `docs/NETLIFY.md` (second host; DNS decided, DEC-033) proposed but
+unscheduled. `docs/TEMPLATE_CONSOLIDATION.md` (template fleet: retire
+folio, shared content base, fixture CI) approved in outline,
 unscheduled. `delete` (DEC-031) + Website field (DEC-032) shipped at
 v1.3.0.
 
@@ -19,6 +21,10 @@ v1.3.0.
       split) is a pure refactor, landable on its own.
 - [ ] **Command model**: `docs/SITE_ADDRESS.md` proposed,
       undecided; more command questions queued from the user.
+- [ ] **Template consolidation**: `docs/TEMPLATE_CONSOLIDATION.md`
+      decisions settled 2026-10-04 (retire folio; extended portable
+      field set; tepiton fixture repo); staging pass 1 (dek port +
+      folio retirement) needs no new repos.
 - [ ] **Backlog**: rec #6 long-termers — Pages IPs from
       `api.github.com/meta`; D1 create-only-missing `sync` path.
 
@@ -34,8 +40,11 @@ None.
 ## Context
 
 - Templates: 11 repos in `tepiton` (7 Eleventy starters, 3
-      single-page, pandoc-resume). Canonical inventory: mimeo-sites
+      single-page, pandoc-resume); canonical inventory: mimeo-sites
       TEMPLATES/CLAUDE.md. `--force` is the only in-place replacement.
+      Template fleet now installs silent under npm 12 (2026-10-03
+      pass; per-repo DECs + TEMPLATES meta DEC-004) — drop each
+      `audit=false` when eleventy 4 ships.
 - Netlify (Entries 72–77): delete = delete the project + restore
       Porkbun NS (project deletion removes site, domains, and zone —
       user-verified); `gh api search/repositories` returns topics
@@ -57,6 +66,7 @@ None.
 
 ## Next Session
 
-Build NETLIFY.md pass 1 (repo/host split — useful even if Netlify
-stalls), or settle open decisions #2, #4, #5, #7, #8; SITE_ADDRESS and
-the command questions still queued.
+Execute TEMPLATE_CONSOLIDATION pass 1 (dek port + folio retirement —
+no new repos needed), build NETLIFY.md pass 1, or settle open
+decisions #2, #4, #5, #7, #8; SITE_ADDRESS and the command questions
+still queued.

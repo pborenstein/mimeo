@@ -1056,3 +1056,47 @@ TEMPLATE_CONSOLIDATION.md, IMPLEMENTATION.md, DECISIONS.md, CONTEXT.md,
 this entry. Sub-repos: tepiton/eleventy-chapbook (89c7ad4, dbfa114,
 881eadc, 5b57c95), tepiton/eleventy-folio (34133ff, archived),
 TEMPLATES meta (3806568, 5283f47), tepiton.github.io (94c041e).
+
+## Entry 82: TEMPLATE_CONSOLIDATION pass 2 -- the contract and its CI (2026-10-04)
+
+**What**: tepiton/content-fixture is live: `CONTENT-CONTRACT.md`
+stating what portable `content/` means across chapbook, pamphlet,
+prose-blog, and tech-blog, plus a corpus that a four-job Actions
+matrix builds against every template. The first four-way run is
+green (push-triggered and manual dispatch; all four jobs). The plan
+is fully executed.
+
+**Why**: Pass 2 was the remainder of the approved outline — "the
+contract is enforced, not asserted." OD 1-4 settled per the plan's
+recommendations: repo name `content-fixture`; corpus as sketched;
+push + weekly + dispatch cadence; no output assertions.
+
+**How**: Built locally first: a four-way overlay dry run (backup
+content/, overlay the corpus, build, restore) before anything was
+pushed, which caught two facts the contract had to account for.
+Fact one: pamphlet had no drafts preprocessor — a `draft: true`
+chapter would have published — so pamphlet gained chapbook's
+preprocessor (sub-repo DEC-010; build output verified byte-identical,
+production sites carry no draft files, plan's "pamphlet unchanged"
+amended). Fact two: Eleventy 3 copies a file only when its extension
+is in `templateFormats` or an explicit passthrough covers it, so
+chapbook — image-transform-free since DEC-010 — served no content
+images at all; it gained `addPassthroughCopy("content/img")`,
+pamphlet's existing convention (sub-repo DEC-012), and the corpus
+image moved to `content/img/`. The blogs' "automatic optimization"
+claim is convention-dependent (their demos never exercise markdown
+image references; their verbatim dir is `public/`), so the contract
+states the mechanism instead of the promise. With those in place the
+dry run verified every contract row locally (drafts excluded
+everywhere, dek renders in chapbook, footnote markers degrade to
+literal text, the image lands verbatim in the literary pair), and
+the pushed repo went green on its first run. All six to-verify rows
+in the plan are resolved.
+
+**Decisions**: sub-repo DEC-010 (pamphlet), DEC-012 (chapbook); no
+new mimeo decision — mimeo code did not change in pass 2.
+
+**Files**: tepiton/content-fixture (all); TEMPLATE_CONSOLIDATION.md,
+IMPLEMENTATION.md, CONTEXT.md, this entry. Sub-repos: pamphlet
+(a4c834a..d37e00f), chapbook (982c377, 6441692), TEMPLATES meta
+(66a646f, f370307).

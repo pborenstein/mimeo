@@ -1009,3 +1009,50 @@ pamphlet; OD 6 records the engines question (recommendation: keep
 
 **Files**: `docs/TEMPLATE_CONSOLIDATION.md` (639f892);
 IMPLEMENTATION.md, CONTEXT.md, this entry; this commit.
+## Entry 81: TEMPLATE_CONSOLIDATION pass 1 -- folio retired, `dek` in chapbook, DEC-034 (2026-10-04)
+
+**What**: The plan's pass 1 executed end to end. chapbook renders
+`dek` (chapter header, home TOC, demo, README) and installs no image
+transform; eleventy-folio is archived and gone from every inventory;
+mimeo gained one code change the outline did not forecast: `create`
+rejects unflagged template repos (DEC-034).
+
+**Why**: Pass 1 was the scheduled next-session work (plan approved in
+outline, four decisions settled, Entries 79-80). The code change came
+out of the plan's own to-verify table: `create --template
+eleventy-folio` against the unflagged repo would have silently
+re-flagged it (`_ensure_is_template` PATCHed the flag back on), so the
+"fails cleanly" expectation was false until the self-heal was removed.
+The user called the self-heal a mistake and directed: reject.
+
+**How**: chapbook: `dek` ported from folio (a conditional in
+`chapter.njk`, the TOC dek stacked under the title in a
+`.chapter-entry` column in `home.njk`, CSS, one demo chapter's front
+matter, the README field doc); the transform's import, `addPlugin`,
+devDependency, and lock entries removed -- build output verified
+byte-identical before and after, install 159 -> 141 packages (folio's
+tree measured 137); engines stays `>=22` (sub-repo DEC-011, which
+settles OD 6). folio: the orphaned `content/feed/` deleted; a one-line
+README retirement pointer to chapbook (OD 5); `is_template`
+unchecked, the `mimeo-template` topic dropped, the repo archived; the
+local TEMPLATES/eleventy-folio dir removed (the archived repo is the
+record). Inventories: TEMPLATES/CLAUDE.md (seven -> six, eleven ->
+ten, retirement note), the TEMPLATES meta ledger (Entry 5, CONTEXT
+pin), tepiton.github.io index.md (row dropped, date bump; fetched
+first -- no new out-of-band push). mimeo: `_require_is_template`
+raises instead of patching, `validate_template` checks the flag
+before any mutation; two tests rewritten as rejection tests, three
+added for `validate_template`; 387 pass. Live verification: `create
+--template eleventy-folio mimeo-folio-retirement-check.example` exits
+1 with "may have been retired" and creates nothing. The to-verify row
+about `status`/`doctor` enumerating by topic found nothing to verify:
+no mimeo code path enumerates templates (`status` lists sites by
+`topic:mimeo` on the deploy org; `doctor` checks the environment).
+
+**Decisions**: DEC-034.
+
+**Files**: `mimeo/providers/host/github.py`, tests (a1fa646);
+TEMPLATE_CONSOLIDATION.md, IMPLEMENTATION.md, DECISIONS.md, CONTEXT.md,
+this entry. Sub-repos: tepiton/eleventy-chapbook (89c7ad4, dbfa114,
+881eadc, 5b57c95), tepiton/eleventy-folio (34133ff, archived),
+TEMPLATES meta (3806568, 5283f47), tepiton.github.io (94c041e).

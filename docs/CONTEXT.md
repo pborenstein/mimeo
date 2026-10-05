@@ -2,28 +2,21 @@
 phase: 8
 phase_name: Consolidation
 updated: 2026-10-04
-last_commit: 9904ea8
-last_entry: 81
+last_commit: c5cba66
+last_entry: 82
 ---
 
 ## Current Focus
 
-`docs/TEMPLATE_CONSOLIDATION.md` pass 1 executed 2026-10-04 (Entry
-81): folio retired and archived, `dek` in chapbook, DEC-034 shipped
-(`create` rejects unflagged template repos). Pass 2 — the content
-contract and the tepiton fixture repo (OD 1–4) — is the next
-consolidation work, unscheduled. Command-model work:
-`docs/SITE_ADDRESS.md` and `docs/NETLIFY.md` (second host; DNS
-decided, DEC-033) also proposed but unscheduled.
+`docs/TEMPLATE_CONSOLIDATION.md` is fully executed (Entries 81–82):
+folio retired, `dek` in chapbook, DEC-034 shipped, and pass 2's
+tepiton/content-fixture live with the content contract and a green
+four-template CI matrix. Nothing is queued for consolidation.
+Command-model work: `docs/SITE_ADDRESS.md` and `docs/NETLIFY.md`
+(second host; DNS decided, DEC-033) proposed but unscheduled.
 
 ## Active Tasks
 
-- [ ] **Template consolidation pass 2**: the `CONTENT-CONTRACT.md`
-      + fixture-repo change — OD 1 (repo name, rec
-      `tepiton/content-fixture`), OD 2 (corpus), OD 3 (Actions
-      cadence), OD 4 (assertions) still open. The fixture's first run
-      is the check for the four unverified contract claims in the
-      plan's table.
 - [ ] **Netlify second host**: DNS decided (DEC-033); OD #1, #3, #6
       decided — open: #2, #4, #5, #7, #8; staging pass 1 (repo/host
       split) is a pure refactor, landable on its own.
@@ -31,6 +24,8 @@ decided, DEC-033) also proposed but unscheduled.
       undecided; more command questions queued from the user.
 - [ ] **Backlog**: rec #6 long-termers — Pages IPs from
       `api.github.com/meta`; D1 create-only-missing `sync` path.
+- [ ] **Watch item**: content-fixture's weekly Actions run is the
+      drift alarm for template changes that break portability.
 
 ## On Ice (2026-09-29, user call)
 
@@ -44,16 +39,22 @@ None.
 ## Context
 
 - Templates: 10 repos in `tepiton` (6 eleventy starters, 3
-      single-page, pandoc-resume) — folio retired 2026-10-04,
-      archived; canonical inventory: mimeo-sites TEMPLATES/CLAUDE.md.
-      `--force` is the only in-place replacement.
+      single-page, pandoc-resume); canonical inventory: mimeo-sites
+      TEMPLATES/CLAUDE.md. `--force` is the only in-place
+      replacement.
+- The content contract lives in tepiton/content-fixture
+      (`CONTENT-CONTRACT.md`): portable fields (title, draft, order,
+      date, tags, dek), `content/chapters|posts|img/` directories,
+      and what portable content must not rely on. Its Actions matrix
+      builds the corpus against the four document templates — push,
+      weekly (Mon 06:17 UTC), dispatch.
 - Template offering is by repo flag: `is_template` unchecked = retired
       (DEC-034 — `create` rejects unflagged repos; the self-heal that
       re-flagged them is gone). The `mimeo-template` topic is for
       humans; nothing in mimeo enumerates templates.
-- chapbook is the literary chaptered template (folio's `dek` ported;
-      no image transform, images copy through unchanged — chapbook
-      DEC-010/011; engines stays `>=22` across the six).
+- chapbook: `dek` ported, no image transform, `content/img`
+      passthrough (sub-repo DEC-010/011/012); pamphlet: drafts
+      preprocessor (sub-repo DEC-010). Engines `>=22` across the six.
 - Template fleet installs silent under npm 12 (2026-10-03 pass) —
       drop each `audit=false` when eleventy 4 ships.
 - Netlify (Entries 72–77): delete = delete the project + restore
@@ -77,8 +78,6 @@ None.
 
 ## Next Session
 
-Nothing queued for mimeo itself. When consolidation resumes: execute
-`docs/TEMPLATE_CONSOLIDATION.md` pass 2 — settle OD 1–4, build the
-tepiton fixture repo (`CONTENT-CONTRACT.md`, the corpus, the
-four-template Actions matrix), and let its first run verify the
-contract claims still marked unverified.
+Consolidation has no queue. The open threads are the Netlify second
+host (staging pass 1 is self-contained) and the command-model
+question in `docs/SITE_ADDRESS.md` — whichever the user picks up.

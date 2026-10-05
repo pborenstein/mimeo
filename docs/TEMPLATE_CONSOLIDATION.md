@@ -1,6 +1,6 @@
 # Template Consolidation and the Shared Content Base
 
-Status: **Approved in outline, not scheduled** — three decisions settled
+Status: **Approved in outline, not scheduled** — four decisions settled
 2026-10-04 (listed under Decisions). All work lands in the tepiton
 template repos plus one new tepiton repo; mimeo itself needs no code
 change. Verified 2026-10-04 by grep: no template name appears in
@@ -47,6 +47,14 @@ Facts verified against the trees 2026-10-03/04:
 - folio's only feature chapbook lacks is `dek`: one conditional at
   `chapter.njk:8`, one in the index table of contents, and two demo
   chapters using it. chapbook contains zero `dek` references.
+- chapbook ships the eleventy-img transform plugin, but its demo
+  content contains no image files, so the plugin processes nothing in
+  the shipped build. The cost is install weight: 18MB of prebuilt
+  binaries under `@img/` plus 1MB `sharp` (measured 2026-10-04). The
+  blogs' demos do contain images and prose-blog's history records
+  verified avif/webp output; product/service use sharp in
+  `scripts/generate-icons.mjs` to generate the favicon, apple-touch
+  icon, and OG image — a different, load-bearing job.
 
 ## Decisions (2026-10-04)
 
@@ -57,6 +65,10 @@ Facts verified against the trees 2026-10-03/04:
    not use.
 3. **Fixture: a tepiton repo** with a GitHub Actions workflow, not a
    local script and not mimeo's test suite.
+4. **Drop the image transform from chapbook.** Its demo content has
+   no images; the plugin processes nothing. Removing it leaves image
+   optimization in the fleet only where it runs on real content (the
+   blogs; product/service generate icons with sharp).
 
 ## What Needs to Happen
 
@@ -65,7 +77,7 @@ Four changes, in dependency order. Changes 1 and 2 need nothing from
 
 <a id="change-1"></a>
 
-**1. Port `dek` to chapbook.**
+**1. Port `dek` to chapbook; drop its unused image transform.**
 
 - `eleventy-chapbook/_includes/layouts/chapter.njk`: add
   `{% if dek %}<p class="chapter-dek">{{ dek }}</p>{% endif %}` where
@@ -75,7 +87,14 @@ Four changes, in dependency order. Changes 1 and 2 need nothing from
   the `{{ chapter.data.dek }}` conditional folio's index has.
 - Add `dek:` to one demo chapter's front matter so the feature is
   visible in the demo build.
-- Build, verify the dek renders; commit and push.
+- Remove the `eleventyImageTransformPlugin` import and `addPlugin`
+  call from `eleventy-chapbook/eleventy.config.js`, drop
+  `@11ty/eleventy-img` from devDependencies, refresh the lock —
+  the install lands near folio's measured 137 packages (chapbook is
+  159 with it).
+- Build, verify the dek renders and the output is unchanged by the
+  transform removal (no images exist for it to process); commit and
+  push.
 
 <a id="change-2"></a>
 
@@ -132,8 +151,11 @@ Portable fields (the extended set) and their behavior on receipt:
 
 The contract also states what portable content must not rely on:
 template-specific shortcodes or filters (footnote popovers exist only
-in the blogs), and optimized image output (chapbook and the blogs run
-the eleventy-img transform; pamphlet copies images through unchanged).
+in the blogs), and optimized image output (the blogs run the
+eleventy-img transform; chapbook and pamphlet copy images through
+unchanged). The remedy for a site that wants optimized chapter art is
+part of the contract too: add the transform plugin — an import and one
+`addPlugin` call.
 
 <a id="change-4"></a>
 
@@ -190,7 +212,7 @@ in the first version.
 | `create --template eleventy-folio` fails cleanly once `is_template` is unchecked — a `HostError`, not a stack trace | Run it after change 2 step 3 |
 | Removing the `mimeo-template` topic drops folio from whatever enumerates by topic (`status`, doctor) | Run `mimeo status` after change 2 step 3 |
 | Footnote markdown in a template without `markdown-it-footnote` degrades to visible literal `[^1]` text, not a build failure | Fixture corpus's `notes.md`, built in chapbook and pamphlet |
-| An image referenced by portable content lands in `_site/` unchanged in templates without the img transform | Same |
+| An image referenced by portable content lands in `_site/` unchanged in the templates without the transform (chapbook, pamphlet) | Fixture corpus's `notes.md`, built in both |
 
 ## Open Decisions
 
@@ -201,6 +223,7 @@ in the first version.
 | 3 | Actions cadence | Push + weekly + `workflow_dispatch` | Push catches corpus drift; weekly catches template drift, since template changes do not trigger the fixture's workflow |
 | 4 | Output assertions beyond build success | Not in pass one | Build failure is the contract's failure mode; path assertions duplicate each template's own demo expectations |
 | 5 | Edit folio's README before archiving | Yes, one line pointing at chapbook | README is living documentation, not a point-in-time record; the archive's front page should not present folio as usable |
+| 6 | chapbook's `engines.node` after the transform drop | Keep `>=22` | The floor was raised 2026-10-03 for img@7, which change 1 removes; chapbook's remaining tree needs no more than eleventy's `>=18`. Keeping `>=22` holds one floor across the six templates (`engines`, `.nvmrc` 24, CI 24) instead of five-and-one |
 
 ## Suggested Staging
 
@@ -219,7 +242,7 @@ would test a seven-template fleet that no longer exists.
 
 | Change | Where | Notes |
 |--------|-------|-------|
-| [1 — dek](#change-1) | tepiton/eleventy-chapbook: `chapter.njk`, home TOC (`content/index.md`), `css/`, one demo chapter | source of the lines: folio `chapter.njk:8`, `content/index.md:18` |
+| [1 — dek + transform drop](#change-1) | tepiton/eleventy-chapbook: `chapter.njk`, home TOC (`content/index.md`), `css/`, one demo chapter, `eleventy.config.js`, `package.json`, `package-lock.json` | source of the dek lines: folio `chapter.njk:8`, `content/index.md:18`; transform removal returns chapbook to folio's measured install size |
 | [2 — retire folio](#change-2) | tepiton/eleventy-folio (feed dir, README, flags, archive); TEMPLATES/CLAUDE.md; TEMPLATES/docs/CONTEXT.md; tepiton/tepiton.github.io `index.md` | fetch tepiton.github.io first (out-of-band push seen 2026-10-03) |
 | [3 — contract](#change-3) | fixture repo `CONTENT-CONTRACT.md`; link from TEMPLATES/CLAUDE.md | contract text derives from the tables in this doc |
 | [4 — fixture CI](#change-4) | fixture repo `content/`, `.github/workflows/build.yml` | node 24; engines floors raised 2026-10-03 make older node invalid anyway |

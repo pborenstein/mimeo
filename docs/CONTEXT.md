@@ -39,9 +39,14 @@ None.
 ## Context
 
 - Templates: 10 repos in `tepiton` (6 eleventy starters, 3
-      single-page, pandoc-resume); canonical inventory: mimeo-sites
-      TEMPLATES/CLAUDE.md. `--force` is the only in-place
-      replacement.
+      single-page, pandoc-resume); canonical inventory:
+      `~/projects/tepiton/TEMPLATES/CLAUDE.md`. `--force` is the only
+      in-place replacement.
+- On disk (moved 2026-10-09): the tepiton org's working copies live
+      under `~/projects/tepiton/` — TEMPLATES/ (fleet + meta ledger +
+      content-fixture), tepiton.github.io/, and the site repos at the
+      top level. `~/projects/mimeo-sites/` is residual stragglers;
+      earlier doc references to mimeo-sites predate the move.
 - The content contract lives in tepiton/content-fixture
       (`CONTENT-CONTRACT.md`): portable fields (title, draft, order,
       date, tags, dek), `content/chapters|posts|img/` directories,

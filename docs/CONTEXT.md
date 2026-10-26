@@ -3,27 +3,27 @@ phase: 8
 phase_name: Consolidation
 updated: 2026-10-26
 last_commit: a5045ae
-last_entry: 85
+last_entry: 86
 ---
 
 ## Current Focus
 
-Template consolidation is done (Entries 81–82). Open code work is
-the two Entry 83 `create` defects; Entry 84 was an ops pass (Porkbun
-parking CNAMEs removed from 54 domains).
+Entry 83's two defects are closed (Entry 86: one fixed, one was not a
+bug), D1 shipped, and doctor checks the Pages IPs (Entry 85). No code
+work is in flight.
 
 ## Active Tasks
 
-- [ ] **Entry 83 fixes**: `_gh_api` drops the response `errors`
-      array; `required_dns_records` uses `default_org` for `www`,
-      ignoring `--deploy-org` (github.py:994). Test-first.
+- [ ] **`www` repoint (user call)**: 59 domains' `www` points at
+      `tepiton.github.io` (pre-move leftover); `mimeo sync --all`
+      repoints them to `mimeo-sites.github.io`, one record each.
 - [ ] **Netlify second host**: DNS decided (DEC-033); OD #1, #3, #6
       decided — open: #2, #4, #5, #7, #8; staging pass 1 (repo/host
       split) is a pure refactor, landable on its own.
 - [ ] **Command model**: `docs/SITE_ADDRESS.md` proposed,
       undecided; more command questions queued from the user.
-- [ ] **Backlog**: D1 -- `sync` adds only what's missing (CODE_REVIEW
-      rec #6). Pages IPs item closed by the doctor check (Entry 85).
+- [ ] **Backlog**: none from CODE_REVIEW rec #6 (Pages IPs: doctor
+      check, Entry 85; D1: Entry 86). Open: AAAA records undecided.
 
 ## On Ice (2026-09-29, user call)
 
@@ -48,5 +48,6 @@ None.
 
 ## Next Session
 
-Fix the two Entry 83 defects test-first. After that: Netlify staging
-pass 1 or the `docs/SITE_ADDRESS.md` command-model question.
+Get the user's call on the `www` repoint. Then the command-model
+question (`docs/SITE_ADDRESS.md`), walked through one decision at a
+time, or Netlify staging pass 1.

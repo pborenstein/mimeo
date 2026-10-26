@@ -1176,3 +1176,32 @@ though GitHub documents four for apex domains.
 
 **Files**: `mimeo/cli/doctor.py`, `tests/test_cli.py`, README,
 ARCHITECTURE.md.
+
+## Entry 86: Entry 83 defects closed; sync adds only missing records (2026-10-26)
+
+**What**: Fixed the hidden GitHub error detail, found the second
+Entry 83 defect was not a bug, and shipped CODE_REVIEW D1.
+
+**Why**: Entry 83's diagnosis named two defects. The first was real:
+gh writes only `message` to stderr, and the `errors` array with the
+cause goes to stdout (verified live). The second was a misread:
+`--deploy-org` overwrites `cfg.github_username`, which every command
+passes to `GitHubHost(default_org=...)`, so `required_dns_records`
+already uses the deploy org; `sync`/`status` skip repos outside it.
+D1 was scheduled because the user asked for the fixes to follow it.
+
+**How**: Test-first throughout. `_response_error_details` appends
+`errors` entries to the `HostError` message (`bc939bf`).
+`plan_missing_records` + `apply_record_plan` replace `configure_dns`
+in `sync`: create what is missing, delete only a blocking record
+(wrong-target CNAME, apex parking ALIAS) (`4759f0c`). 405 tests pass.
+A live `sync --all --dry-run` showed 59 domains whose `www` CNAME
+targets `tepiton.github.io` while the repos are in `mimeo-sites` --
+the pre-move leftover Entry 83 saw. With D1 each needs one record
+replaced; before D1, `sync` would have rewritten all five per domain.
+Not applied: user call.
+
+**Decisions**: none.
+
+**Files**: `mimeo/providers/host/github.py`,
+`mimeo/providers/registrar/porkbun.py`, `mimeo/cli/sync.py`, tests.

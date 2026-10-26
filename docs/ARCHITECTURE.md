@@ -63,7 +63,8 @@ mimeo/
 │   │                     PorkbunRegistrar: list_domains, check_nameservers,
 │   │                       update_nameservers, domain_exists
 │   │                     PorkbunDNSProvider: configure_dns, verify_dns, check_dns_drift,
-│   │                       get_domain_records
+│   │                       get_domain_records, plan_missing_records,
+│   │                       apply_record_plan
 │   │                     HTTP calls to api-ipv4.porkbun.com/api/json/v3
 │   │                     configure_dns: delete conflicts, create records
 │   │                     verify_dns: poll with dnspython
@@ -303,7 +304,10 @@ per domain (concurrent unless --dry-run):
         │
         ▼
   required_dns_records() + check_dns_drift()
-    missing records ──► configure_dns() -- apply them
+    missing records ──► plan_missing_records() + apply_record_plan():
+                          create only what is missing; delete a live record
+                          only when it blocks one (wrong-target CNAME at the
+                          same name, apex parking ALIAS)
     extra-only drift  ──► report dns_status="drift" (same term `status` uses);
                           sync does not delete records it does not manage
         │

@@ -638,17 +638,24 @@ front-door verbs than it started with. See DEC-021.
         optimization claim rewritten as convention-dependent (their
         verbatim dir is `public/`, demos never exercise markdown
         image optimization)
-- [ ] `create` failure on a domain already claimed by another Pages
-      site (2026-10-26, Entry 83) -- diagnosed, not fixed
-  - [ ] `_gh_api` surfaces only the top-level `message` ("Invalid
+- [x] `create` failure on a domain already claimed by another Pages
+      site (2026-10-26, Entry 83; fixed Entry 86)
+  - [x] `_gh_api` surfaces only the top-level `message` ("Invalid
         cname"); the `errors` array carrying the cause ("already
-        taken") is dropped -- include it in `HostError`
-  - [ ] `required_dns_records` builds the `www` CNAME from
-        `default_org`, ignoring `--deploy-org` (github.py:994)
+        taken") is dropped -- fixed in `_run_gh_command` (`bc939bf`)
+  - [x] ~~`required_dns_records` ignores `--deploy-org`~~ -- not a
+        bug (Entry 86): `--deploy-org` sets the host's `default_org`,
+        and `sync`/`status` skip repos outside it. The `tepiton.github.io`
+        `www` targets are pre-move leftovers on 59 domains
   - [ ] Optional pre-flight: scan the user's orgs' Pages cnames
         before creating the repo (GitHub has no claim-lookup API)
   - [x] Cleanup: `documentation.rodeo` repo situation resolved by
         the user out of band (2026-10-26, Entry 84)
+- [x] CODE_REVIEW D1: `sync` adds only missing records, replacing a
+      record only when it blocks one (2026-10-26, Entry 86, `4759f0c`)
+- [ ] Repoint `www` on 59 domains from `tepiton.github.io` to
+      `mimeo-sites.github.io` with `mimeo sync --all` (user call;
+      sites work either way, `sync --all --dry-run` lists them)
 - [ ] When eleventy 4 ships: drop each template's `audit=false`
       (added in the 2026-10-03 npm 12 pass to keep installs silent)
 - [x] `doctor` Pages IP check (2026-10-26, Entry 85): replaces the

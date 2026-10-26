@@ -17,6 +17,7 @@ from .doctor import (
     _check_gh_installed,
     _check_gh_workflow_scope,
     _check_nameservers,
+    _check_pages_ips,
     _check_python_version,
     doctor,
 )
@@ -72,6 +73,7 @@ __all__ = [
     "_check_gh_installed",
     "_check_gh_workflow_scope",
     "_check_nameservers",
+    "_check_pages_ips",
     "_check_python_version",
     "_categorize_error",
     "_emit",

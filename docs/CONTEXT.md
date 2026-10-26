@@ -3,7 +3,7 @@ phase: 8
 phase_name: Consolidation
 updated: 2026-10-26
 last_commit: a5045ae
-last_entry: 84
+last_entry: 85
 ---
 
 ## Current Focus
@@ -22,8 +22,8 @@ parking CNAMEs removed from 54 domains).
       split) is a pure refactor, landable on its own.
 - [ ] **Command model**: `docs/SITE_ADDRESS.md` proposed,
       undecided; more command questions queued from the user.
-- [ ] **Backlog**: rec #6 long-termers — Pages IPs from
-      `api.github.com/meta`; D1 create-only-missing `sync` path.
+- [ ] **Backlog**: D1 -- `sync` adds only what's missing (CODE_REVIEW
+      rec #6). Pages IPs item closed by the doctor check (Entry 85).
 
 ## On Ice (2026-09-29, user call)
 

@@ -340,6 +340,10 @@ workflow scope?     ok / fail + remediation
 config valid?       ok / fail + remediation
         │
         ▼
+Pages IPs listed?   every GITHUB_PAGES_IPS entry in api.github.com/meta
+                    `pages`; fail names the dropped IP
+        │
+        ▼
 (for each domain) NS check via lookup_nameservers()
   ns_ok? ──► ok
   !ns_ok? ──► warn: nameservers point elsewhere
@@ -348,6 +352,8 @@ config valid?       ok / fail + remediation
 all ok? ──► exit 0
 any fail? ──► print failures ──► exit EXIT_CONFIG
 ```
+
+The Pages IP check only confirms the hardcoded list. The `meta` list also carries two legacy IPs (`192.30.252.153/154`) and IPv6 addresses, so it is never used as the source of records.
 
 Each check returns `(ok: bool, detail: str, fix: str)`. The checks are implemented as standalone functions and are independently testable.
 

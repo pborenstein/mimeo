@@ -53,7 +53,7 @@ In JSON log mode each diagnostic line is a newline-delimited JSON object with `t
 
 ### doctor
 
-Checks that all prerequisites are met before running any other command: Python version, `gh` installation, `gh` authentication, `workflow` token scope, and config file validity. Each check prints a pass/fail result with remediation instructions. Passing domain names also checks that their nameservers point to Porkbun.
+Checks that all prerequisites are met before running any other command: Python version, `gh` installation, `gh` authentication, `workflow` token scope, config file validity, and that GitHub still lists the four Pages IPs mimeo writes as A records (read from `api.github.com/meta`). Each check prints a pass/fail result with remediation instructions. Passing domain names also checks that their nameservers point to Porkbun.
 
 | Task | Command |
 |:-----|:--------|

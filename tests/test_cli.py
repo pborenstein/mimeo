@@ -13,6 +13,7 @@ from mimeo.cli import (
     _check_gh_installed,
     _check_gh_workflow_scope,
     _check_nameservers,
+    _check_pages_ips,
     _check_python_version,
     create,
     delete,
@@ -1084,8 +1085,96 @@ class TestDoctorHelpers:
         assert "no NS records" in detail
 
 
+class TestCheckPagesIps:
+    """Tests for the GitHub Pages IP doctor check."""
+
+    _META = (
+        '["192.30.252.153/32","192.30.252.154/32","185.199.108.153/32",'
+        '"185.199.109.153/32","185.199.110.153/32","185.199.111.153/32",'
+        '"2606:50c0:8000::153/128"]\n'
+    )
+
+    def _run(self, stdout: str, returncode: int = 0) -> MagicMock:
+        result = MagicMock()
+        result.returncode = returncode
+        result.stdout = stdout
+        result.stderr = ""
+        return result
+
+    def test_all_listed(self) -> None:
+        """Passes when every hardcoded IP is in GitHub's meta pages list."""
+        with patch(f"{_DOCTOR}.subprocess.run", return_value=self._run(self._META)):
+            ok, detail, fix = _check_pages_ips()
+        assert ok is True
+        assert "4" in detail
+        assert fix == ""
+
+    def test_ip_dropped(self) -> None:
+        """Fails and names the IP when GitHub no longer lists it."""
+        meta = '["185.199.108.153/32","185.199.109.153/32","185.199.110.153/32"]'
+        with patch(f"{_DOCTOR}.subprocess.run", return_value=self._run(meta)):
+            ok, detail, fix = _check_pages_ips()
+        assert ok is False
+        assert "185.199.111.153" in detail
+        assert "GITHUB_PAGES_IPS" in fix
+
+    def test_fetch_fails(self) -> None:
+        """Fails when gh api meta returns non-zero."""
+        with patch(f"{_DOCTOR}.subprocess.run", return_value=self._run("", returncode=1)):
+            ok, detail, fix = _check_pages_ips()
+        assert ok is False
+        assert "api.github.com/meta" in detail
+
+    def test_bad_json(self) -> None:
+        """Fails when the response is not a JSON list."""
+        with patch(f"{_DOCTOR}.subprocess.run", return_value=self._run("not json")):
+            ok, detail, fix = _check_pages_ips()
+        assert ok is False
+        assert "api.github.com/meta" in detail
+
+    def test_gh_missing(self) -> None:
+        """Fails when gh is not installed."""
+        with patch(f"{_DOCTOR}.subprocess.run", side_effect=FileNotFoundError):
+            ok, detail, fix = _check_pages_ips()
+        assert ok is False
+        assert "cli.github.com" in fix
+
+
 class TestDoctorCommand:
     """Tests for the doctor CLI command."""
+
+    @pytest.fixture(autouse=True)
+    def _pages_ips_ok(self) -> Any:
+        """Keep the Pages IP check off the network in command tests."""
+        with patch(f"{_DOCTOR}._check_pages_ips", return_value=(True, "4 listed", "")):
+            yield
+
+    def test_doctor_reports_dropped_pages_ip(
+        self, runner: CliRunner, tmp_path: Path
+    ) -> None:
+        """Doctor exits non-zero when a Pages IP check fails."""
+        cfg_file = tmp_path / "config.toml"
+        cfg_file.write_text(
+            '[porkbun]\napi_key = "pk1_test"\nsecret_key = "sk1_test"\n'
+            '[github]\ndefault_org = "testuser"\n'
+        )
+
+        def fake_run(cmd: list, **kwargs: Any) -> MagicMock:
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_result.stdout = "gh version 2.40.0\n  - Token scopes: 'repo', 'workflow'\n"
+            mock_result.stderr = ""
+            return mock_result
+
+        failing = (False, "not listed: 185.199.111.153", "Update GITHUB_PAGES_IPS")
+        with patch(f"{_DOCTOR}.subprocess.run", side_effect=fake_run), patch(
+            f"{_DOCTOR}._check_pages_ips", return_value=failing
+        ):
+            result = runner.invoke(doctor, ["--config", str(cfg_file)])
+
+        assert result.exit_code != 0
+        assert "Pages IPs" in result.output
+        assert "185.199.111.153" in result.output
 
     def test_doctor_help(self, runner: CliRunner) -> None:
         """Doctor command shows help."""
@@ -1390,7 +1479,9 @@ class TestLogFormatOption:
                 m.stderr = ""
             return m
 
-        with patch(f"{_DOCTOR}.subprocess.run", side_effect=fake_run):
+        with patch(f"{_DOCTOR}.subprocess.run", side_effect=fake_run), patch(
+            f"{_DOCTOR}._check_pages_ips", return_value=(True, "4 listed", "")
+        ):
             result = runner.invoke(
                 main,
                 ["--log-format", "json", "doctor", "--config", str(cfg_file)],

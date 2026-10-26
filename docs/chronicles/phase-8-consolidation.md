@@ -1152,3 +1152,27 @@ every deleted record's name and target if any need recreating.
 **Decisions**: none.
 
 **Files**: `a5045ae` (scripts, README, .gitignore); IMPLEMENTATION.md.
+
+## Entry 85: doctor checks the hardcoded Pages IPs against GitHub (2026-10-26)
+
+**What**: `mimeo doctor` gains a "Pages IPs" check: every entry in
+`GITHUB_PAGES_IPS` must appear in the `pages` field of
+`api.github.com/meta` (read via `gh api meta`). A dropped IP fails the
+check and names it. Closes the CODE_REVIEW rec #6 Pages-IP item.
+
+**Why**: The backlog item proposed sourcing the A records from `meta`.
+The live list (2026-10-26) has 10 entries: the four documented apex
+IPs, two legacy `192.30.252.153/154`, and four IPv6. Using it directly
+would add the legacy IPs to every domain; filtering it re-hardcodes a
+rule. The real risk -- GitHub retiring an IP while mimeo keeps writing
+it -- is covered by a check. User agreed.
+
+**How**: `_check_pages_ips` in `mimeo/cli/doctor.py`, test-first (5
+helper tests + 1 command test; doctor command tests patch the check
+to stay offline). 393 tests pass; live `mimeo doctor` passes.
+
+**Decisions**: none. Open, not decided: mimeo writes no AAAA records,
+though GitHub documents four for apex domains.
+
+**Files**: `mimeo/cli/doctor.py`, `tests/test_cli.py`, README,
+ARCHITECTURE.md.

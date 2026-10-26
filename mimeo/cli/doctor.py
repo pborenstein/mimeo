@@ -79,6 +79,45 @@ def _check_gh_workflow_scope() -> tuple[bool, str, str]:
         return False, "gh not installed", "Install gh from https://cli.github.com"
 
 
+def _check_pages_ips() -> tuple[bool, str, str]:
+    """Check that GitHub still lists every hardcoded Pages IP.
+
+    mimeo writes GITHUB_PAGES_IPS as apex A records. GitHub publishes the
+    current Pages addresses in the ``pages`` field of api.github.com/meta,
+    which also carries legacy and IPv6 entries, so the list is used only to
+    confirm the hardcoded set, never as the source of records.
+    """
+    from ..providers.host.github import GITHUB_PAGES_IPS
+    try:
+        result = subprocess.run(
+            ["gh", "api", "meta", "--jq", ".pages"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        return False, "gh not installed", "Install gh from https://cli.github.com"
+    unreachable = "could not read api.github.com/meta"
+    if result.returncode != 0:
+        return False, unreachable, "Check network access and 'gh auth status'."
+    try:
+        listed = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return False, unreachable, "Unexpected response from 'gh api meta'."
+    if not isinstance(listed, list):
+        return False, unreachable, "Unexpected response from 'gh api meta'."
+    addresses = {str(entry).split("/")[0] for entry in listed}
+    missing = [ip for ip in GITHUB_PAGES_IPS if ip not in addresses]
+    if missing:
+        return (
+            False,
+            f"not listed by GitHub: {', '.join(missing)}",
+            "Update GITHUB_PAGES_IPS in mimeo/providers/host/github.py from "
+            "GitHub's Pages docs, then run 'mimeo sync --all'.",
+        )
+    return True, f"all {len(GITHUB_PAGES_IPS)} listed by GitHub", ""
+
+
 def _check_nameservers(domain: str) -> tuple[bool, str, str]:
     """Check that a domain's nameservers point to Porkbun."""
     from ..providers.registrar.porkbun import PORKBUN_NAMESERVERS, lookup_nameservers
@@ -128,6 +167,7 @@ def doctor(config: Path | None, domains: tuple[str, ...]) -> None:
       - gh CLI is authenticated
       - GitHub token has the 'workflow' scope
       - Config file exists and is valid
+      - GitHub still lists mimeo's Pages IPs (api.github.com/meta)
       - NS records for each DOMAIN point to Porkbun (if domains provided)
 
     \b
@@ -147,6 +187,7 @@ def doctor(config: Path | None, domains: tuple[str, ...]) -> None:
         ("gh authenticated", _check_gh_auth),
         ("workflow scope", _check_gh_workflow_scope),
         ("config file", lambda: _check_config(config)),
+        ("Pages IPs", _check_pages_ips),
     ]
 
     for domain in domains:

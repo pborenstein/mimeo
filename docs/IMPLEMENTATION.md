@@ -651,6 +651,10 @@ front-door verbs than it started with. See DEC-021.
         the user out of band (2026-10-26, Entry 84)
 - [ ] When eleventy 4 ships: drop each template's `audit=false`
       (added in the 2026-10-03 npm 12 pass to keep installs silent)
+- [x] `doctor` Pages IP check (2026-10-26, Entry 85): replaces the
+      CODE_REVIEW rec #6 "fetch Pages IPs from api.github.com/meta"
+      item -- `meta` carries legacy and IPv6 entries, so it confirms
+      the hardcoded list instead of replacing it
 - [x] Porkbun parking-CNAME sweep (2026-10-26, Entry 84): deleted the
       wildcard `*.domain` CNAMEs to `pixie`/`uixie.porkbun.com` on 54
       domains; `pborenstein.ooo` left (expired, API access off).

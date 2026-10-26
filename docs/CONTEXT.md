@@ -2,29 +2,23 @@
 phase: 8
 phase_name: Consolidation
 updated: 2026-10-26
-last_commit: 086ffb7
-last_entry: 83
+last_commit: a5045ae
+last_entry: 84
 ---
 
 ## Current Focus
 
-`docs/TEMPLATE_CONSOLIDATION.md` is fully executed (Entries 81–82):
-folio retired, `dek` in chapbook, DEC-034 shipped, and pass 2's
-tepiton/content-fixture live with the content contract and a green
-four-template CI matrix. Nothing is queued for consolidation.
-Entry 83 diagnosed a `create` failure: `documentation.rodeo` is
-already the Pages cname of `mimeo-sites/documentation.rodeo`, and
-GitHub's "Invalid cname" hid that. Two mimeo fixes queued, no code
-changed yet.
+Template consolidation is done (Entries 81–82). Entry 83 diagnosed
+a `create` failure on a domain already claimed by another Pages
+site; the repo cleanup is resolved (user), the two mimeo fixes are
+not. Entry 84 swept Porkbun's wildcard parking CNAMEs off 54
+domains and added jq helpers for the account exports.
 
 ## Active Tasks
 
 - [ ] **Entry 83 fixes**: `_gh_api` drops the response `errors`
       array; `required_dns_records` uses `default_org` for `www`,
       ignoring `--deploy-org` (github.py:994). Test-first.
-- [ ] **Cleanup (user call)**: delete empty
-      `documentation-rodeo/documentation.rodeo`; then transfer
-      `mimeo-sites/documentation.rodeo` there, or leave it.
 - [ ] **Netlify second host**: DNS decided (DEC-033); OD #1, #3, #6
       decided — open: #2, #4, #5, #7, #8; staging pass 1 (repo/host
       split) is a pure refactor, landable on its own.
@@ -89,8 +83,11 @@ None.
       (`scripts/e2e_smoke.sh` on a junk domain). Version 1.3.0; bump
       pyproject + `__version__` + `uv lock` together.
 
+- Porkbun exports (`scripts/porkbun*.json`) are gitignored: full
+      domain list + DNS, public repo. `pborenstein.ooo` expired
+      2026-10-05, API access off -- its parking CNAME stays (user call).
+
 ## Next Session
 
-Get the user's call on the documentation.rodeo repo cleanup, then
-fix the two Entry 83 defects test-first. After that: Netlify staging
+Fix the two Entry 83 defects test-first. After that: Netlify staging
 pass 1 or the `docs/SITE_ADDRESS.md` command-model question.

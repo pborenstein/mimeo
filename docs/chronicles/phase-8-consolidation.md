@@ -1127,3 +1127,28 @@ leave it).
 **Decisions**: none.
 
 **Files**: none changed; IMPLEMENTATION.md tasks added.
+
+## Entry 84: Porkbun parking-CNAME sweep and jq helpers (2026-10-26)
+
+**What**: Deleted the Porkbun-default wildcard CNAMEs (`*.domain` ->
+`pixie.porkbun.com` / `uixie.porkbun.com`) from 54 domains. Committed
+two jq helper scripts for the account's JSON exports; the exports
+themselves are gitignored. The `documentation.rodeo` cleanup from
+Entry 83 was resolved by the user.
+
+**Why**: The wildcard sent every unconfigured subdomain to Porkbun's
+parking page. The exports hold the full domain list and DNS records,
+and the repo is public, so they stay local (`scripts/porkbun*.json`).
+
+**How**: A throwaway script (session scratchpad, not committed) used
+`Config.load()` and `PorkbunDNSProvider` to re-read live records for
+the 99 domains on Porkbun nameservers, dry-run first (55 matches,
+same as the snapshot), then `--apply`. 54 deleted; `pborenstein.ooo`
+refused with HTTP 400 "Domain cannot currently be managed" -- it
+expired 2026-10-05 with auto-renew and `apiAccess` off. Left as is
+(user call). The local `porkbun+dns.2026.10.26.json` snapshot keeps
+every deleted record's name and target if any need recreating.
+
+**Decisions**: none.
+
+**Files**: `a5045ae` (scripts, README, .gitignore); IMPLEMENTATION.md.

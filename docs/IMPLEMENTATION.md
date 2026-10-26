@@ -647,9 +647,13 @@ front-door verbs than it started with. See DEC-021.
         `default_org`, ignoring `--deploy-org` (github.py:994)
   - [ ] Optional pre-flight: scan the user's orgs' Pages cnames
         before creating the repo (GitHub has no claim-lookup API)
-  - [ ] Cleanup pending user call: empty leftover repo
-        `documentation-rodeo/documentation.rodeo`; live site is
-        `mimeo-sites/documentation.rodeo` (transfer it, or leave it)
+  - [x] Cleanup: `documentation.rodeo` repo situation resolved by
+        the user out of band (2026-10-26, Entry 84)
+- [x] Porkbun parking-CNAME sweep (2026-10-26, Entry 84): deleted the
+      wildcard `*.domain` CNAMEs to `pixie`/`uixie.porkbun.com` on 54
+      domains; `pborenstein.ooo` left (expired, API access off).
+      `scripts/porkbun-domains.sh` and `porkbun-query.sh` added; the
+      JSON exports are gitignored
 
 ---
 

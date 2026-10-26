@@ -1100,3 +1100,30 @@ new mimeo decision — mimeo code did not change in pass 2.
 IMPLEMENTATION.md, CONTEXT.md, this entry. Sub-repos: pamphlet
 (a4c834a..d37e00f), chapbook (982c377, 6441692), TEMPLATES meta
 (66a646f, f370307).
+
+## Entry 83: create fails on a domain already claimed by Pages (2026-10-26)
+
+**What**: `mimeo --deploy-org documentation-rodeo create --template
+eleventy-service documentation.rodeo` failed at the Pages cname PUT
+with "Invalid cname (HTTP 400)". Diagnosed only; no code changed.
+
+**Why**: GitHub allows one Pages site per custom domain, and
+`mimeo-sites/documentation.rodeo` already holds `documentation.rodeo`
+(live, 200 from GitHub). The response body's `errors` array said so
+("already taken"); mimeo printed only `message`. Found by scanning
+Pages cnames across the user's orgs -- GitHub has no API to look up
+which repo holds a domain.
+
+**How**: Re-ran the PUT with `gh api -i` to see the body, then looped
+over `gh api user/orgs` repos. Two mimeo defects surfaced: the
+dropped `errors` detail in `_gh_api`, and `required_dns_records`
+deriving the `www` CNAME target from `default_org` instead of the
+deploy org (current record points at `tepiton.github.io`; works
+because Pages routes by Host header, but wrong). The failed run left
+an empty `documentation-rodeo/documentation.rodeo` repo; cleanup
+waits on the user's choice (transfer the live repo, or delete and
+leave it).
+
+**Decisions**: none.
+
+**Files**: none changed; IMPLEMENTATION.md tasks added.

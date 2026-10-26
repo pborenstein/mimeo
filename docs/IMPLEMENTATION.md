@@ -638,6 +638,18 @@ front-door verbs than it started with. See DEC-021.
         optimization claim rewritten as convention-dependent (their
         verbatim dir is `public/`, demos never exercise markdown
         image optimization)
+- [ ] `create` failure on a domain already claimed by another Pages
+      site (2026-10-26, Entry 83) -- diagnosed, not fixed
+  - [ ] `_gh_api` surfaces only the top-level `message` ("Invalid
+        cname"); the `errors` array carrying the cause ("already
+        taken") is dropped -- include it in `HostError`
+  - [ ] `required_dns_records` builds the `www` CNAME from
+        `default_org`, ignoring `--deploy-org` (github.py:994)
+  - [ ] Optional pre-flight: scan the user's orgs' Pages cnames
+        before creating the repo (GitHub has no claim-lookup API)
+  - [ ] Cleanup pending user call: empty leftover repo
+        `documentation-rodeo/documentation.rodeo`; live site is
+        `mimeo-sites/documentation.rodeo` (transfer it, or leave it)
 
 ---
 

@@ -1,9 +1,9 @@
 ---
 phase: 8
 phase_name: Consolidation
-updated: 2026-10-04
-last_commit: c5cba66
-last_entry: 82
+updated: 2026-10-26
+last_commit: 086ffb7
+last_entry: 83
 ---
 
 ## Current Focus
@@ -12,11 +12,19 @@ last_entry: 82
 folio retired, `dek` in chapbook, DEC-034 shipped, and pass 2's
 tepiton/content-fixture live with the content contract and a green
 four-template CI matrix. Nothing is queued for consolidation.
-Command-model work: `docs/SITE_ADDRESS.md` and `docs/NETLIFY.md`
-(second host; DNS decided, DEC-033) proposed but unscheduled.
+Entry 83 diagnosed a `create` failure: `documentation.rodeo` is
+already the Pages cname of `mimeo-sites/documentation.rodeo`, and
+GitHub's "Invalid cname" hid that. Two mimeo fixes queued, no code
+changed yet.
 
 ## Active Tasks
 
+- [ ] **Entry 83 fixes**: `_gh_api` drops the response `errors`
+      array; `required_dns_records` uses `default_org` for `www`,
+      ignoring `--deploy-org` (github.py:994). Test-first.
+- [ ] **Cleanup (user call)**: delete empty
+      `documentation-rodeo/documentation.rodeo`; then transfer
+      `mimeo-sites/documentation.rodeo` there, or leave it.
 - [ ] **Netlify second host**: DNS decided (DEC-033); OD #1, #3, #6
       decided — open: #2, #4, #5, #7, #8; staging pass 1 (repo/host
       split) is a pure refactor, landable on its own.
@@ -83,6 +91,6 @@ None.
 
 ## Next Session
 
-Consolidation has no queue. The open threads are the Netlify second
-host (staging pass 1 is self-contained) and the command-model
-question in `docs/SITE_ADDRESS.md` — whichever the user picks up.
+Get the user's call on the documentation.rodeo repo cleanup, then
+fix the two Entry 83 defects test-first. After that: Netlify staging
+pass 1 or the `docs/SITE_ADDRESS.md` command-model question.

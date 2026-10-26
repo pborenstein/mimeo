@@ -81,3 +81,64 @@ uv run scripts/smoke_test_github.py
 ### Requirements
 
 - `gh` CLI installed and authenticated
+
+## Porkbun JSON exports
+
+Two JSON snapshots of the Porkbun domain account, dated 2026-10-26. They are a different format from the CSV that `fetch_porkbun_domains.py` writes.
+
+- `porkbun-no-dns.2026.10.26.json`: 105 domains, `dns_records` empty on every entry
+- `porkbun+dns.2026.10.26.json`: same domains, `dns_records` populated
+
+Each entry has this shape:
+
+```json
+{
+  "domain": "example.com",
+  "tld": "com",
+  "expires": "2027-01-04 22:25:52",
+  "auto_renew": true,
+  "nameservers": ["curitiba.porkbun.com", "fortaleza.porkbun.com"],
+  "ns_ok": true,
+  "dns_records": [
+    {"id": "...", "name": "www.example.com", "type": "CNAME",
+     "content": "example.github.io", "ttl": "600", "prio": "0", "notes": ""}
+  ],
+  "error": null
+}
+```
+
+- `ns_ok` is `false` when the nameservers are not Porkbun's (the export shows `dns*.p0N.nsone.net` in those cases)
+- `auto_renew: false` marks domains that will not renew
+- The CNAME targets in the DNS export are GitHub Pages hosts, `pixie.porkbun.com` / `uixie.porkbun.com`, and `pborenstein.micro.blog`
+
+These files contain the full domain list and DNS records for the account. `.gitignore` excludes them (`scripts/porkbun*.json`), so they stay local.
+
+### porkbun-domains.sh
+
+Summarizes a JSON export with `jq`. By default it lists renewing domains with their `ns_ok` value.
+
+```bash
+scripts/porkbun-domains.sh scripts/porkbun+dns.2026.10.26.json        # domain + ns_ok, renewing only
+scripts/porkbun-domains.sh -s scripts/porkbun+dns.2026.10.26.json     # names only
+scripts/porkbun-domains.sh -n scripts/porkbun+dns.2026.10.26.json     # ns_ok false only
+scripts/porkbun-domains.sh -a scripts/porkbun+dns.2026.10.26.json     # include non-renewals
+scripts/porkbun-domains.sh -f expires scripts/porkbun+dns.2026.10.26.json
+```
+
+Requires `jq`.
+
+### porkbun-query.sh
+
+Takes a plain-English query, asks Claude (`claude --model haiku -p`) for a jq filter, checks that the filter compiles, then runs it against the export. The default file is `porkbun+dns.2026.10.26.json` next to the script.
+
+```bash
+scripts/porkbun-query.sh "domains that renew and use non-Porkbun nameservers"
+scripts/porkbun-query.sh -q "domains with a CNAME to github.io"   # print filter only
+scripts/porkbun-query.sh -f other.json "..."                      # different export
+```
+
+The script prints the generated filter to stderr before running it. Only the query text and a description of the record fields are sent to Claude. The JSON data stays local and is read by `jq`.
+
+Requires `jq` and the `claude` CLI.
+
+Known issue: the generated filter is not always valid. The script exits with "Claude returned an invalid jq filter" and prints the filter. Rerunning usually works.

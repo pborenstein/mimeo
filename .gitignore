@@ -63,3 +63,6 @@ data/
 
 # ZCode harness local config
 .zcodeignore
+
+# Porkbun account exports (full domain list + DNS records)
+scripts/porkbun*.json

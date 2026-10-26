@@ -109,6 +109,45 @@ Use the `/plinth:session-wrapup` command to automate this.
 - [ ] Document new decisions in DECISIONS.md
 - [ ] Commit with descriptive message
 
+## Project Facts
+
+Stable facts that sessions need. Current work state lives in
+`docs/CONTEXT.md`, not here.
+
+- **Templates**: GitHub template repos in the `tepiton` org; the
+  canonical inventory is `~/projects/tepiton/TEMPLATES/CLAUDE.md`. A
+  repo is offered only while its `is_template` flag is set (DEC-034);
+  `create` rejects unflagged repos. The `mimeo-template` topic is for
+  humans -- nothing in mimeo enumerates templates. `--force` is the
+  only in-place replacement.
+- **Content contract**: `CONTENT-CONTRACT.md` in tepiton/content-fixture
+  defines portable frontmatter and directories. Its Actions matrix
+  builds the corpus against the four document templates (push, weekly
+  Mon 06:17 UTC, dispatch) and is the drift alarm for template changes.
+- **On disk** (since 2026-10-09): tepiton working copies live under
+  `~/projects/tepiton/` (TEMPLATES/, tepiton.github.io/, site repos).
+  `~/projects/mimeo-sites/` holds stragglers; older doc references to
+  it predate the move.
+- **Public repo**: anything committed is published. Porkbun account
+  exports (`scripts/porkbun*.json`) are gitignored for that reason.
+- **E2E**: live usage is the end-to-end hedge; `scripts/e2e_smoke.sh`
+  runs against a junk domain.
+- **Releases**: bump `pyproject.toml`, `mimeo/__version__`, and run
+  `uv lock` together.
+- **Tests**: tests that build 404/422 `HostError`s must pass
+  `status_code=` (exit-code mapping depends on it, DEC-027/028).
+
+### Doc Style
+
+The [documentation principles gist](https://gist.github.com/pborenstein/80b6e1a9011b4a02ad13dfbc06874141)
+(adopted Entry 67) governs all prose docs:
+
+- Explain the mechanism; do not coin a label for it
+- Answer the question asked -- a yes/no question gets yes/no
+- Link to what you reference
+- Vendor facts are verified-with-date, or listed as unverified
+- Chronicles, DECISIONS.md, and CODE_REVIEW.md are never rewritten
+
 ## What NOT to Do
 
 - Don't skip documentation updates

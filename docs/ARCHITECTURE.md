@@ -382,7 +382,7 @@ default path: ~/.config/mimeo/config.toml
 parse TOML (tomllib, stdlib 3.11+)
   schema_version    integer (currently 1)
   [porkbun]         api_key, secret_key
-  [github]          default_org
+  [github]          default_org, template_org
   [defaults]        registrar, host
   ignore_domains    list of domains excluded from fleet-wide sweeps
         │
@@ -399,6 +399,8 @@ raise ConfigurationError if missing
         ▼
 return Config dataclass
 ```
+
+`github.template_org` (default `tepiton`) is the org templates are read from; `github.default_org` is the org new site repos are created in. `--template-org` and `--deploy-org` override them for one invocation.
 
 `ignore_domains` only trims fleet-wide sweeps (`status --all`, `sync --all`); explicitly named domains are always processed regardless of the ignore list.
 
@@ -428,6 +430,8 @@ The CLI catches `ConfigurationError` and `HostError` at the top level and prints
 | 4 | EXIT_RATE_LIMIT | Rate limit hit |
 | 5 | EXIT_TRANSIENT | Transient network/server error |
 | 6 | EXIT_PARTIAL | Some domains succeeded, some failed |
+
+Only confirmed-transient failures exit 5 (DEC-027): 429 exits 4, 5xx exits 5, 401/403 exit 3, and definitive provider failures (400/404/422, gh not installed) exit 1. A script that retries on 5 does not retry a failure that will repeat.
 
 ## Structured Logging
 

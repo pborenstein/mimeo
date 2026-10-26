@@ -649,6 +649,8 @@ front-door verbs than it started with. See DEC-021.
         before creating the repo (GitHub has no claim-lookup API)
   - [x] Cleanup: `documentation.rodeo` repo situation resolved by
         the user out of band (2026-10-26, Entry 84)
+- [ ] When eleventy 4 ships: drop each template's `audit=false`
+      (added in the 2026-10-03 npm 12 pass to keep installs silent)
 - [x] Porkbun parking-CNAME sweep (2026-10-26, Entry 84): deleted the
       wildcard `*.domain` CNAMEs to `pixie`/`uixie.porkbun.com` on 54
       domains; `pborenstein.ooo` left (expired, API access off).

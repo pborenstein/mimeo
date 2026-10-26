@@ -1228,3 +1228,19 @@ follow-up dry run plans changes only for orobia.dev.
 **Decisions**: none. Open: orobia.dev (user call).
 
 **Files**: IMPLEMENTATION.md, CONTEXT.md (no code).
+
+## Entry 88: orobia.dev brought online (2026-10-26)
+
+**What**: `mimeo sync orobia.dev` created its four apex A records and
+the `www` CNAME to `mimeo-sites.github.io`. The user confirmed the
+site should be live (Entry 87 had left it out pending that call).
+
+**How**: Porkbun's nameservers answered with the four Pages IPs right
+away. `https://orobia.dev/` returned 200 with a valid certificate from
+GitHub. Pages already had `cname` set and HTTPS enforced, and the last
+build (2026-09-15) had succeeded. Public resolvers that cached the
+earlier empty answer catch up as that negative cache expires.
+
+**Decisions**: none.
+
+**Files**: IMPLEMENTATION.md, CONTEXT.md (no code).

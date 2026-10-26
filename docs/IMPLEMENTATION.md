@@ -655,9 +655,8 @@ front-door verbs than it started with. See DEC-021.
       record only when it blocks one (2026-10-26, Entry 86, `4759f0c`)
 - [x] Repointed `www` to `mimeo-sites.github.io` on 57 domains and
       added the missing `www` on amalgamedon.com (2026-10-26, Entry 87)
-- [ ] orobia.dev: Pages repo is configured but the domain has no
-      A/CNAME records, so the site is offline. `mimeo sync orobia.dev`
-      would bring it up (user call: offline on purpose or not)
+- [x] orobia.dev brought online with `mimeo sync orobia.dev`
+      (user call, 2026-10-26, Entry 88)
 - [ ] When eleventy 4 ships: drop each template's `audit=false`
       (added in the 2026-10-03 npm 12 pass to keep installs silent)
 - [x] `doctor` Pages IP check (2026-10-26, Entry 85): replaces the

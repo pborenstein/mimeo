@@ -3,7 +3,7 @@ phase: 8
 phase_name: Consolidation
 updated: 2026-10-26
 last_commit: 794abb7
-last_entry: 87
+last_entry: 88
 ---
 
 ## Current Focus
@@ -14,9 +14,6 @@ work is in flight.
 
 ## Active Tasks
 
-- [ ] **orobia.dev (user call)**: Pages repo set up, no DNS records,
-      so offline. `mimeo sync orobia.dev` brings it up. It is the only
-      domain `sync --all --dry-run` would change.
 - [ ] **Netlify second host**: DNS decided (DEC-033); OD #1, #3, #6
       decided — open: #2, #4, #5, #7, #8; staging pass 1 (repo/host
       split) is a pure refactor, landable on its own.
@@ -48,6 +45,6 @@ None.
 
 ## Next Session
 
-Get the user's call on orobia.dev. Then the command-model
-question (`docs/SITE_ADDRESS.md`), walked through one decision at a
+The fleet is converged (`sync --all --dry-run` plans nothing). Next:
+the command-model question (`docs/SITE_ADDRESS.md`), walked through one decision at a
 time, or Netlify staging pass 1.

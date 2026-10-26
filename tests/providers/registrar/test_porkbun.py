@@ -773,3 +773,106 @@ class TestRemoveDNSRecords:
 
         with pytest.raises(RegistrarError):
             provider.remove_dns_records("example.com", managed_records)
+
+
+class TestMissingRecordPlan:
+    """Tests for plan_missing_records / apply_record_plan (sync's D1 path)."""
+
+    @pytest.fixture
+    def provider(self) -> PorkbunDNSProvider:
+        return PorkbunDNSProvider(api_key="pk1_test_key", secret_key="sk1_test_secret")
+
+    @pytest.fixture
+    def expected(self) -> list[DNSRecord]:
+        return [DNSRecord(type="A", name="", content=ip, ttl=600) for ip in GITHUB_PAGES_IPS] + [
+            DNSRecord(type="CNAME", name="www", content="testuser.github.io", ttl=600)
+        ]
+
+    def _live_correct(self) -> list[dict]:
+        live = [
+            {"id": f"a{i}", "type": "A", "name": "example.com", "content": ip}
+            for i, ip in enumerate(GITHUB_PAGES_IPS)
+        ]
+        live.append(
+            {"id": "c1", "type": "CNAME", "name": "www.example.com", "content": "testuser.github.io"}
+        )
+        return live
+
+    def test_nothing_missing(self, provider: PorkbunDNSProvider, expected: list) -> None:
+        """A fully converged domain plans no work."""
+        assert provider.plan_missing_records("example.com", expected, self._live_correct()) == []
+
+    def test_one_a_missing(self, provider: PorkbunDNSProvider, expected: list) -> None:
+        """Only the missing A record is planned; the correct ones are untouched."""
+        live = [r for r in self._live_correct() if r["id"] != "a3"]
+        plan = provider.plan_missing_records("example.com", expected, live)
+        assert [(rec.type, rec.content, deletes) for rec, deletes in plan] == [
+            ("A", GITHUB_PAGES_IPS[3], [])
+        ]
+
+    def test_wrong_www_cname_replaced(self, provider: PorkbunDNSProvider, expected: list) -> None:
+        """A www CNAME with the wrong target is deleted before the right one is created."""
+        live = self._live_correct()
+        live[-1] = {"id": "c9", "type": "CNAME", "name": "www.example.com",
+                    "content": "otherorg.github.io"}
+        plan = provider.plan_missing_records("example.com", expected, live)
+        assert [(rec.type, rec.name, deletes) for rec, deletes in plan] == [
+            ("CNAME", "www", ["c9"])
+        ]
+
+    def test_apex_alias_cleared_once(self, provider: PorkbunDNSProvider, expected: list) -> None:
+        """A Porkbun parking ALIAS at the apex is deleted once, before the first A."""
+        live = [{"id": "al1", "type": "ALIAS", "name": "example.com",
+                 "content": "pixie.porkbun.com"}]
+        plan = provider.plan_missing_records("example.com", expected, live)
+        deletes = [d for _, d in plan]
+        assert deletes[0] == ["al1"]
+        assert all(d == [] for d in deletes[1:])
+        assert len(plan) == 5
+
+    def test_unrelated_records_never_deleted(
+        self, provider: PorkbunDNSProvider, expected: list
+    ) -> None:
+        """TXT, MX, and other-name records are not touched."""
+        live = [
+            {"id": "t1", "type": "TXT", "name": "example.com", "content": "v=spf1"},
+            {"id": "m1", "type": "MX", "name": "example.com", "content": "mail.example.com"},
+            {"id": "c2", "type": "CNAME", "name": "blog.example.com", "content": "x.micro.blog"},
+        ]
+        plan = provider.plan_missing_records("example.com", expected, live)
+        assert all(deletes == [] for _, deletes in plan)
+
+    @responses.activate
+    def test_apply_deletes_then_creates(self, provider: PorkbunDNSProvider) -> None:
+        """apply_record_plan deletes the conflicting record, then creates the new one."""
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/delete/example.com/c9",
+            json={"status": "SUCCESS"},
+            status=200,
+        )
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/create/example.com",
+            json={"status": "SUCCESS", "id": "new"},
+            status=200,
+        )
+        record = DNSRecord(type="CNAME", name="www", content="testuser.github.io", ttl=600)
+        provider.apply_record_plan("example.com", [(record, ["c9"])])
+
+        assert len(responses.calls) == 2
+        assert responses.calls[0].request.url.endswith("/delete/example.com/c9")
+        assert responses.calls[1].request.url.endswith("/create/example.com")
+
+    @responses.activate
+    def test_apply_wraps_errors(self, provider: PorkbunDNSProvider) -> None:
+        """A failed create surfaces as RegistrarError."""
+        responses.add(
+            responses.POST,
+            "https://api-ipv4.porkbun.com/api/json/v3/dns/create/example.com",
+            json={"status": "ERROR", "message": "conflict"},
+            status=200,
+        )
+        record = DNSRecord(type="A", name="", content="1.2.3.4", ttl=600)
+        with pytest.raises(RegistrarError):
+            provider.apply_record_plan("example.com", [(record, [])])

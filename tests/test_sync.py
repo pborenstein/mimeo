@@ -10,7 +10,7 @@ from click.testing import CliRunner
 from mimeo.cli.sync import sync
 from mimeo.config import Config
 from mimeo.exceptions import EXIT_CONFIG, EXIT_PARTIAL, RegistrarError
-from mimeo.models import NameserverCheckResult
+from mimeo.models import DNSRecord, NameserverCheckResult
 
 _SYNC = "mimeo.cli.sync"
 
@@ -66,14 +66,25 @@ def _make_registrar(domains: list, ns_ok: bool = True) -> MagicMock:
     return registrar
 
 
-def _make_dns_provider(missing: list | None = None, extra: list | None = None) -> MagicMock:
+def _make_dns_provider(
+    missing: list | None = None,
+    extra: list | None = None,
+    plan: list | None = None,
+) -> MagicMock:
     dns_provider = MagicMock()
     status = "missing" if missing else "drift" if extra else "ok"
+    dns_provider.get_domain_records.return_value = []
     dns_provider.check_dns_drift.return_value = {
         "status": status,
         "missing": missing or [],
         "extra": extra or [],
     }
+    if plan is None:
+        plan = [
+            (DNSRecord(type=m["type"], name=m["name"], content=m["content"], ttl=600), [])
+            for m in missing or []
+        ]
+    dns_provider.plan_missing_records.return_value = plan
     dns_provider.__enter__.return_value = dns_provider
     dns_provider.__exit__ = MagicMock(return_value=False)
     return dns_provider
@@ -189,8 +200,71 @@ class TestSyncActions:
 
         assert result.exit_code == 0
         data = json.loads(result.stdout)
-        assert any("DNS record" in a for a in data[0]["actions"])
-        mock_dns_provider.configure_dns.assert_called_once()
+        assert "apply 1 missing DNS record(s)" in data[0]["actions"]
+        mock_dns_provider.apply_record_plan.assert_called_once()
+        mock_dns_provider.configure_dns.assert_not_called()
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_SYNC}.GitHubHost")
+    @patch(f"{_SYNC}.PorkbunRegistrar")
+    @patch(f"{_SYNC}.PorkbunDNSProvider")
+    def test_wrong_record_replaced(
+        self,
+        mock_dns_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """A planned delete is reported as a replacement, not a plain add."""
+        mock_config_load.return_value = mock_config
+        mock_registrar_class.return_value = _make_registrar(["drifty.com"])
+        mock_host_class.return_value = _make_host([{"name": "drifty.com"}])
+        cname = DNSRecord(type="CNAME", name="www", content="testuser.github.io", ttl=600)
+        mock_dns_provider = _make_dns_provider(
+            missing=[{"type": "CNAME", "name": "www", "content": "testuser.github.io"}],
+            plan=[(cname, ["c9"])],
+        )
+        mock_dns_class.return_value = mock_dns_provider
+
+        result = runner.invoke(sync, ["drifty.com", "--format", "json"])
+
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert "replace 1 DNS record(s)" in data[0]["actions"]
+        mock_dns_provider.apply_record_plan.assert_called_once_with(
+            "drifty.com", [(cname, ["c9"])]
+        )
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_SYNC}.GitHubHost")
+    @patch(f"{_SYNC}.PorkbunRegistrar")
+    @patch(f"{_SYNC}.PorkbunDNSProvider")
+    def test_missing_dns_dry_run_not_applied(
+        self,
+        mock_dns_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        """--dry-run reports the plan and changes nothing."""
+        mock_config_load.return_value = mock_config
+        mock_registrar_class.return_value = _make_registrar(["drifty.com"])
+        mock_host_class.return_value = _make_host([{"name": "drifty.com"}])
+        mock_dns_provider = _make_dns_provider(
+            missing=[{"type": "A", "name": "@", "content": "185.199.108.153"}]
+        )
+        mock_dns_class.return_value = mock_dns_provider
+
+        result = runner.invoke(sync, ["drifty.com", "--dry-run", "--format", "json"])
+
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert "would apply 1 missing DNS record(s)" in data[0]["actions"]
+        mock_dns_provider.apply_record_plan.assert_not_called()
 
     @patch("mimeo.config.Config.load")
     @patch(f"{_SYNC}.GitHubHost")

@@ -219,13 +219,25 @@ def sync(
                         row["actions"].append(f"{would}reset nameservers to Porkbun")
 
                     expected = host.required_dns_records(domain)
-                    drift = dns_provider.check_dns_drift(domain, expected)
+                    live = dns_provider.get_domain_records(domain)
+                    drift = dns_provider.check_dns_drift(domain, expected, live_records=live)
                     if drift["missing"]:
+                        # Add only what is missing; a record is deleted only
+                        # when it blocks one being added (wrong-target CNAME,
+                        # parking ALIAS). Correct records stay in place.
+                        plan = dns_provider.plan_missing_records(domain, expected, live)
                         if not dry_run:
-                            dns_provider.configure_dns(domain, expected)
-                        row["actions"].append(
-                            f"{would}apply {len(drift['missing'])} missing DNS record(s)"
-                        )
+                            dns_provider.apply_record_plan(domain, plan)
+                        replaced = sum(1 for _, deletes in plan if deletes)
+                        added = len(plan) - replaced
+                        if added:
+                            row["actions"].append(
+                                f"{would}apply {added} missing DNS record(s)"
+                            )
+                        if replaced:
+                            row["actions"].append(
+                                f"{would}replace {replaced} DNS record(s)"
+                            )
                     elif drift["status"] == "drift":
                         # Extra records only -- sync does not delete records
                         # it does not manage. Report the same "drift" status

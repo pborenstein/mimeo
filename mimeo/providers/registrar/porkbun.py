@@ -1,6 +1,6 @@
 """Porkbun registrar and DNS provider implementations."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import dns.resolver
 
@@ -328,6 +328,80 @@ class PorkbunDNSProvider(_PorkbunClient, DNSProvider):
             if isinstance(e, RegistrarError):
                 raise
             raise RegistrarError(f"Failed to remove DNS records for {domain}: {e}") from e
+
+    def plan_missing_records(
+        self,
+        domain: str,
+        expected: List[DNSRecord],
+        live_records: List[Dict[str, Any]],
+    ) -> List[Tuple[DNSRecord, List[str]]]:
+        """Plan the minimal changes that add the expected records a domain lacks.
+
+        Unlike configure_dns, which deletes and recreates every managed
+        record, this leaves correct records alone. Each planned entry is a
+        record to create plus the IDs of live records that would block it:
+        a CNAME at the same name with a different target (a name holds one
+        CNAME), or a Porkbun parking ALIAS at the apex (it blocks A records).
+        Unrelated records are never scheduled for deletion.
+
+        Args:
+            domain: Domain name being converged
+            expected: Records the host requires
+            live_records: Records from get_domain_records()
+
+        Returns:
+            List of (record to create, live record IDs to delete first)
+        """
+        live_keys = {
+            (
+                r.get("type", ""),
+                self._normalize_record_name(r.get("name", ""), domain),
+                r.get("content", "").rstrip("."),
+            )
+            for r in live_records
+        }
+        claimed: set[str] = set()
+        plan: List[Tuple[DNSRecord, List[str]]] = []
+
+        for record in expected:
+            name = self._normalize_record_name(record.name, domain)
+            if (record.type, name, record.content.rstrip(".")) in live_keys:
+                continue
+            deletes: List[str] = []
+            for live in live_records:
+                record_id = live.get("id", "")
+                if record_id in claimed:
+                    continue
+                live_type = live.get("type", "")
+                live_name = self._normalize_record_name(live.get("name", ""), domain)
+                if live_name != name:
+                    continue
+                if (record.type == "CNAME" and live_type == "CNAME") or (
+                    record.type == "A" and name == "" and live_type == "ALIAS"
+                ):
+                    deletes.append(record_id)
+            claimed.update(deletes)
+            plan.append((record, deletes))
+
+        return plan
+
+    def apply_record_plan(
+        self, domain: str, plan: List[Tuple[DNSRecord, List[str]]]
+    ) -> None:
+        """Carry out a plan from plan_missing_records.
+
+        Raises:
+            RegistrarError: If a delete or create fails
+        """
+        try:
+            for record, deletes in plan:
+                for record_id in deletes:
+                    self._delete_record(domain, record_id)
+                self._create_record(domain, record)
+        except Exception as e:
+            if isinstance(e, RegistrarError):
+                raise
+            raise RegistrarError(f"Failed to update DNS for {domain}: {e}") from e
 
     def check_dns_drift(
         self,

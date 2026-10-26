@@ -114,6 +114,51 @@ class TestGitHubHost:
                 host._run_gh_command(["api", "user"])
             assert exc_info.value.status_code is None
 
+    def test_run_gh_command_failure_includes_errors_array(self, host: GitHubHost) -> None:
+        """The response body's `errors` detail is appended to the message."""
+        body = (
+            '{"message":"Invalid cname","errors":[{"resource":"Page","code":"custom",'
+            '"field":"cname","message":"documentation.rodeo is already taken"}],'
+            '"status":"400"}'
+        )
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(
+                returncode=1,
+                stdout=body,
+                stderr="gh: Invalid cname (HTTP 400)\n",
+            )
+            with pytest.raises(HostError) as exc_info:
+                host._run_gh_command(["api", "repos/o/r/pages"])
+        assert "Invalid cname (HTTP 400)" in str(exc_info.value)
+        assert "documentation.rodeo is already taken" in str(exc_info.value)
+        assert exc_info.value.status_code == 400
+
+    def test_run_gh_command_failure_errors_as_strings(self, host: GitHubHost) -> None:
+        """String entries in `errors`, and entries with only a code, are kept."""
+        body = '{"message":"Validation Failed","errors":["name too long",{"code":"invalid"}]}'
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(
+                returncode=1,
+                stdout=body,
+                stderr="gh: Validation Failed (HTTP 422)\n",
+            )
+            with pytest.raises(HostError) as exc_info:
+                host._run_gh_command(["api", "repos/o/r"])
+        assert "name too long" in str(exc_info.value)
+        assert "invalid" in str(exc_info.value)
+
+    def test_run_gh_command_failure_non_json_stdout(self, host: GitHubHost) -> None:
+        """Non-JSON stdout leaves the stderr message unchanged."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(
+                returncode=1,
+                stdout="not json",
+                stderr="gh: Not Found (HTTP 404)\n",
+            )
+            with pytest.raises(HostError) as exc_info:
+                host._run_gh_command(["api", "repos/o/r"])
+        assert str(exc_info.value) == "gh: Not Found (HTTP 404)"
+
     def test_run_gh_command_with_token(self, host: GitHubHost) -> None:
         """Test gh command uses token from environment."""
         with patch("subprocess.run") as mock_run:

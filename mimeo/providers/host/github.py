@@ -35,6 +35,31 @@ GITHUB_PAGES_IPS = [
 ]
 
 
+def _response_error_details(stdout: str) -> list[str]:
+    """Extract the `errors` array from a failed `gh api` response body.
+
+    gh prints only the top-level `message` to stderr ("Invalid cname");
+    the cause ("... is already taken") is in the body's `errors` array,
+    which gh writes to stdout. Entries are strings or objects carrying a
+    `message` and/or `code`.
+    """
+    try:
+        body = json.loads(stdout)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    if not isinstance(body, dict) or not isinstance(body.get("errors"), list):
+        return []
+    details: list[str] = []
+    for entry in body["errors"]:
+        if isinstance(entry, str):
+            details.append(entry)
+        elif isinstance(entry, dict):
+            text = entry.get("message") or entry.get("code")
+            if text:
+                details.append(str(text))
+    return details
+
+
 def health_status(health: Dict[str, Any]) -> str:
     """Derive a human-readable health status from a get_pages_health() result."""
     if not health["pages_configured"]:
@@ -140,6 +165,9 @@ class GitHubHost(Host):
                         or result.stdout.strip()
                         or f"gh exited with status {result.returncode} without error output"
                     )
+                    details = _response_error_details(result.stdout)
+                    if details:
+                        error_msg = f"{error_msg}: {'; '.join(details)}"
                     code_match = _HTTP_STATUS_RE.search(error_msg)
                     raise HostError(
                         error_msg,

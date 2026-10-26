@@ -19,8 +19,8 @@ work is in flight.
       split) is a pure refactor, landable on its own.
 - [ ] **Command model**: `docs/SITE_ADDRESS.md` proposed,
       undecided; more command questions queued from the user.
-- [ ] **Backlog**: none from CODE_REVIEW rec #6 (Pages IPs: doctor
-      check, Entry 85; D1: Entry 86). Open: AAAA records undecided.
+- [ ] **Backlog**: CODE_REVIEW rec #6 done (DEC-035, DEC-036). Open:
+      AAAA records, undecided.
 
 ## On Ice (2026-09-29, user call)
 

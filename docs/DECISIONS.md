@@ -667,3 +667,31 @@ A fourth, related fix landed in the same session at the provider layer (`mimeo/p
 **Consequences**: A template-org owner retires a template by unchecking one box; `create` naming it exits 1 with a clear message. Verified live against tepiton/eleventy-folio after retirement: exit 1, "may have been retired", nothing created. Generate-from-template on a repo whose owner merely forgot the flag now fails too — the message names the mechanism to fix.
 
 ---
+
+### DEC-035: `sync` Converges DNS by Minimal Change; `create` Keeps Clear-and-Recreate (2026-10-26)
+
+**Status**: Active (Phase 8) — closes `docs/CODE_REVIEW.md` D1. Implemented in Entry 86 (`4759f0c`).
+
+**Context**: `sync` called `configure_dns` whenever any expected record was missing. `configure_dns` deletes every live record whose (type, name) is managed and recreates the full set, so one missing record churned the four correct apex A records and the `www` CNAME, and the action text ("apply 1 missing DNS record(s)") understated it. A wrong-target CNAME shows up in the drift check as both missing and extra, and a name can hold only one CNAME, so "create only what is missing" alone fails on that case.
+
+**Decision**: `sync` plans per record (`plan_missing_records`) and then applies the plan (`apply_record_plan`). Records already correct are left alone. A live record is deleted only when it blocks one being added: a CNAME at the same name with a different target, or a parking ALIAS at the apex (Porkbun refuses A records beside it). Unrelated records (TXT, MX, other names) are never deleted, matching `sync`'s existing rule of not deleting records it does not manage. The plan step makes no API calls, so `--dry-run` reports exactly what would change. The text output reports "apply N missing" and "replace N" separately. `create` keeps `configure_dns`: on first provisioning, clearing conflicting records is the point.
+
+**Alternatives considered**: Create-only with no deletes (rejected: fails on wrong-target CNAMEs, the common case once records drift). Delete every record that conflicts at a managed name, regardless of type (rejected: would delete user TXT records at `www`; wider than any observed failure).
+
+**Consequences**: First live use (Entry 87) replaced `www` on 57 domains, one record each. Before this change, the same run would have rewritten five records per domain. `sync` now fetches live records once instead of twice.
+
+---
+
+### DEC-036: Pages IPs Stay Hardcoded; `doctor` Checks Them Against GitHub's List (2026-10-26)
+
+**Status**: Active (Phase 8). Replaces the `docs/CODE_REVIEW.md` rec #6 item "fetch Pages IPs from `api.github.com/meta`". Implemented in Entry 85 (`1f19cbc`).
+
+**Context**: mimeo writes `GITHUB_PAGES_IPS` (four IPv4 addresses) as apex A records. The risk is GitHub retiring an address while mimeo keeps writing it. As of 2026-10-26, the `pages` field of `api.github.com/meta` lists 10 entries: the four documented apex IPs, two legacy `192.30.252.153/154`, and four IPv6.
+
+**Decision**: Keep the hardcoded list as the source of records. `mimeo doctor` gains a "Pages IPs" check: every hardcoded IP must appear in `meta`'s `pages` field (read via `gh api meta`). The check fails, naming the IP, when GitHub stops listing it.
+
+**Alternatives considered**: Source the records from `meta` (rejected: adds the legacy IPs to every domain). Source them from `meta` and filter it (rejected: the filter is a hardcoded rule, so nothing is gained over the hardcoded list).
+
+**Consequences**: Detection is manual, since it runs only when someone runs `doctor`. The `meta` list includes IPv6, but this decision does not cover AAAA records: mimeo writes none, and that question remains open.
+
+---

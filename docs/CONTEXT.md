@@ -3,7 +3,7 @@ phase: 8
 phase_name: Consolidation
 updated: 2026-10-26
 last_commit: a5045ae
-last_entry: 86
+last_entry: 87
 ---
 
 ## Current Focus
@@ -14,9 +14,9 @@ work is in flight.
 
 ## Active Tasks
 
-- [ ] **`www` repoint (user call)**: 59 domains' `www` points at
-      `tepiton.github.io` (pre-move leftover); `mimeo sync --all`
-      repoints them to `mimeo-sites.github.io`, one record each.
+- [ ] **orobia.dev (user call)**: Pages repo set up, no DNS records,
+      so offline. `mimeo sync orobia.dev` brings it up. It is the only
+      domain `sync --all --dry-run` would change.
 - [ ] **Netlify second host**: DNS decided (DEC-033); OD #1, #3, #6
       decided — open: #2, #4, #5, #7, #8; staging pass 1 (repo/host
       split) is a pure refactor, landable on its own.
@@ -48,6 +48,6 @@ None.
 
 ## Next Session
 
-Get the user's call on the `www` repoint. Then the command-model
+Get the user's call on orobia.dev. Then the command-model
 question (`docs/SITE_ADDRESS.md`), walked through one decision at a
 time, or Netlify staging pass 1.

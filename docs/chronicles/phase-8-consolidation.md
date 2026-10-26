@@ -1205,3 +1205,26 @@ Not applied: user call.
 
 **Files**: `mimeo/providers/host/github.py`,
 `mimeo/providers/registrar/porkbun.py`, `mimeo/cli/sync.py`, tests.
+
+## Entry 87: fleet www records repointed with the new sync (2026-10-26)
+
+**What**: Ran `mimeo sync` on 58 domains. 57 had `www` CNAME ->
+`tepiton.github.io` while their repos are in `mimeo-sites`; each now
+targets `mimeo-sites.github.io`. amalgamedon.com had no `www` record;
+sync added it. User approved.
+
+**Why**: Records now match where the sites live. The sites already
+worked (GitHub routes by host name), so this is tidying, not repair.
+
+**How**: The `sync --all --dry-run` tally first showed 57 replacements
+plus two domains that had not been mentioned to the user:
+amalgamedon.com (missing `www`) and orobia.dev (no A/CNAME records at
+all -- its Pages site is offline). orobia.dev was left out, since
+syncing it would put a site online, and the other 58 were passed to
+`sync` by name. No errors. A spot check shows the A records untouched
+and only `www` changed, which is the D1 behavior from Entry 86. A
+follow-up dry run plans changes only for orobia.dev.
+
+**Decisions**: none. Open: orobia.dev (user call).
+
+**Files**: IMPLEMENTATION.md, CONTEXT.md (no code).

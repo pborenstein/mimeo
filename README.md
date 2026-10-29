@@ -28,6 +28,19 @@ Full setup details (prerequisites, `gh` token scope, global vs. dev install, env
 
 Idempotent: safe to re-run against an existing deployment.
 
+## After `create`
+
+The site is an ordinary GitHub repository in the deploy org. To change it,
+clone the repo, edit, and push to `main`: the template's GitHub Actions
+workflow builds the site and deploys it to Pages. There is no separate
+publish step; content changes never go through mimeo (`status` and `sync`
+only deal with registration, DNS, Pages, and HTTPS state).
+
+To push without deploying, put `[skip ci]` (or `[no ci]`, `[skip actions]`)
+in the commit message. See GitHub's
+[Skipping workflow runs](https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-workflow-runs/skipping-workflow-runs)
+for the full list and its limits.
+
 ## Global options
 
 These options go before the subcommand and apply to every command.

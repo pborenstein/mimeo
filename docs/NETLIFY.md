@@ -317,5 +317,5 @@ against `main` at `4f6c03b`.
 | [4 — NS update + zone](#change-4) | `providers/registrar/porkbun.py`; `providers/dns/netlify.py` (new) | `set_nameservers` → `POST /domain/updateNameServers/{domain}`; expected-NS parameter on `check_nameservers` |
 | [5 — fleet commands](#change-5) | `cli/status.py`, `cli/sync.py`, `cli/delete.py`, `cli/doctor.py` | host read from the topic; host column, per-host NS expectation, DEC-031 amendment, netlify doctor checks |
 | [6 — config](#change-6) | `mimeo/config.py`, `config.toml.example` | `[netlify]` section, schema_version 2, env overrides |
-| [7 — templates](#change-7) | tepiton template repos + TEMPLATES/CLAUDE.md inventory | `netlify.toml` per template; rejection gate list |
+| [7 — templates](#change-7) | tepiton template repos + inventory in the tepiton meta-repo (`~/projects/tepiton/CLAUDE.md`) | `netlify.toml` per template; rejection gate list |
 | tests | `tests/` | Regression: github-hosted fixtures unchanged. New: netlify deploy/teardown against mocked `netlify api` output, NS switch ordering, record warning, DNSSEC refusal |

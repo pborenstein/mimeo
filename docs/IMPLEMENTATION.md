@@ -587,7 +587,8 @@ front-door verbs than it started with. See DEC-021.
         target (23 links, no bare "change N" left); references with
         no navigational value dropped. New doc-style rule: link to
         what you reference
-- [x] Template-consolidation plan written (2026-10-04, Entry 79)
+- [x] Template-consolidation plan written (2026-10-04, Entry 79).
+      The doc moved to `~/projects/tepiton/docs/` on 2026-10-28.
   - [x] `docs/TEMPLATE_CONSOLIDATION.md` (approved in outline, not
         scheduled): retire eleventy-folio after porting `dek` to
         chapbook (a repo-flag change -- is_template plus topic; mimeo

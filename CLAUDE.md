@@ -114,20 +114,21 @@ Use the `/plinth:session-wrapup` command to automate this.
 Stable facts that sessions need. Current work state lives in
 `docs/CONTEXT.md`, not here.
 
-- **Templates**: GitHub template repos in the `tepiton` org; the
-  canonical inventory is `~/projects/tepiton/TEMPLATES/CLAUDE.md`. A
-  repo is offered only while its `is_template` flag is set (DEC-034);
-  `create` rejects unflagged repos. The `mimeo-template` topic is for
-  humans -- nothing in mimeo enumerates templates. `--force` is the
-  only in-place replacement.
-- **Content contract**: `CONTENT-CONTRACT.md` in tepiton/content-fixture
-  defines portable frontmatter and directories. Its Actions matrix
-  builds the corpus against the four document templates (push, weekly
-  Mon 06:17 UTC, dispatch) and is the drift alarm for template changes.
-- **On disk** (since 2026-10-09): tepiton working copies live under
-  `~/projects/tepiton/` (TEMPLATES/, tepiton.github.io/, site repos).
-  `~/projects/mimeo-sites/` holds stragglers; older doc references to
-  it predate the move.
+- **Orgs**: templates live in the `tepiton` GitHub org
+  (`github.template_org`); site repos live in the `mimeo-sites` org
+  (`github.default_org`). The exception is gilborenstein.com, whose
+  repo stays in `tepiton`.
+- **On disk**: template working copies and the tepiton meta-repo are
+  at `~/projects/tepiton/`; site working copies are at
+  `~/projects/WEBSITES/mimeo-sites/`. Older doc references to
+  `TEMPLATES/` or `~/projects/mimeo-sites/` predate the split.
+- **Templates are tracked elsewhere**: template work (inventory,
+  content contract, consolidation history) lives in the tepiton
+  meta-repo (`~/projects/tepiton/CLAUDE.md`, `docs/`), not here.
+  mimeo's docs cover only what mimeo does with a template: a repo is
+  offered only while its `is_template` flag is set (DEC-034), `create`
+  rejects unflagged repos, nothing in mimeo enumerates templates, and
+  `--force` is the only in-place replacement.
 - **Public repo**: anything committed is published. Porkbun account
   exports (`scripts/porkbun*.json`) are gitignored for that reason.
 - **E2E**: live usage is the end-to-end hedge; `scripts/e2e_smoke.sh`

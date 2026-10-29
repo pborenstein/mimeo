@@ -131,7 +131,7 @@ segment of the address, not the address.
 
 - **The templates.** The shared `pages.yml` already builds both layouts
   (its `PATHPREFIX` if/else: `.github.io` repos at `/`, everything else at
-  `$REPO_NAME/` — TEMPLATES DEC-001). `tepiton.github.io` is a live root
+  `$REPO_NAME/` — tepiton meta-repo DEC-001). `tepiton.github.io` is a live root
   site from this fleet's lineage, made by hand; mimeo would standardize
   what already works.
 - **The provider ABCs.** Registrar and Host are already separate; DNS is

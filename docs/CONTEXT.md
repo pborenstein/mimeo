@@ -38,8 +38,11 @@ None.
       config and exit codes in `docs/ARCHITECTURE.md`.
 - Netlify design and its unverified-claims table:
       `docs/NETLIFY.md` (Entries 72–77).
-- Template sub-repo decisions (chapbook `dek`/`content/img`,
-      pamphlet drafts) live in their own repos' DECISIONS.md.
+- Template docs live in the tepiton meta-repo
+      (`~/projects/tepiton/`), not here; `TEMPLATE_CONSOLIDATION.md`
+      moved there 2026-10-28. Template sub-repo decisions (chapbook
+      `dek`/`content/img`, pamphlet drafts) live in their own repos'
+      DECISIONS.md.
 - `pborenstein.ooo` expired 2026-10-05 with API access off; its
       parking CNAME stays (user call, Entry 84).
 

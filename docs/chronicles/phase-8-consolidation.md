@@ -1244,3 +1244,23 @@ earlier empty answer catch up as that negative cache expires.
 **Decisions**: none.
 
 **Files**: IMPLEMENTATION.md, CONTEXT.md (no code).
+
+## Entry 89: create fails with HTTP 307 after the template move (2026-11-02)
+
+**What**: `mimeo create twohorses.org` failed at
+`POST repos/tepiton/mimeo/generate: gh: HTTP 307`. Diagnosis only;
+no code or config changed this session.
+
+**Why**: Every template repo now lives in the `mimeo-templates` org;
+`tepiton` has none. The config's `template_org` is still `tepiton`.
+GitHub redirects requests for a transferred repo. `gh` follows the
+redirect on GET (`gh api repos/tepiton/mimeo` returns
+`full_name: mimeo-templates/mimeo`), but not the 307 GitHub returns
+for POST, so the generate call reports the redirect as an error.
+
+**How**: Compared `gh repo list` for both orgs. The failed run
+created nothing (it stopped before the repo existed).
+
+**Decisions**: none. Follow-ups in IMPLEMENTATION.md Phase 8.
+
+**Files**: CLAUDE.md (Project Facts), IMPLEMENTATION.md, CONTEXT.md.

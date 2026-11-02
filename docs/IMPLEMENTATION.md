@@ -669,6 +669,14 @@ front-door verbs than it started with. See DEC-021.
       domains; `pborenstein.ooo` left (expired, API access off).
       `scripts/porkbun-domains.sh` and `porkbun-query.sh` added; the
       JSON exports are gitignored
+- [ ] Templates moved from `tepiton` to `mimeo-templates` (found
+      2026-11-02, Entry 89); `create` with the old `template_org`
+      fails with `gh: HTTP 307`
+  - [ ] User config: `github.template_org = "mimeo-templates"`
+  - [ ] Code default `TEMPLATE_ORG` in `providers/host/github.py`,
+        plus README and ARCHITECTURE.md references to `tepiton`
+  - [ ] On a 307 from `generate`, look up the repo and report where
+        it moved instead of the bare HTTP code
 
 ---
 

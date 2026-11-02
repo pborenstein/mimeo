@@ -114,8 +114,10 @@ Use the `/plinth:session-wrapup` command to automate this.
 Stable facts that sessions need. Current work state lives in
 `docs/CONTEXT.md`, not here.
 
-- **Orgs**: templates live in the `tepiton` GitHub org
-  (`github.template_org`); site repos live in the `mimeo-sites` org
+- **Orgs**: templates live in the `mimeo-templates` GitHub org
+  (`github.template_org`; moved from `tepiton`, found 2026-11-02,
+  Entry 89 -- the code default still says `tepiton`); site repos
+  live in the `mimeo-sites` org
   (`github.default_org`). The exception is gilborenstein.com, whose
   repo stays in `tepiton`.
 - **On disk**: template working copies and the tepiton meta-repo are

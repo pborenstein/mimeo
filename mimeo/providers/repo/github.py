@@ -5,6 +5,7 @@ import time
 from typing import Any, Dict
 
 from mimeo.exceptions import HostError
+from mimeo.providers.base import RepoProvider
 from mimeo.providers.gh import GhCli
 from mimeo.providers.host.template_manifest import (
     DEFAULT_DEV_PATHS,
@@ -19,7 +20,7 @@ TEMPLATE_ORG = "mimeo-templates"
 DEFAULT_TEMPLATE = "mimeo"
 
 
-class GitHubRepoProvider:
+class GitHubRepoProvider(RepoProvider):
     """Repository work for a site: create from a template, rename, delete.
 
     Holds nothing about how the site is served. A host (GitHub Pages

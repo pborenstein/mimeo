@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from mimeo.exceptions import HostError
+from mimeo.models import Site
 from mimeo.providers.host.github import DEFAULT_TEMPLATE, TEMPLATE_ORG, GitHubHost, health_status
 from mimeo.providers.host.template_manifest import (
     DEFAULT_DEV_PATHS,
@@ -456,3 +457,83 @@ class TestTeardownSite:
             )
             assert result["repo_deleted"] is False
             assert result["pages_disabled"] is True
+
+
+class TestGitHubHostInterface:
+    """The Host interface methods added for 2.0."""
+
+    @pytest.fixture
+    def host(self) -> GitHubHost:
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(returncode=0, stdout="", stderr="")
+            return GitHubHost(default_org="sites", organizations=["sites", "other"])
+
+    def test_organizations_default_to_default_org(self) -> None:
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(returncode=0, stdout="", stderr="")
+            assert GitHubHost(default_org="sites").organizations == ["sites"]
+
+    def test_find_site_tries_each_organization(self, host: GitHubHost) -> None:
+        with patch.object(host.gh, "api") as api:
+            api.side_effect = [HostError("Not Found", status_code=404), {"cname": "Example.com"}]
+            assert host.find_site("example.com") == Site("github", "other/example.com")
+        assert [c.args[0] for c in api.call_args_list] == [
+            "repos/sites/example.com/pages", "repos/other/example.com/pages",
+        ]
+
+    def test_find_site_ignores_a_repo_serving_another_hostname(self, host: GitHubHost) -> None:
+        with patch.object(host.gh, "api", return_value={"cname": "different.com"}):
+            assert host.find_site("example.com") is None
+
+    def test_find_site_surfaces_other_failures(self, host: GitHubHost) -> None:
+        with patch.object(host.gh, "api", side_effect=HostError("Forbidden", status_code=403)):
+            with pytest.raises(HostError):
+                host.find_site("example.com")
+
+    def test_scan_reads_custom_domain_of_every_pages_repo(self, host: GitHubHost) -> None:
+        with patch.object(host.gh, "run") as run, patch.object(host.gh, "api") as api:
+            run.side_effect = ["sites/a.com\nsites/plain\n", "other/odd-name\n"]
+            api.side_effect = [{"cname": "a.com"}, {"cname": None}, {"cname": "b.com"}]
+            found = host.scan()
+        assert found == {
+            "a.com": [Site("github", "sites/a.com")],
+            "b.com": [Site("github", "other/odd-name")],
+        }
+        assert run.call_args_list[0].args[0][2] == "users/sites/repos?per_page=100"
+
+    def test_state(self, host: GitHubHost) -> None:
+        with patch.object(host.gh, "api") as api:
+            api.return_value = {
+                "cname": "example.com",
+                "https_enforced": True,
+                "https_certificate": {"state": "bad_authz", "expires_at": "2026-12-12"},
+            }
+            state = host.state(Site("github", "sites/example.com"))
+        assert (state.configured, state.custom_domain, state.https_enforced) == (True, "example.com", True)
+        assert (state.cert_state, state.cert_expires) == ("bad_authz", "2026-12-12")
+
+    def test_state_without_pages(self, host: GitHubHost) -> None:
+        with patch.object(host.gh, "api", side_effect=HostError("Not Found", status_code=404)):
+            assert host.state(Site("github", "sites/example.com")).configured is False
+
+    def test_set_custom_domain_enables_pages_first(self, host: GitHubHost) -> None:
+        with patch.object(host, "_enable_github_pages") as enable, patch.object(host.gh, "api") as api:
+            host.set_custom_domain(Site("github", "sites/x"), "example.com")
+        enable.assert_called_once_with("sites/x")
+        api.assert_called_once_with("repos/sites/x/pages", method="PUT", data={"cname": "example.com"})
+
+    def test_removing_custom_domain_sends_null(self, host: GitHubHost) -> None:
+        with patch.object(host, "_enable_github_pages") as enable, patch.object(host.gh, "api") as api:
+            host.set_custom_domain(Site("github", "sites/x"), None)
+        enable.assert_not_called()
+        api.assert_called_once_with("repos/sites/x/pages", method="PUT", data={"cname": None})
+
+    def test_required_records_for_apex(self, host: GitHubHost) -> None:
+        records = host.required_records(Site("github", "Other/example.com"), "")
+        assert [r.type for r in records] == ["A"] * 4 + ["AAAA"] * 4 + ["CNAME"]
+        assert records[-1].name == "www"
+        assert records[-1].content == "other.github.io"
+
+    def test_required_records_for_subdomain(self, host: GitHubHost) -> None:
+        records = host.required_records(Site("github", "sites/service.example.com"), "service")
+        assert [(r.type, r.name, r.content) for r in records] == [("CNAME", "service", "sites.github.io")]

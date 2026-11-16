@@ -3,7 +3,7 @@
 from typing import Any, Dict
 
 from mimeo.exceptions import HostError
-from mimeo.models import DNSRecord
+from mimeo.models import DNSRecord, Site, SiteState
 from mimeo.providers.base import DeployResult, Host
 from mimeo.providers.gh import GhCli
 from mimeo.providers.repo.github import DEFAULT_TEMPLATE, TEMPLATE_ORG, GitHubRepoProvider
@@ -11,9 +11,17 @@ from mimeo.providers.repo.github import DEFAULT_TEMPLATE, TEMPLATE_ORG, GitHubRe
 __all__ = [
     "DEFAULT_TEMPLATE",
     "GITHUB_PAGES_IPS",
+    "GITHUB_PAGES_IPV6",
     "TEMPLATE_ORG",
     "GitHubHost",
     "health_status",
+]
+
+GITHUB_PAGES_IPV6 = [
+    "2606:50c0:8000::153",
+    "2606:50c0:8001::153",
+    "2606:50c0:8002::153",
+    "2606:50c0:8003::153",
 ]
 
 GITHUB_PAGES_IPS = [
@@ -52,12 +60,15 @@ class GitHubHost(Host):
         token: str | None = None,
         default_org: str | None = None,
         template_org: str | None = None,
+        organizations: list[str] | None = None,
     ) -> None:
         """Initialize GitHub host provider.
 
         Args:
             token: GitHub personal access token (optional, uses gh auth if not provided)
             default_org: Default organization/user for repository creation
+            organizations: Organizations and user accounts searched for
+                sites (defaults to default_org alone)
             template_org: Organization holding template repositories
                 (defaults to TEMPLATE_ORG)
 
@@ -66,7 +77,121 @@ class GitHubHost(Host):
         """
         self.gh = GhCli(token)
         self.default_org = default_org
+        self.organizations = list(organizations or ([default_org] if default_org else []))
         self.repos = GitHubRepoProvider(self.gh, template_org)
+
+    name = "github"
+
+    def find_site(self, hostname: str) -> Site | None:
+        """Look for a repo named after the hostname in each listed organization.
+
+        Returns the first one whose Pages custom domain is the hostname.
+        A site in a repo with another name is found only by scan().
+
+        Raises:
+            HostError: If an API call fails for a reason other than 404
+        """
+        for org in self.organizations:
+            ref = f"{org}/{hostname}"
+            try:
+                data = self.gh.api(f"repos/{ref}/pages")
+            except HostError as e:
+                if e.status_code == 404:
+                    continue
+                raise
+            if str(data.get("cname") or "").lower() == hostname.lower():
+                return Site(host=self.name, ref=ref)
+        return None
+
+    def scan(self) -> dict[str, list[Site]]:
+        """Find every Pages site with a custom domain in the listed organizations.
+
+        Lists each organization's repositories (the same endpoint serves
+        organizations and user accounts), keeps the ones with Pages on,
+        and reads each one's custom domain. Only repositories the
+        endpoint lists publicly are seen.
+
+        Raises:
+            HostError: If an API call fails for a reason other than 404
+        """
+        found: dict[str, list[Site]] = {}
+        for org in self.organizations:
+            listing = self.gh.run(
+                [
+                    "api",
+                    "--paginate",
+                    f"users/{org}/repos?per_page=100",
+                    "--jq",
+                    ".[] | select(.has_pages) | .full_name",
+                ]
+            )
+            for ref in listing.splitlines():
+                ref = ref.strip()
+                if not ref:
+                    continue
+                try:
+                    data = self.gh.api(f"repos/{ref}/pages")
+                except HostError as e:
+                    if e.status_code == 404:
+                        continue
+                    raise
+                cname = str(data.get("cname") or "").lower()
+                if cname:
+                    found.setdefault(cname, []).append(Site(host=self.name, ref=ref))
+        return found
+
+    def state(self, site: Site) -> SiteState:
+        """Read the site's Pages configuration.
+
+        Raises:
+            HostError: If the API call fails for a reason other than 404
+        """
+        try:
+            data = self.gh.api(f"repos/{site.ref}/pages")
+        except HostError as e:
+            if e.status_code != 404:
+                raise
+            return SiteState(configured=False)
+        cert = data.get("https_certificate") or {}
+        return SiteState(
+            configured=True,
+            custom_domain=(str(data["cname"]).lower() if data.get("cname") else None),
+            https_enforced=bool(data.get("https_enforced", False)),
+            cert_state=cert.get("state"),
+            cert_expires=cert.get("expires_at"),
+        )
+
+    def set_custom_domain(self, site: Site, hostname: str | None) -> None:
+        """Set the Pages custom domain, enabling Pages first if needed.
+
+        With hostname None the custom domain is removed and Pages is
+        left on.
+
+        Raises:
+            HostError: If an API call fails
+        """
+        if hostname is not None:
+            self._enable_github_pages(site.ref)
+        self.gh.api(f"repos/{site.ref}/pages", method="PUT", data={"cname": hostname})
+
+    def required_records(self, site: Site, label: str) -> list[DNSRecord]:
+        """Records GitHub Pages needs for a hostname.
+
+        For an apex (label ""): four A and four AAAA records at the apex
+        and a `www` CNAME. For a subdomain: one CNAME at the label. The
+        CNAME target is the repository owner's github.io name.
+        """
+        target = f"{site.ref.split('/')[0].lower()}.github.io"
+        if label:
+            return [DNSRecord(type="CNAME", name=label, content=target)]
+        records = [DNSRecord(type="A", name="", content=ip) for ip in GITHUB_PAGES_IPS]
+        records += [DNSRecord(type="AAAA", name="", content=ip) for ip in GITHUB_PAGES_IPV6]
+        records.append(DNSRecord(type="CNAME", name="www", content=target))
+        return records
+
+    def enforce_https(self, site: Site) -> bool:
+        """Turn on HTTPS enforcement; False when no certificate exists yet."""
+        return self.enable_https_enforcement(site.ref)
 
     @property
     def token(self) -> str | None:

@@ -876,3 +876,64 @@ class TestMissingRecordPlan:
         record = DNSRecord(type="A", name="", content="1.2.3.4", ttl=600)
         with pytest.raises(RegistrarError):
             provider.apply_record_plan("example.com", [(record, [])])
+
+
+class TestPorkbunNewInterfaces:
+    """The Registrar and DNSProvider methods added for 2.0."""
+
+    def test_get_nameservers_reads_the_registrar_setting(self) -> None:
+        registrar = PorkbunRegistrar("pk1_x", "sk1_x")
+        with patch.object(registrar, "_make_request") as request:
+            request.return_value = {"status": "SUCCESS", "ns": ["B.ns.example.", "a.ns.example"]}
+            assert registrar.get_nameservers("example.com") == ["a.ns.example", "b.ns.example"]
+        request.assert_called_once_with("/domain/getNs/example.com", {})
+
+    def test_set_nameservers_sends_the_given_list(self) -> None:
+        registrar = PorkbunRegistrar("pk1_x", "sk1_x")
+        with patch.object(registrar, "_make_request") as request:
+            registrar.set_nameservers("example.com", ["a.ns.cloudflare.com", "b.ns.cloudflare.com"])
+        request.assert_called_once_with(
+            "/domain/updateNs/example.com", {"ns": ["a.ns.cloudflare.com", "b.ns.cloudflare.com"]}
+        )
+
+    def test_dnssec_enabled(self) -> None:
+        registrar = PorkbunRegistrar("pk1_x", "sk1_x")
+        with patch.object(registrar, "_make_request") as request:
+            request.return_value = {"status": "SUCCESS", "records": {"123": {"keyTag": "123"}}}
+            assert registrar.dnssec_enabled("example.com")
+            request.return_value = {"status": "SUCCESS", "records": {}}
+            assert not registrar.dnssec_enabled("example.com")
+
+    def test_serves_only_porkbun_nameservers(self) -> None:
+        dns = PorkbunDNSProvider("pk1_x", "sk1_x")
+        assert dns.serves(sorted(PORKBUN_NAMESERVERS))
+        assert not dns.serves(["ada.ns.cloudflare.com"])
+        assert not dns.serves([])
+
+    def test_list_records_makes_names_relative_and_keeps_mx_priority(self) -> None:
+        dns = PorkbunDNSProvider("pk1_x", "sk1_x")
+        raw = [
+            {"id": "1", "name": "example.com", "type": "A", "content": "1.2.3.4", "ttl": "600", "prio": "0"},
+            {"id": "2", "name": "www.example.com", "type": "CNAME", "content": "x.github.io", "ttl": "600", "prio": None},
+            {"id": "3", "name": "example.com", "type": "MX", "content": "mx.example.net", "ttl": "600", "prio": "10"},
+        ]
+        with patch.object(dns, "get_domain_records", return_value=raw):
+            records = dns.list_records("example.com")
+        assert [(r.type, r.name, r.priority, r.id) for r in records] == [
+            ("A", "", None, "1"), ("CNAME", "www", None, "2"), ("MX", "", 10, "3"),
+        ]
+
+    def test_add_record_raises_ttl_to_porkbun_minimum_and_sends_priority(self) -> None:
+        dns = PorkbunDNSProvider("pk1_x", "sk1_x")
+        with patch.object(dns, "_make_request") as request:
+            dns.add_record("example.com", DNSRecord(type="MX", name="", content="mx.example.net", ttl=1, priority=10))
+        request.assert_called_once_with(
+            "/dns/create/example.com",
+            {"type": "MX", "name": "", "content": "mx.example.net", "ttl": "600", "prio": "10"},
+        )
+
+    def test_delete_record_uses_the_record_id(self) -> None:
+        dns = PorkbunDNSProvider("pk1_x", "sk1_x")
+        with patch.object(dns, "_make_request") as request:
+            dns.delete_record("example.com", DNSRecord(type="A", name="", content="1.2.3.4", id="42"))
+        request.assert_called_once_with("/dns/delete/example.com/42", {})

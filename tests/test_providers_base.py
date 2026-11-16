@@ -1,131 +1,34 @@
 """Tests for provider base classes."""
 
-from pathlib import Path
-from typing import Any
-
 import pytest
 
-from mimeo.models import DNSRecord, NameserverCheckResult
-from mimeo.providers.base import DNSProvider, DeployResult, Host, Registrar
+from mimeo.providers.base import DNSProvider, DeployResult, Host, Registrar, RepoProvider
+from tests.fakes import FakeDNS, FakeHost, FakeRegistrar
 
 
-class ConcreteRegistrar(Registrar):
-    """Concrete implementation of Registrar for testing."""
-
-    def check_nameservers(self, domain: str) -> NameserverCheckResult:
-        """Test implementation."""
-        return NameserverCheckResult(ok=True, actual=[], expected=[])
-
-    def update_nameservers(self, domain: str) -> None:
-        """Test implementation."""
-        pass
-
-    def list_domains(self) -> list[dict[str, Any]]:
-        """Test implementation."""
-        return []
-
-
-class ConcreteDNSProvider(DNSProvider):
-    """Concrete implementation of DNSProvider for testing."""
-
-    def configure_dns(self, domain: str, records: list[DNSRecord]) -> None:
-        """Test implementation."""
-        pass
-
-
-class ConcreteHost(Host):
-    """Concrete implementation of Host for testing."""
-
-    def deploy_site(self, domain: str, content_path: Path) -> DeployResult:
-        """Test implementation."""
-        return DeployResult(url=f"https://{domain}", repo_created=True, https_enabled=True)
-
-    def required_dns_records(self, domain: str) -> list[DNSRecord]:
-        """Test implementation."""
-        return [DNSRecord(type="A", name="", content="1.2.3.4")]
-
-    def enable_https_enforcement(self, repo_full_name: str) -> bool:
-        """Test implementation."""
-        return True
-
-
-def test_registrar_can_be_instantiated() -> None:
-    """Concrete Registrar implementation should be instantiable."""
-    registrar = ConcreteRegistrar()
-    assert isinstance(registrar, Registrar)
-
-
-def test_registrar_has_check_nameservers_method() -> None:
-    """Registrar should have check_nameservers method."""
-    registrar = ConcreteRegistrar()
-    result = registrar.check_nameservers("example.com")
-    assert isinstance(result, NameserverCheckResult)
-    assert result.ok is True
-
-
-def test_registrar_has_update_nameservers_method() -> None:
-    """Registrar should have update_nameservers method."""
-    registrar = ConcreteRegistrar()
-    registrar.update_nameservers("example.com")  # should not raise
-
-
-def test_registrar_has_list_domains_method() -> None:
-    """Registrar should have list_domains method."""
-    registrar = ConcreteRegistrar()
-    result = registrar.list_domains()
-    assert isinstance(result, list)
-
-
-def test_dns_provider_can_be_instantiated() -> None:
-    """Concrete DNSProvider implementation should be instantiable."""
-    provider = ConcreteDNSProvider()
-    assert isinstance(provider, DNSProvider)
-
-
-def test_dns_provider_has_configure_dns_method() -> None:
-    """DNSProvider should have configure_dns method."""
-    provider = ConcreteDNSProvider()
-    records = [DNSRecord(type="A", name="@", content="1.2.3.4")]
-    provider.configure_dns("example.com", records)
-
-
-def test_host_can_be_instantiated() -> None:
-    """Concrete Host implementation should be instantiable."""
-    host = ConcreteHost()
-    assert isinstance(host, Host)
-
-
-def test_host_has_deploy_site_method() -> None:
-    """Host should have deploy_site method."""
-    host = ConcreteHost()
-    result = host.deploy_site("example.com", Path("/tmp/site"))
-    assert result.url == "https://example.com"
-    assert result.repo_created is True
-    assert result.https_enabled is True
-
-
-def test_host_has_required_dns_records_method() -> None:
-    """Host should have required_dns_records method."""
-    host = ConcreteHost()
-    records = host.required_dns_records("example.com")
-    assert isinstance(records, list)
-    assert len(records) > 0
-    assert isinstance(records[0], DNSRecord)
-
-
-def test_cannot_instantiate_abstract_registrar() -> None:
-    """Cannot instantiate Registrar directly without implementing abstract methods."""
+@pytest.mark.parametrize("interface", [Registrar, DNSProvider, Host, RepoProvider])
+def test_interfaces_cannot_be_instantiated(interface: type) -> None:
     with pytest.raises(TypeError):
-        Registrar()  # type: ignore
+        interface()
 
 
-def test_cannot_instantiate_abstract_dns_provider() -> None:
-    """Cannot instantiate DNSProvider directly without implementing abstract methods."""
+def test_complete_implementations_instantiate() -> None:
+    assert isinstance(FakeRegistrar(), Registrar)
+    assert isinstance(FakeDNS("x"), DNSProvider)
+    assert isinstance(FakeHost(), Host)
+
+
+def test_partial_implementation_is_rejected() -> None:
+    class Partial(DNSProvider):
+        name = "partial"
+
+        def serves(self, nameservers: list[str]) -> bool:
+            return False
+
     with pytest.raises(TypeError):
-        DNSProvider()  # type: ignore
+        Partial()  # type: ignore[abstract]
 
 
-def test_cannot_instantiate_abstract_host() -> None:
-    """Cannot instantiate Host directly without implementing abstract methods."""
-    with pytest.raises(TypeError):
-        Host()  # type: ignore
+def test_deploy_result_defaults() -> None:
+    result = DeployResult(url="https://example.com", repo_created=True, https_enabled=False)
+    assert result.repo_existed is False

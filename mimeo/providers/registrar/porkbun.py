@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Tuple
 import dns.resolver
 
 from mimeo.exceptions import RegistrarError
-from mimeo.models import DNSRecord, NameserverCheckResult
+from mimeo.models import DNSRecord, NameserverCheckResult, relative_name
 from mimeo.providers.base import DNSProvider, Registrar
 from mimeo.utils.http import HTTPClient
 from mimeo.utils.retry import retry_with_jitter
@@ -121,6 +121,35 @@ class PorkbunRegistrar(_PorkbunClient, Registrar):
             {"ns": PORKBUN_NAMESERVERS},
         )
 
+    def get_nameservers(self, domain: str) -> list[str]:
+        """Return the nameservers set for the domain at the registrar.
+
+        This is the registrar's own setting, not a public DNS lookup, so
+        it is current the moment set_nameservers returns.
+
+        Raises:
+            RegistrarError: If the API call fails
+        """
+        response = self._make_request(f"/domain/getNs/{domain}", {})
+        return sorted(str(n).rstrip(".").lower() for n in response.get("ns") or [])
+
+    def set_nameservers(self, domain: str, nameservers: list[str]) -> None:
+        """Set the domain's nameservers.
+
+        Raises:
+            RegistrarError: If the API call fails
+        """
+        self._make_request(f"/domain/updateNs/{domain}", {"ns": list(nameservers)})
+
+    def dnssec_enabled(self, domain: str) -> bool:
+        """Return True when the registry holds DNSSEC records for the domain.
+
+        Raises:
+            RegistrarError: If the API call fails
+        """
+        response = self._make_request(f"/dns/getDnssecRecords/{domain}", {})
+        return bool(response.get("records"))
+
     def domain_exists(self, domain: str) -> bool:
         """Check if a domain is registered in this Porkbun account.
 
@@ -182,6 +211,75 @@ class PorkbunDNSProvider(_PorkbunClient, DNSProvider):
             RegistrarError: If credentials are invalid
         """
         _PorkbunClient.__init__(self, api_key, secret_key)
+
+    name = "porkbun"
+
+    def serves(self, nameservers: list[str]) -> bool:
+        """True when every nameserver is one of Porkbun's."""
+        return bool(nameservers) and all(n.endswith(".porkbun.com") for n in nameservers)
+
+    def zone_exists(self, zone: str) -> bool:
+        """Porkbun keeps a zone for every domain registered there."""
+        return True
+
+    def create_zone(self, zone: str) -> None:
+        """Nothing to do: the zone exists for every registered domain."""
+
+    def zone_nameservers(self, zone: str) -> list[str]:
+        """Porkbun answers for every zone on the same four nameservers."""
+        return sorted(PORKBUN_NAMESERVERS)
+
+    def list_records(self, zone: str) -> list[DNSRecord]:
+        """Every record in the zone, names relative to the zone.
+
+        Raises:
+            RegistrarError: If the API call fails
+        """
+        records: list[DNSRecord] = []
+        for raw in self.get_domain_records(zone):
+            record_type = str(raw.get("type", ""))
+            prio = raw.get("prio")
+            records.append(
+                DNSRecord(
+                    type=record_type,
+                    name=relative_name(str(raw.get("name", "")), zone),
+                    content=str(raw.get("content", "")),
+                    ttl=int(raw.get("ttl") or 600),
+                    priority=(
+                        int(str(prio))
+                        if record_type in ("MX", "SRV") and prio not in (None, "")
+                        else None
+                    ),
+                    id=str(raw.get("id", "")),
+                )
+            )
+        return records
+
+    def add_record(self, zone: str, record: DNSRecord) -> None:
+        """Add a record. Porkbun's minimum TTL is 600 seconds.
+
+        Raises:
+            RegistrarError: If the API call fails
+        """
+        payload = {
+            "type": record.type,
+            "name": record.name,
+            "content": record.content,
+            "ttl": str(max(record.ttl, 600)),
+        }
+        if record.priority is not None:
+            payload["prio"] = str(record.priority)
+        self._make_request(f"/dns/create/{zone}", payload)
+
+    def delete_record(self, zone: str, record: DNSRecord) -> None:
+        """Delete a record by the ID list_records returned.
+
+        Raises:
+            RegistrarError: If the record has no ID or the API call fails
+        """
+        if not record.id:
+            raise RegistrarError(f"Cannot delete a record without an ID: {record.describe()}")
+        self._delete_record(zone, record.id)
 
     def get_domain_records(self, domain: str) -> List[Dict[str, Any]]:
         """Retrieve all DNS records for a domain.

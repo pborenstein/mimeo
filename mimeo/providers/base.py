@@ -1,67 +1,138 @@
-"""Abstract base classes for providers."""
+"""Abstract base classes for providers.
+
+Four roles, each a separate interface (DEC-041, DEC-044):
+
+- Registrar: holds the registration and the nameserver setting
+- DNSProvider: holds a zone's records
+- Host: serves a site and holds its custom-domain setting
+- RepoProvider: creates and removes the repository behind a site
+"""
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any  # noqa: F401 — kept for subclass use
+from typing import Any
 
-from mimeo.models import DNSRecord, NameserverCheckResult
+from mimeo.models import DNSRecord, Site, SiteState
 
 
 class Registrar(ABC):
-    """Abstract base class for domain registrars."""
-
-    @abstractmethod
-    def check_nameservers(self, domain: str) -> NameserverCheckResult:
-        """Check whether the domain's nameservers match this registrar.
-
-        Args:
-            domain: Domain name to check
-
-        Returns:
-            NameserverCheckResult with ok flag and actual/expected nameservers
-        """
-        pass
-
-    @abstractmethod
-    def update_nameservers(self, domain: str) -> None:
-        """Reset the domain's nameservers to this registrar's defaults.
-
-        Args:
-            domain: Domain name to update
-
-        Raises:
-            RegistrarError: If the update fails
-        """
-        pass
+    """A domain registrar."""
 
     @abstractmethod
     def list_domains(self) -> list[dict[str, Any]]:
-        """Return all domains in the account.
+        """Return all domains in the account, as the registrar reports them."""
 
-        Returns:
-            List of domain info dicts as returned by the registrar API.
+    @abstractmethod
+    def get_nameservers(self, domain: str) -> list[str]:
+        """Return the nameservers set for the domain, lowercase and sorted."""
 
-        Raises:
-            RegistrarError: If the API call fails
-        """
-        pass
+    @abstractmethod
+    def set_nameservers(self, domain: str, nameservers: list[str]) -> None:
+        """Set the domain's nameservers."""
+
+    @abstractmethod
+    def dnssec_enabled(self, domain: str) -> bool:
+        """Return True when the registry holds DNSSEC records for the domain."""
 
 
 class DNSProvider(ABC):
-    """Abstract base class for DNS providers."""
+    """A DNS provider: zones and the records in them."""
+
+    name: str
 
     @abstractmethod
-    def configure_dns(self, domain: str, records: list[DNSRecord]) -> None:
-        """Configure DNS records for a domain.
+    def serves(self, nameservers: list[str]) -> bool:
+        """Return True when these nameservers belong to this provider."""
+
+    @abstractmethod
+    def zone_exists(self, zone: str) -> bool:
+        """Return True when the provider has the zone."""
+
+    @abstractmethod
+    def create_zone(self, zone: str) -> None:
+        """Create the zone. A zone that already exists is left alone."""
+
+    @abstractmethod
+    def zone_nameservers(self, zone: str) -> list[str]:
+        """Return the nameservers the provider answers on for the zone."""
+
+    @abstractmethod
+    def list_records(self, zone: str) -> list[DNSRecord]:
+        """Return every record in the zone, names relative to the zone."""
+
+    @abstractmethod
+    def add_record(self, zone: str, record: DNSRecord) -> None:
+        """Add a record to the zone."""
+
+    @abstractmethod
+    def delete_record(self, zone: str, record: DNSRecord) -> None:
+        """Delete a record previously returned by list_records."""
+
+
+class Host(ABC):
+    """A hosting provider: serves sites and links each to a hostname."""
+
+    name: str
+
+    @abstractmethod
+    def find_site(self, hostname: str) -> Site | None:
+        """Find the site whose custom domain is the hostname, without a full scan.
+
+        Checks only the places a site for this hostname would be by
+        default. Returns None when it is not there.
+        """
+
+    @abstractmethod
+    def scan(self) -> dict[str, list[Site]]:
+        """Return every site with a custom domain, keyed by that hostname."""
+
+    @abstractmethod
+    def state(self, site: Site) -> SiteState:
+        """Return the site's custom domain, certificate and HTTPS state."""
+
+    @abstractmethod
+    def set_custom_domain(self, site: Site, hostname: str | None) -> None:
+        """Set the site's custom domain, or remove it when hostname is None."""
+
+    @abstractmethod
+    def required_records(self, site: Site, label: str) -> list[DNSRecord]:
+        """Return the records the host needs for a hostname.
 
         Args:
-            domain: Domain name to configure
-            records: List of DNS records to create/update
-
-        Raises:
-            RegistrarError: If DNS configuration fails
+            site: The site being served
+            label: The hostname relative to its zone ("" for the apex)
         """
-        pass
+
+    @abstractmethod
+    def enforce_https(self, site: Site) -> bool:
+        """Turn on HTTPS enforcement. Returns False when no certificate exists yet."""
+
+
+class RepoProvider(ABC):
+    """Creates and removes the repository behind a site."""
+
+    @abstractmethod
+    def validate_template(self, template_repo: str) -> None:
+        """Raise unless the template exists and is offered as a template."""
+
+    @abstractmethod
+    def create_from_template(
+        self,
+        repo_name: str,
+        owner: str,
+        template_repo: str,
+        private: bool = False,
+        force: bool = False,
+    ) -> tuple[str, bool, bool]:
+        """Create a repository from a template.
+
+        Returns:
+            (full name, created, existed before)
+        """
+
+    @abstractmethod
+    def delete_repository_if_exists(self, repo_full_name: str) -> bool:
+        """Delete a repository. Returns False when it did not exist."""
 
 
 @dataclass
@@ -72,46 +143,3 @@ class DeployResult:
     repo_created: bool
     https_enabled: bool
     repo_existed: bool = False
-
-
-class Host(ABC):
-    """Abstract base class for hosting providers."""
-
-    @abstractmethod
-    def deploy_site(self, domain: str) -> DeployResult:
-        """Deploy a site to the hosting provider.
-
-        Args:
-            domain: Domain name for the site
-
-        Returns:
-            DeployResult with url, repo_created, and https_enabled flags
-
-        Raises:
-            HostError: If deployment fails
-        """
-        pass
-
-    @abstractmethod
-    def required_dns_records(self, domain: str) -> list[DNSRecord]:
-        """Return the DNS records required for this host to serve the domain.
-
-        Args:
-            domain: Domain name for the site
-
-        Returns:
-            List of DNSRecord objects that must be configured
-        """
-        pass
-
-    @abstractmethod
-    def enable_https_enforcement(self, repo_full_name: str) -> bool:
-        """Enable HTTPS enforcement for a site.
-
-        Args:
-            repo_full_name: Full repository name (owner/repo)
-
-        Returns:
-            True if HTTPS enforcement was enabled, False if certificate not ready
-        """
-        pass

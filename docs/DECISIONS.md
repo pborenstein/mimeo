@@ -852,3 +852,30 @@ Checked 2026-11-15:
 **Consequences**: Tests must cover several sites in one zone, including `sync` and `unlink` on one site leaving the others' records intact. `sync` can no longer clear and rewrite a zone for any site; DEC-035's clear-and-recreate in `create` has to be narrowed to the site's own records.
 
 ---
+
+### DEC-046: The 2.0 Design Is MIMEO2_DESIGN.md; Its Remaining Calls Were Made in One Pass (2026-11-15)
+
+**Status**: Active (Phase 8). User call: after DEC-039 to DEC-045 the user asked for the rest of the design to be worked out without further questions, then for it to be built. Implemented in Entry 91.
+
+**Context**: DEC-039 to DEC-045 answered scope and the six open questions in `docs/MIMEO2.md`. A buildable design needed more choices than those. `docs/MIMEO2_DESIGN.md` made them and lists each with its reason under "Calls Made Here".
+
+**Decision**: `docs/MIMEO2_DESIGN.md` is the 2.0 design. The calls it adds:
+
+- Every command runs one shared read (`Fleet.read`), one comparison (`compare`) and one apply. `status` prints the comparison's list of changes and `sync` applies it.
+- `delete` stays, as `unlink` plus repository deletion. `unlink` never touches a repository.
+- Config gains `defaults.dns`, the provider `create` and `delegate` put a zone at.
+- mimeo owns the address records (A, AAAA, CNAME, ALIAS) at a site's own names: it adds the required ones that are missing and removes the others. Nothing else in a zone is touched.
+- AAAA records are written at the apex. This closes the backlog item left open by DEC-036.
+- Netlify is not in 2.0. Two open decisions in `docs/NETLIFY.md` ("unmanaged records at the NS switch", "where the host choice lives") are overtaken by DEC-042 and DEC-040 and get redone when Netlify is picked up.
+- A version 1 config file loads unchanged, and mimeo then behaves as 1.x did.
+- Cloudflare is called through the existing HTTP client; no SDK.
+
+**Amends DEC-040**: a lookup that misses the cache runs a full scan only when the cache has never been filled by one, or when the caller is `delete`. Otherwise it tries `<organization>/<hostname>` and stops. DEC-040 said every miss falls back to a scan; a scan costs one API call per Pages repository, too much for each `status` of a domain with no site.
+
+**Amends DEC-043**: a record mimeo adds takes the proxy setting already in use at its name, so adding a record does not change how the name is served. New names are still DNS-only.
+
+**Alternatives considered**: Continuing question by question (ended by the user). Porting 1.x `status` and `sync` unchanged onto the new core before changing behavior (rejected: their `--source` views and Porkbun-only assumptions are what the redesign removes, so the port would have been written and then deleted).
+
+**Consequences**: The 1.x command tests were replaced by tests that run the commands against in-memory providers. The first `sync --all` on 2.0 adds four AAAA records to every apex site at a configured provider. The Cloudflare provider and `delegate` have not been run against a live account; the vendor facts they rest on are listed as unverified in `docs/MIMEO2_DESIGN.md`. Other differences between the design text and the code are in that document's "As Built" section.
+
+---

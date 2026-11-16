@@ -686,6 +686,41 @@ front-door verbs than it started with. See DEC-021.
 
 ---
 
+- [x] mimeo 2.0 (DEC-038 to DEC-046, Entry 91; design in
+      `docs/MIMEO2_DESIGN.md`; branch `mimeo-2.0-design`, not merged or
+      released)
+  - [x] Design session: scope and six open questions (DEC-039 to DEC-045)
+  - [x] Step 1: repo/host split, template org default, 307 message
+        (version 1.4.0, commit `62eeff7`)
+  - [x] Step 2: `connection.py` (read), `plan.py` (compare, apply),
+        provider interfaces, in-memory test providers
+  - [x] Step 3: `github.organizations`, site cache, `scan`
+  - [x] Step 4: Cloudflare DNS provider; provider chosen by nameservers;
+        `doctor` credential checks
+  - [x] Step 5: `link`, `unlink`; `create` and `delete` rebuilt on them
+  - [x] Step 6: `delegate`
+  - [x] Step 7: subdomain sites; AAAA records
+  - [x] Step 8 (docs): README, ARCHITECTURE, INSTALLATION,
+        `config.toml.example`
+  - [ ] Add `github.organizations` to the live config
+        (`["mimeo-sites", "tepiton", "pborenstein"]`), then `mimeo scan`
+  - [ ] Add `[cloudflare]` to the live config; run `mimeo doctor`, then
+        `mimeo status blueberryhill.fyi xhosi.com --records` (first live
+        use of the Cloudflare provider; read-only)
+  - [ ] First live writes: `mimeo sync` on one Porkbun-served site (adds
+        AAAA), then `delegate --dry-run` and `delegate` on a junk domain
+  - [ ] Verify the vendor facts listed in `docs/MIMEO2_DESIGN.md` "To
+        Verify at Implementation"
+  - [ ] Extend the smoke script to cover `delegate` to Cloudflare and back
+  - [ ] `docs/TROUBLESHOOTING.md` still describes 1.x commands
+  - [ ] Decide the release: 1.4.0 from `62eeff7`, 2.0.0 from the branch
+        tip (version is 2.0.0b1 until then)
+- [ ] xhosi.com: GitHub certificate renewal is failing (`bad_authz`),
+      expires 2026-12-12; records are proxied through Cloudflare
+- [ ] mimeo.lol returns GitHub's 404: `pborenstein/mimeo.lol` is now
+      `mimeo-templates/mimeo`, which has no custom domain (found
+      2026-11-15)
+
 ### Phase 7: CLI Redesign (2026-03-19 - 2026-07-06)
 
 **Delivered**:

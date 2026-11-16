@@ -3,47 +3,59 @@ phase: 8
 phase_name: Consolidation
 updated: 2026-11-15
 last_commit: 9ab965a
-last_entry: 90
+last_entry: 91
 ---
 
 ## Current Focus
 
-Preparing the mimeo 2.0 design session (DEC-038). Proposed scope: mimeo connects
-a domain to the host serving its site (domain, nameservers, DNS
-records, site) and stops growing site creation. Notes, command
-sketch and open questions: `docs/MIMEO2.md`.
+mimeo 2.0 is designed and built on branch `mimeo-2.0-design` (DEC-039
+to DEC-046, Entry 91). Not merged, not released, and not yet run
+against live APIs for anything that writes. Design:
+`docs/MIMEO2_DESIGN.md`; what differs from it: its "As Built" section.
 
 ## Active Tasks
 
-- [ ] **2.0 design session**: work `docs/MIMEO2.md` open questions
-      into DECISIONS.md entries.
-- [ ] **Template org move** (Entry 89): config `template_org`, code
-      default, README/ARCHITECTURE refs, 307 message. twohorses.org
-      still uncreated.
-- [ ] **Netlify second host**: staging pass 1 (repo/host split) is
-      what 2.0's `SITE` argument needs; open: OD #2, #4, #5, #7, #8.
-- [ ] **Backlog**: AAAA records, undecided.
+- [ ] **Live config**: add `github.organizations =
+      ["mimeo-sites", "tepiton", "pborenstein"]`; run `mimeo scan`.
+- [ ] **Cloudflare, read-only first**: add `[cloudflare]` (token with
+      Zone:Read and DNS:Edit; `account_id` for zone creation); run
+      `mimeo doctor`, then `mimeo status blueberryhill.fyi xhosi.com
+      --records`.
+- [ ] **First live writes**: `mimeo sync` one Porkbun-served site (adds
+      four AAAA); `delegate --dry-run` then `delegate` on a junk domain.
+- [ ] **Verify vendor facts** in MIMEO2_DESIGN.md "To Verify at
+      Implementation" (Cloudflare zone creation and record import,
+      Porkbun DNSSEC lookup, AAAA and certificates).
+- [ ] **Release**: 1.4.0 is commit `62eeff7`; branch tip is 2.0.0b1.
+- [ ] **Leftovers**: `docs/TROUBLESHOOTING.md` describes 1.x; smoke
+      script needs `delegate`; `docs/SUBDOMAINS.md` and
+      `docs/NETLIFY.md` predate 2.0.
 
-## On Ice (2026-09-29, user call)
+## Found This Session
 
-- **Template apply** (Entry 68). **Subdomain sites**:
-      `docs/SUBDOMAINS.md` (revisit in 2.0, MIMEO2.md question 6).
+- xhosi.com: GitHub certificate renewal failing (`bad_authz`), expires
+      2026-12-12; records proxied through Cloudflare (DEC-043).
+- mimeo.lol returns GitHub's 404: its repo is now
+      `mimeo-templates/mimeo`, with no custom domain.
+- twohorses.org still uncreated (Entry 89); the template org default
+      is fixed, so `create` should work once the config key is too.
 
 ## Blockers: none
 
 ## Context
 
-- DNS is moving to Cloudflare; blueberryhill.fyi and xhosi.com are
-      delegated and proxied to GitHub Pages. `status` now treats
-      Porkbun records as live only on Porkbun nameservers (DEC-037).
-- Sites can live in any GitHub account; `status`/`sync` only see the
-      configured one (blueberryhill.fyi shows `no repo`).
+- 2.0 in one paragraph: every command reads the registration,
+      nameservers, records (at the provider the nameservers name) and
+      site for a hostname, compares them with what the host needs, and
+      applies or prints the changes. README "How it works".
+- A site is the repo whose Pages custom domain is the hostname, in any
+      organization in `github.organizations`; cached in
+      `~/.cache/mimeo/sites.json`.
+- A 1.x config loads unchanged and behaves as 1.x did.
 - Stable facts: `CLAUDE.md` "Project Facts"; config and exit codes:
-      `docs/ARCHITECTURE.md`; Netlify: `docs/NETLIFY.md`.
-- Current release is 1.3.0; the redesign ships as 2.0.
-- `docs/SITE_ADDRESS.md` is stale, not a 2.0 input (DEC-038).
+      `docs/ARCHITECTURE.md`.
 
 ## Next Session
 
-Start the 2.0 design session from `docs/MIMEO2.md`: settle scope,
-then open questions one at a time, recording each as a DEC entry.
+Update the live config, run `mimeo scan` and `mimeo status --all`, and
+compare against what 1.3.0 reports before any command that writes.

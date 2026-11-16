@@ -1,6 +1,8 @@
 # Mimeo
 
-Automates the provisioning of landing pages for registered domains. One command takes a domain from nothing to a live GitHub Pages site with custom DNS.
+Connects a domain to the site that serves it, and keeps the connection correct. For a site to load at `example.com`, four things have to agree: the registration, the nameservers, the DNS records at whichever provider the nameservers name, and the host's custom-domain setting. mimeo reads all four, shows what disagrees, and fixes what it can.
+
+Today that means Porkbun as the registrar, Porkbun or Cloudflare as the DNS provider, and GitHub Pages as the host.
 
 ## Quick Start
 
@@ -9,37 +11,57 @@ git clone https://github.com/pborenstein/mimeo
 cd mimeo
 uv sync
 cp config.toml.example ~/.config/mimeo/config.toml
-# edit ~/.config/mimeo/config.toml with your Porkbun API key and GitHub username
+# edit ~/.config/mimeo/config.toml with your Porkbun API key and GitHub organization
 
-uv run mimeo doctor     # verify setup
-uv run mimeo create example.com
+uv run mimeo doctor              # verify setup
+uv run mimeo create example.com  # new repo from a template, connected to the domain
+uv run mimeo status example.com
 ```
 
 Full setup details (prerequisites, `gh` token scope, global vs. dev install, environment variable overrides) are in [docs/INSTALLATION.md](./docs/INSTALLATION.md).
 
-## What it does
+## How it works
 
-`mimeo create example.com` orchestrates the full workflow:
+Every command runs the same three steps.
 
-1. Creates a GitHub repository from a template (default: `mimeo`)
-2. Enables GitHub Pages with a custom domain
-3. Configures DNS via Porkbun API (4 A records + CNAME)
-4. Enables HTTPS enforcement when the cert is ready
+1. **Read.** For a hostname, collect the zone it belongs to, the zone's nameservers (from the registrar), which configured DNS provider those nameservers belong to, the records at that provider, and the site whose custom domain is the hostname, with its certificate and HTTPS state.
+2. **Compare.** Ask the host which records the site needs and compare them, and the host's settings, with what was read. The result is a list of changes.
+3. **Apply** the changes, or print them.
 
-Idempotent: safe to re-run against an existing deployment.
+`status` prints the list. `sync` applies it. The other commands do one thing before or after those steps.
+
+| Command | What it does |
+|:--------|:-------------|
+| [`status`](#status) | Shows what was read, the changes `sync` would make, and the problems it cannot fix |
+| [`sync`](#sync) | Applies the changes |
+| [`link`](#link-and-unlink) | Sets a site's custom domain to a hostname, then syncs it |
+| [`unlink`](#link-and-unlink) | Removes the site's records and its custom domain |
+| [`delegate`](#delegate) | Moves a zone to another DNS provider |
+| [`create`](#create) | `delegate` if needed, a new repository from a template, then `link` |
+| [`delete`](#delete) | `unlink`, then deletes the repository |
+| [`scan`](#scan) | Rebuilds the cache of which repository serves which hostname |
+| [`doctor`](#doctor) | Checks tools, config and credentials |
+
+### Which records mimeo touches
+
+mimeo owns the address records (A, AAAA, CNAME, ALIAS) at a site's own names, and nothing else in the zone.
+
+| Site | Names | Records GitHub Pages needs |
+|:-----|:------|:---------------------------|
+| Apex (`example.com`) | `example.com`, `www.example.com` | Four A and four AAAA at the apex; `www` CNAME to `<owner>.github.io` |
+| Subdomain (`service.example.com`) | `service.example.com` | One CNAME to `<owner>.github.io` |
+
+At those names a required record that is missing is added, and an address record that is not required is removed. MX and TXT records, records at any other name, and each record's Cloudflare proxy setting are left alone. `<owner>` is the owner of the repository serving the site.
+
+### Which repository serves a hostname
+
+The repository whose GitHub Pages custom domain is the hostname, in any organization or account listed under `github.organizations`. The repository's name does not matter. mimeo caches the pairs it finds in `~/.cache/mimeo/sites.json`; the custom-domain setting stays the authority, and a cached pair is confirmed against it before use. See [`scan`](#scan).
 
 ## After `create`
 
-The site is an ordinary GitHub repository in the deploy org. To change it,
-clone the repo, edit, and push to `main`: the template's GitHub Actions
-workflow builds the site and deploys it to Pages. There is no separate
-publish step; content changes never go through mimeo (`status` and `sync`
-only deal with registration, DNS, Pages, and HTTPS state).
+The site is an ordinary GitHub repository. To change it, clone the repo, edit, and push to `main`: the template's GitHub Actions workflow builds the site and deploys it to Pages. Content changes never go through mimeo.
 
-To push without deploying, put `[skip ci]` (or `[no ci]`, `[skip actions]`)
-in the commit message. See GitHub's
-[Skipping workflow runs](https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-workflow-runs/skipping-workflow-runs)
-for the full list and its limits.
+To push without deploying, put `[skip ci]` (or `[no ci]`, `[skip actions]`) in the commit message. See GitHub's [Skipping workflow runs](https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-workflow-runs/skipping-workflow-runs).
 
 ## Global options
 
@@ -51,140 +73,118 @@ These options go before the subcommand and apply to every command.
 | `--template-org ORG` | Org holding template repositories | `github.template_org` (`mimeo-templates`) |
 | `--deploy-org ORG` | GitHub user/org where site repositories are created | `github.default_org` (required) |
 
-Templates and sites live in different places: the template org holds the repositories `create` copies from, while the deploy org — usually your username — is where new site repositories land. The two need not match; pass `--template-org` or `--deploy-org` to override either for a single invocation:
-
-```bash
-mimeo --log-format json create example.com
-mimeo --template-org mytemplates --deploy-org myorg create example.com
-```
-
 Precedence: CLI flags > `MIMEO_*` environment variables > config file.
-
-In JSON log mode each diagnostic line is a newline-delimited JSON object with `ts`, `level`, `message`, and optionally `domain`. Result output (tables, JSON arrays) still goes to stdout.
 
 ## Commands
 
-### doctor
-
-Checks that all prerequisites are met before running any other command: Python version, `gh` installation, `gh` authentication, `workflow` token scope, config file validity, and that GitHub still lists the four Pages IPs mimeo writes as A records (read from `api.github.com/meta`). Each check prints a pass/fail result with remediation instructions. Passing domain names also checks that their nameservers point to Porkbun.
-
-| Task | Command |
-|:-----|:--------|
-| Run all checks | `mimeo doctor` |
-| Also check nameservers for specific domains | `mimeo doctor example.com another.lol` |
-
-### create
-
-Provisions one or more domains end to end. Templates are looked up in the template org (see [Global options](#global-options)); the default template is `mimeo`. Multiple domains are processed concurrently (up to 5 workers); use `--sequential` for verbose per-step output or when debugging. Every deploy sets the repository's Website field to the site URL; the "Include in the home page" checkboxes (releases/packages/deployments) have no API surface and remain a manual per-repo setting.
-
-| Task | Command |
-|:-----|:--------|
-| Provision a single domain | `mimeo create example.com` |
-| Provision several domains concurrently | `mimeo create example.com another.lol third.com` |
-| Preview without executing | `mimeo create example.com --dry-run` |
-| Run sequentially with per-step output | `mimeo create example.com another.lol --sequential` |
-| Use a specific template | `mimeo create example.com --template pandoc-simple` |
-| Create repo and Pages only; configure DNS separately | `mimeo create example.com --skip-dns` |
-| Replace an existing site with a different template | `mimeo create example.com --template new-theme --force` |
-| Same, without the confirmation prompt | `mimeo create example.com --template new-theme --force --yes` |
-
-If a repository already exists, `create` leaves it unchanged (safe to re-run). `--force` instead replaces an existing repository's content with the template: it **deletes and recreates the repo**, so all existing content, issues, and history are lost, and managed DNS records are deleted and recreated as well. Pass `--skip-dns` alongside `--force` to leave DNS untouched. `--force` prompts for confirmation unless `--yes` is passed.
-
-### delete
-
-Tears down sites: deletes the GitHub repository (the Pages site and custom domain go with it) and removes the managed DNS records (GitHub Pages A/CNAME) from Porkbun. The domain registration and nameservers are never touched — `delete` then `create` is how to repurpose a domain with a fresh template. Domains must be named explicitly; there is no fleet-wide mode.
-
-| Task | Command |
-|:-----|:--------|
-| Tear down a site completely | `mimeo delete example.com` |
-| Same, without the confirmation prompt | `mimeo delete example.com --yes` |
-| Stop serving but keep the repository | `mimeo delete example.com --keep-repo` |
-| Preview without executing | `mimeo delete example.com --dry-run` |
-
-`delete` prompts for confirmation unless `--yes` is passed. With `--keep-repo` the repository is spared and only its Pages configuration is disabled. Deleting a repository needs the `delete_repo` token scope — the same scope `create --force` requires. A domain whose repository is already gone still gets its DNS records cleaned up; a domain not registered in the Porkbun account gets repo/Pages teardown only.
-
 ### status
 
-One view of the fleet: registration expiry, nameservers, DNS drift, and Pages health per domain, joining the Porkbun account against mimeo-managed repos.
-
 | Task | Command |
 |:-----|:--------|
-| Check specific domains (quick) | `mimeo status example.com another.lol` |
-| Whole fleet: union of registered domains and mimeo repos | `mimeo status --all` |
-| Only domains that need attention | `mimeo status --all --problems` |
-| Full detail for scripting | `mimeo status --all --format json \| jq '.[] \| select(.dns_status == "drift")'` |
-| Include the Porkbun zone records | `mimeo status example.com --with-dns` |
+| Check specific hostnames | `mimeo status example.com service.example.com` |
+| Every registered domain and known site | `mimeo status --all` |
+| Only hostnames that need attention | `mimeo status --all --problems` |
+| Every record in the zone, from the provider serving it | `mimeo status example.com --records` |
+| For scripting | `mimeo status --all --format json \| jq '.[] \| select(.fixable)'` |
 
-A bare `mimeo status` refuses to run: the fleet sweep makes several API calls per domain and is slow on large accounts, so it requires the explicit `--all`.
+| Column | Values |
+|:-------|:-------|
+| `EXPIRES` | Registration expiry; `-` for a subdomain or a hostname whose domain is not at the registrar |
+| `DNS` | The provider serving the zone: `porkbun`, `cloudflare`, `external` (another provider, which mimeo cannot read), `none` (the registrar reports no nameservers). A trailing `*` means the site's records are proxied. |
+| `RECORDS` | `ok`, `missing`, `extra`, `external` (not compared), `unknown` |
+| `SITE` | `ok`, `fixable` (certificate ready, HTTPS not enforced), `pending`, `no cert`, `cert error`, `expiring` (14 days or less, so renewal is not happening), `no pages`, `no site` |
+| `REPO` | The repository whose custom domain is the hostname |
 
-Registered domains with no site show `no repo`; sites whose domain is not in the Porkbun account show `-` on the registrar side. The DNS column is `-` when there is no repo (no desired state to compare against). The NS column shows `pb` (Porkbun nameservers), `ext` (another provider) or `none` (the NS lookup returned nothing). Porkbun's records are live only when NS is `pb`: for `ext` the DNS column shows `external` and nothing is compared, because mimeo does not read the other provider; for `none` it shows `unknown`. Nameservers at another provider are not counted as a problem, and are never counted as fixable by `sync` (DEC-037). `--with-dns` flags Porkbun records that are not in use. Drift and unhealthy sites are findings (exit 0); API errors exit nonzero with partial results.
-
-`--source` narrows the report to a single provider instead of the cross-provider join.
-
-#### --source github
-
-Site inventory: all mimeo-managed sites, i.e. repos tagged with the `mimeo` topic.
-
-| Task | Command |
-|:-----|:--------|
-| Human-readable table | `mimeo status --all --source github` |
-| JSON output | `mimeo status --all --source github --format json` |
-| CSV output | `mimeo status --all --source github --format csv` |
-| Include Pages health | `mimeo status --all --source github --health` |
-| Include the template each site was created from | `mimeo status --all --source github --show-template` |
-
-With `--health`, each site is classified as `healthy`, `fixable`, `cert_pending`, `no_cert`, or `pages_error`, and output is sorted by severity (problems first).
-
-#### --source porkbun
-
-Registrar inventory: all domains in the Porkbun account, regardless of whether mimeo manages them. Output fields: `domain`, `tld`, `expires`, `auto_renew`, `ns_ok` (whether NS points to Porkbun), `nameservers`. `--with-dns` includes each domain's Porkbun zone records (doubles the API calls); they are the live records only when `ns_ok` is true.
-
-| Task | Command |
-|:-----|:--------|
-| Human-readable table | `mimeo status --all --source porkbun` |
-| JSON output | `mimeo status --all --source porkbun --format json` |
-| Full inventory to CSV | `mimeo status --all --source porkbun --format csv --with-dns > inventory.csv` |
-| Which domains do not point at Porkbun | `mimeo status --all --source porkbun --format json \| jq '.[] \| select(.ns_ok == false) \| .domain'` |
-| Adjust concurrency | `mimeo status --all --source porkbun --workers 10` (default 5) |
-
-#### --source dns
-
-Live DNS records for named domains, or the drift against what GitHub Pages expects. Unlike the other sources, `--source dns` has no fleet-wide mode; it always takes explicit domain names. Repairing missing records and enabling HTTPS enforcement are both part of `mimeo sync`; replacing repository content with a different template is `mimeo create --force`.
-
-| Task | Command |
-|:-----|:--------|
-| Raw live records | `mimeo status example.com --source dns` |
-| Drift only (missing/extra vs. expected) | `mimeo status example.com --source dns --problems` |
+When hostnames are named, each row is followed by the changes `sync` would make and the problems it cannot fix. A registered domain with no site, a zone at an external provider, and proxied records are not problems. A bare `mimeo status` refuses to run; a fleet sweep needs `--all`. Findings exit 0; API errors exit nonzero with partial results.
 
 ### sync
 
-Converges domains on their desired state: applies missing DNS records and enables HTTPS enforcement when the certificate is ready. It will not create repositories (`mimeo create`), change content (`mimeo create --force`), or delete DNS records it does not manage, and it only touches nameservers with `--reset-nameservers`.
+| Task | Command |
+|:-----|:--------|
+| Preview | `mimeo sync --all --dry-run` |
+| Apply to every site | `mimeo sync --all` |
+| Apply to specific hostnames | `mimeo sync example.com` |
+
+Adds missing address records, removes extra ones at the site's own names, and enforces HTTPS when the certificate is ready. It does not change nameservers (`delegate`), does not link anything (`link`), does not change a proxy setting, and does not write to a zone at a provider that is not configured.
+
+### link and unlink
 
 | Task | Command |
 |:-----|:--------|
-| Preview fleet-wide changes first | `mimeo sync --all --dry-run` |
-| Converge the whole fleet | `mimeo sync --all` |
-| Converge specific domains | `mimeo sync example.com another.lol` |
-| Also reset nameservers that point elsewhere | `mimeo sync example.com --reset-nameservers` |
+| Link a hostname to the repo named after it in the default org | `mimeo link example.com` |
+| Link to any repository | `mimeo link example.com github:someone/portfolio` |
+| Link a subdomain | `mimeo link service.example.com github:mimeo-sites/service` |
+| Preview | `mimeo link example.com --dry-run` |
+| Wait up to 15 minutes for the certificate | `mimeo link example.com --wait` |
+| Set the custom domain only | `mimeo link example.com --skip-dns` |
+| Take a site off a hostname, keeping the repository | `mimeo unlink example.com` |
 
-A bare `mimeo sync` refuses to run: fleet-wide convergence requires the explicit `--all`.
+`link` works on a site that already exists; it creates nothing. Records are written DNS-only. When the zone is at a provider mimeo cannot write to, `link` sets the custom domain and prints the records to add by hand. Without `--wait`, a certificate that is not ready yet is reported and `mimeo sync` enforces HTTPS later. `link` refuses a hostname another site already serves.
 
-## Architecture overview
+`unlink` removes the address records at the site's names and the custom-domain setting, after a confirmation prompt (`--yes` skips it).
 
-```
-mimeo create example.com
-        |
-        +--> GitHub Pages (gh CLI)
-        |      create repo from template
-        |      enable Pages, set custom domain
-        |      attempt HTTPS enforcement
-        |
-        +--> DNS (Porkbun API)
-               4 A records (185.199.108-111.153)
-               www CNAME (user.github.io)
-```
+### delegate
 
-The tool uses provider abstractions (`Registrar`, `Host` ABCs) that allow adding new registrars and hosts without changing the core orchestration. See [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for full component diagrams and data flows.
+| Task | Command |
+|:-----|:--------|
+| Preview a move to Cloudflare | `mimeo delegate example.com --dns cloudflare --dry-run` |
+| Move | `mimeo delegate example.com --dns cloudflare` |
+| Move back | `mimeo delegate example.com --dns porkbun` |
+
+Copies every record except NS and SOA from the provider serving the zone now, reads the copies back to confirm them, and only then sets the nameservers at the registrar. Copies are DNS-only. The old provider's records are left in place. `--dns` defaults to `defaults.dns`.
+
+`delegate` refuses when DNSSEC is enabled for the domain (the registry's DS records point at the current provider's keys), when given a subdomain, and when the current provider is one mimeo cannot read, unless `--empty` is passed to move the zone with no records. Record types the target cannot hold (ALIAS on Cloudflare) are listed and not copied.
+
+### create
+
+| Task | Command |
+|:-----|:--------|
+| One site | `mimeo create example.com` |
+| Several, concurrently | `mimeo create example.com another.lol third.com` |
+| A subdomain site | `mimeo create service.example.com --template eleventy-service` |
+| A specific template | `mimeo create example.com --template pandoc-simple` |
+| A specific repository | `mimeo create example.com --repo someone/portfolio` |
+| Keep the zone at Porkbun for this one | `mimeo create example.com --dns porkbun` |
+| Preview | `mimeo create example.com --dry-run` |
+| Replace an existing repository from the template | `mimeo create example.com --force` |
+
+For each hostname: when the zone sits at a configured DNS provider other than `defaults.dns`, it is moved there first (apex hostnames only; a subdomain never moves its parent zone). Then the repository is created from the template in the template org (which must have its `is_template` flag set), and linked. Nothing is created for a hostname no registered domain covers.
+
+An existing repository is left unchanged and still linked. `--force` **deletes and recreates the repository**, so all content, issues and history are lost; it prompts unless `--yes` is passed. `--skip-dns` leaves nameservers and records alone.
+
+### delete
+
+| Task | Command |
+|:-----|:--------|
+| Tear down a site | `mimeo delete example.com` |
+| Without the prompt | `mimeo delete example.com --yes` |
+| Preview | `mimeo delete example.com --dry-run` |
+
+Does what `unlink` does, then deletes the repository serving the hostname, whatever it is called and whichever listed organization it is in. The prompt names the repository. When nothing is linked, it falls back to the repository named after the hostname in the default org, after a full scan confirms no other repository serves the hostname. Needs the `delete_repo` token scope. The registration, nameservers and every other record are left alone.
+
+### scan
+
+`mimeo scan` reads the custom domain of every Pages repository in every organization listed under `github.organizations` and rewrites the cache. It runs by itself the first time a lookup misses. Run it by hand after linking a site outside mimeo, or after adding an organization to the config. It warns when two repositories claim one hostname.
+
+### doctor
+
+Checks Python version, `gh` installation, authentication and `workflow` scope, the config file, that GitHub still lists the eight Pages addresses mimeo writes (from `api.github.com/meta`), that the Porkbun keys are accepted, and that the Cloudflare token is active when one is configured. `mimeo doctor example.com` also checks that the domain's nameservers belong to a provider mimeo can write to.
+
+## Upgrading from 1.x
+
+A 1.x config file loads unchanged, and with no new keys mimeo behaves as before: one organization, Porkbun DNS, Cloudflare-delegated zones shown as `external`. To use what 2.0 adds, set `github.organizations`, add a `[cloudflare]` section, and set `defaults.dns` (see `config.toml.example`).
+
+| 1.x | 2.0 |
+|:----|:----|
+| A site is the repo named after the domain in one account | A site is whichever repo's custom domain is the hostname, in any listed organization |
+| Porkbun's zone is the DNS | The provider named by the nameservers is the DNS |
+| `sync --reset-nameservers` | `mimeo delegate ZONE --dns porkbun` |
+| `delete --keep-repo` | `mimeo unlink HOSTNAME` |
+| `status --source ...`, `--with-dns`, `--health`, `--show-template` | One `status` view; `--records` shows the zone |
+| `create` rewrites the zone's managed records | `create` changes only the site's address records |
+| No AAAA records | Four AAAA at the apex; the first `sync` adds them |
+| Subdomains refused | Subdomains supported |
+| A registered domain with no repo is a problem | It is shown as `no site` and is not a problem |
 
 ## Development
 
@@ -192,21 +192,25 @@ The tool uses provider abstractions (`Registrar`, `Host` ABCs) that allow adding
 uv sync --frozen && uv run pytest && uv run ruff check mimeo && uv run mypy mimeo
 ```
 
-384 tests. Linting and type checking are expected to be clean. See [docs/INSTALLATION.md](./docs/INSTALLATION.md) for development setup.
+Linting and type checking are expected to be clean. The read, compare and apply steps are tested against in-memory providers (`tests/fakes.py`), with no HTTP mocking.
 
 ## Project structure
 
 ```
 mimeo/
 ├── mimeo/
-│   ├── cli/                  # doctor, create, status, sync commands
-│   ├── providers/            # Registrar / DNSProvider / Host abstractions; Porkbun, GitHub Pages
+│   ├── connection.py         # Read: Fleet.read -> Connection
+│   ├── plan.py               # Compare and apply: compare() -> Plan, apply()
+│   ├── operations.py         # link, unlink, delegate
+│   ├── cache.py              # Hostname-to-site cache
+│   ├── cli/                  # One command per function; _fleet.py builds the providers
+│   ├── providers/            # Registrar, DNSProvider, Host, RepoProvider; Porkbun, Cloudflare, GitHub
 │   ├── utils/                # HTTP session with error handling, retry with jitter
 │   ├── config.py             # Config loading (~/.config/mimeo/config.toml)
-│   ├── models.py             # DNSRecord, NameserverCheckResult
+│   ├── models.py             # DNSRecord, Site, SiteState
 │   └── exceptions.py         # Exception hierarchy + exit codes
 ├── tests/
-├── scripts/                  # Smoke tests and utilities
+├── scripts/
 └── docs/
 ```
 
@@ -215,12 +219,16 @@ mimeo/
 | Document | Purpose |
 |:---------|:--------|
 | [docs/INSTALLATION.md](./docs/INSTALLATION.md) | Prerequisites, install, configuration |
-| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Component map, data flows, workflow diagrams |
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Component map, data flows |
+| [docs/MIMEO2_DESIGN.md](./docs/MIMEO2_DESIGN.md) | The 2.0 design and the reasons for it |
 | [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) | Failure diagnosis and remediation |
 | [docs/DECISIONS.md](./docs/DECISIONS.md) | Architectural decision registry |
 | [docs/IMPLEMENTATION.md](./docs/IMPLEMENTATION.md) | Phase tracker and task status |
 
 ## Known limitations
 
-- Only supports Porkbun (registrar) and GitHub Pages (host). Provider abstraction is in place for future additions.
-- DNS propagation is not polled after configuration -- run `mimeo status` afterwards to confirm records have propagated.
+- One registrar (Porkbun), two DNS providers (Porkbun, Cloudflare), one host (GitHub Pages). The interfaces leave room for more.
+- The Cloudflare provider and `delegate` are tested against in-memory providers and mocked HTTP only; they have not been run against a live Cloudflare account (as of 2026-11-15).
+- mimeo does nothing about GitHub certificate renewal on proxied Cloudflare records. `status` shows a failed renewal as `cert error` (DEC-043).
+- `scan` sees private repositories only in the authenticated account and in organizations it belongs to.
+- DNS propagation is not polled; run `mimeo status` afterwards.

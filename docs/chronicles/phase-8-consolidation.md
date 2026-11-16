@@ -1280,3 +1280,34 @@ created nothing (it stopped before the repo existed).
 **Decisions**: DEC-037.
 
 **Files**: `mimeo/cli/status.py`, `tests/test_status.py`, `docs/MIMEO3.md`, README.md, ARCHITECTURE.md.
+
+---
+
+## Entry 91: mimeo 2.0 designed and built (2026-11-15)
+
+**What**: Held the 2.0 design session, wrote the design, and implemented it on branch `mimeo-2.0-design`: the repo/host split (as 1.4.0), then the 2.0 core and commands. 399 tests pass; `mypy` and `ruff` are clean.
+
+**Why**: The fleet's DNS is moving to Cloudflare and sites live in several GitHub accounts, which 1.x cannot represent (Entry 90). The session began by settling open questions one at a time (DEC-039 to DEC-045). Partway through, the user asked for the remaining design to be worked out in one pass and then built, without further questions (DEC-046).
+
+**How**:
+
+- Design: scope, site lookup by custom domain with a cache, separate registrar and DNS provider interfaces, `delegate` copying all records, DNS-only `link`, the split landing first, and subdomains in scope. `docs/MIMEO2_DESIGN.md` assembles these and adds the calls no question covered.
+- Step 1 (`62eeff7`): `GitHubHost` split into `GhCli`, `GitHubRepoProvider` and a Pages-only host, with a script that moved code by line range and a second that moved the tests. Template org default changed to `mimeo-templates`; a 307 from generate now names `github.template_org`.
+- Core (`648f1eb`): `Fleet.read` builds a `Connection`; `compare` turns it into a `Plan`; `apply` carries it out. Tested against in-memory providers in `tests/fakes.py`.
+- Operations and commands: `link`, `unlink`, `delegate` as functions in `operations.py`; `status`, `sync`, `scan`, `create`, `delete` rebuilt on the core. The 1.x command tests and the provider methods only 1.x used were removed.
+- Checked read-only against live APIs: `status` on mimeo.lol, blueberryhill.fyi, xhosi.com, gilborenstein.com and tequitl.dev with three organizations set through `MIMEO_GITHUB_ORGANIZATIONS` and a scratch cache directory. The scan found 72 sites.
+
+**Found**:
+
+- The first scan missed private repositories, because `users/{name}/repos` lists public ones only. It now uses `user/repos` for the authenticated account and `orgs/{org}/repos` for organizations.
+- `delete` could have fallen back to the repo named after the hostname while a differently named repo served it. It now scans before falling back.
+- xhosi.com's GitHub certificate is `bad_authz` and expires 2026-12-12; its records are proxied through Cloudflare.
+- mimeo.lol returns GitHub's 404. `pborenstein/mimeo.lol` redirects to `mimeo-templates/mimeo`, which has no custom domain.
+- tequitl.dev is served by `pborenstein/twohorses`, a case 1.x could not show.
+
+**Not done**: no command that writes was run live; the Cloudflare provider and `delegate` have only run against fakes and mocked HTTP; the vendor facts in the design's "To Verify" list are unverified; `docs/TROUBLESHOOTING.md` still describes 1.x; nothing is merged, pushed or released.
+
+**Decisions**: DEC-039, DEC-040, DEC-041, DEC-042, DEC-043, DEC-044, DEC-045, DEC-046.
+
+**Files**: `mimeo/connection.py`, `mimeo/plan.py`, `mimeo/operations.py`, `mimeo/cache.py`, `mimeo/models.py`, `mimeo/config.py`, `mimeo/providers/` (base, gh, dns/cloudflare, host/github, repo/github, registrar/porkbun), `mimeo/cli/` (all commands, `_fleet.py`, `connect.py`), `tests/`, README.md, `config.toml.example`, `docs/` (MIMEO2.md, MIMEO2_DESIGN.md, DECISIONS.md, ARCHITECTURE.md, INSTALLATION.md, IMPLEMENTATION.md, CONTEXT.md).
+

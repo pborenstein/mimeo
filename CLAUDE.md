@@ -120,8 +120,9 @@ Stable facts that sessions need. Current work state lives in
   default to the `mimeo-sites` org
   (`github.default_org`), but a site can live in any account:
   gilborenstein.com is in `tepiton`, blueberryhill.fyi in
-  `pborenstein`. `status`/`sync` only see repos under the configured
-  account.
+  `pborenstein`. From 2.0, a site is the repo whose Pages custom
+  domain is the hostname, in any organization listed under
+  `github.organizations` (DEC-040).
 - **DNS**: Porkbun is the registrar. DNS is moving to Cloudflare
   (blueberryhill.fyi, xhosi.com already delegated); Porkbun zone
   records are live only on Porkbun nameservers (DEC-037).
@@ -144,6 +145,9 @@ Stable facts that sessions need. Current work state lives in
   `uv lock` together.
 - **Tests**: tests that build 404/422 `HostError`s must pass
   `status_code=` (exit-code mapping depends on it, DEC-027/028).
+  Command and operation tests run against the in-memory providers in
+  `tests/fakes.py` (the `world` fixture), not mocks of provider
+  classes.
 
 ### Doc Style
 

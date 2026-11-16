@@ -4,24 +4,38 @@
 # MIMEO_PORKBUN_API_KEY); env vars win over this file. The global
 # --template-org/--deploy-org CLI flags win over both.
 
-schema_version = 1
+schema_version = 2
 
 [porkbun]
 # API key from https://porkbun.com/account/api
 api_key = "pk1_your_api_key"
 secret_key = "sk1_your_secret_key"
-# default_ttl = 600
+
+# Optional. Without this section Cloudflare-served zones show as
+# "external" and mimeo does not read or write their records.
+# [cloudflare]
+# API token with Zone:Read and DNS:Edit on the zones mimeo manages
+# (and Zone:Edit to let `delegate` create zones).
+# api_token = "your_cloudflare_api_token"
+# Account new zones are created in; needed only by `delegate`/`create`.
+# account_id = "your_cloudflare_account_id"
 
 [github]
 # Where new site repositories are created (user or org)
 default_org = "your-username-or-org"
-# Where template repositories live; need not match default_org (default: tepiton)
-# template_org = "tepiton"
+# Every organization and user account that holds sites. mimeo finds a
+# hostname's site by looking for the repository whose Pages custom
+# domain is that hostname in each of these. Default: [default_org].
+# organizations = ["your-username-or-org", "another-org"]
+# Where template repositories live (default: mimeo-templates)
+# template_org = "mimeo-templates"
 # Authentication is via the gh CLI ('gh auth login'), not this file.
-# default_private = false
 
 [defaults]
 # Default template for new sites, looked up in github.template_org (default: mimeo)
 # template = "mimeo"
+# DNS provider `create` and `delegate` put a zone at: "porkbun" (default)
+# or "cloudflare" (needs the [cloudflare] section).
+# dns = "porkbun"
 # Domains excluded from fleet-wide sweeps (status --all / sync --all)
 # ignore_domains = ["example.dev", "elsewhere.net"]

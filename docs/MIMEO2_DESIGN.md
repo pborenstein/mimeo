@@ -1,12 +1,13 @@
 # mimeo 2.0: Design
 
-Status: **Proposed 2026-11-15.** Written in one pass at the user's
-request, so that the design can be read whole instead of decided
-question by question. It builds on DEC-039 to DEC-045 in
+Status: **Implemented 2026-11-15** on branch `mimeo-2.0-design`
+(Entry 91, DEC-046). Written in one pass at the user's request, so
+that the design could be read whole instead of decided question by
+question. It builds on DEC-039 to DEC-045 in
 [DECISIONS.md](DECISIONS.md) and on the notes in
-[MIMEO2.md](MIMEO2.md). Choices made here that no DEC entry covers
-are listed under [Calls Made Here](#calls-made-here); they become DEC
-entries when the design is accepted.
+[MIMEO2.md](MIMEO2.md). Where the code ended up different from this
+document, [As Built](#as-built) says how; the rest of the text is
+left as it was designed.
 
 ## What 2.0 Does
 
@@ -305,3 +306,56 @@ Not checked against vendor docs as of 2026-11-15:
 - How long GitHub takes to issue a certificate after AAAA records
   are added to a domain that had only A records, and whether adding
   them disturbs an issued certificate.
+
+## As Built
+
+Differences between the text above and the code (2026-11-15):
+
+- **Certificate expiry warning is 14 days, not 30.** xhosi.com's
+  renewal was already failing with 27 days left, so GitHub starts
+  renewing at about 30 days. A 30-day threshold would flag every
+  healthy site for a while on each renewal.
+- **Two repos claiming one hostname is reported by `scan`**, as a
+  warning, not as a `status` row. Only a scan sees both claims; the
+  cache keeps the first.
+- **Site lookup scans less often than DEC-040 says.** A lookup that
+  misses the cache tries `<organization>/<hostname>` in each listed
+  organization. It then runs a full scan only when the cache has
+  never been filled by one, or when the caller is `delete`. After the
+  first scan, a site in a differently named repo that was linked
+  outside mimeo is found by running `mimeo scan`. A scan costs one
+  API call per Pages repository, which is too much for every
+  `status` of a domain that has no site.
+- **`link` does not wait for the certificate unless given `--wait`**
+  (up to 15 minutes). Without it, a pending certificate is reported
+  and `sync` enforces HTTPS later, as `create` did in 1.x.
+- **`link` has `--skip-dns`**, and `create` keeps it.
+- **A record being added takes the proxy setting in use at its
+  name.** Adding the four AAAA records to an apex whose A records
+  are proxied adds them proxied. This keeps DEC-043's rule that
+  mimeo never changes how a name is served.
+- **`status` has one view.** `--source`, `--with-dns`, `--health` and
+  `--show-template` are gone; `--records` shows the zone. There is no
+  `--source registrar`.
+- **A registered domain with no site is not a problem.** In 1.x it
+  was.
+- **Nameservers are read from the registrar's API**, not public DNS,
+  so they are current as soon as `delegate` sets them.
+- **Layout.** `link`, `unlink` and `delegate` are functions in
+  `mimeo/operations.py`; their commands and `scan` are in
+  `cli/connect.py`; `cli/_fleet.py` builds the providers. The Porkbun
+  DNS provider stayed in `providers/registrar/porkbun.py` next to the
+  registrar, since they share one API client.
+- **`scan` sees private repositories** in the authenticated account
+  and in organizations it belongs to, by using the endpoints that
+  list them; other accounts are listed publicly.
+- **Step 1 did not ship separately.** It is commit `62eeff7` on the
+  same branch, with version 1.4.0, and can be released from there.
+
+Checked against live APIs (read-only, 2026-11-15): Porkbun's
+`getNs` response, the GitHub Pages certificate fields, and the scan
+across `mimeo-sites`, `tepiton` and `pborenstein` (72 sites found,
+including tequitl.dev served by `pborenstein/twohorses`). Not run
+live: anything that writes, the Cloudflare provider, `delegate`, and
+Porkbun's DNSSEC lookup. The items under "To Verify at
+Implementation" are still unverified.

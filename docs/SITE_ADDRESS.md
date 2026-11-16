@@ -1,6 +1,9 @@
 # Site Addresses
 
-Status: **Proposed design** — not yet decided or scheduled. Open questions are
+Status: **Stale, set aside** (2026-11-15, user call, DEC-038). Predates the
+2.0 design (`docs/MIMEO2.md`) and is not an input to it. Kept for history.
+
+Original status: **Proposed design** — not yet decided or scheduled. Open questions are
 listed at the end; once settled they should be promoted to `DECISIONS.md`.
 One of several command-model questions under consideration; expect sibling
 docs rather than growth of this one. Shares its foundation with

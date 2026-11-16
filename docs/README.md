@@ -15,8 +15,9 @@ Navigation index for all Mimeo documentation files.
 | [CONTEXT.md](CONTEXT.md) | Contributors | Current session state, active tasks, blockers |
 | [CODE_REVIEW.md](CODE_REVIEW.md) | Contributors | Critical code review: verified bugs, design concerns, priorities |
 | [SUBDOMAINS.md](SUBDOMAINS.md) | Contributors | Proposed design: sites on subdomains (hostname vs. DNS zone split) |
-| [SITE_ADDRESS.md](SITE_ADDRESS.md) | Contributors | Proposed design: site addresses — builtin `*.github.io` sites, `--repo` |
+| [SITE_ADDRESS.md](SITE_ADDRESS.md) | Contributors | Stale, set aside (DEC-038): site addresses — builtin `*.github.io` sites, `--repo` |
 | [NETLIFY.md](NETLIFY.md) | Contributors | Proposed design: Netlify as a second host (DNS decided: Netlify nameservers, DEC-033) |
+| [MIMEO2.md](MIMEO2.md) | Contributors | Design notes for 2.0: domain-to-host scope, entities, command sketch (undecided) |
 
 ## Contributor Entry Points
 

@@ -709,3 +709,17 @@ A fourth, related fix landed in the same session at the provider layer (`mimeo/p
 **Consequences**: For domains on another DNS provider, `status` checks nothing about their records. A domain delegated somewhere by mistake no longer shows as a problem unless its site health shows it. `sync` is unchanged.
 
 ---
+
+### DEC-038: The Redesign Ships as 2.0; SITE_ADDRESS.md Set Aside (2026-11-15)
+
+**Status**: Active (Phase 8). User call.
+
+**Context**: Entry 90 wrote the redesign notes as "mimeo 3.0" in `docs/MIMEO3.md`, but the current release is 1.3.0. `docs/SITE_ADDRESS.md` (proposed 2026-09) made a "site address" (`example.com`, `org.github.io`, `org.github.io/x`) the operand of every command and always created a repo, the opposite of the domain-first scope in the redesign notes.
+
+**Decision**: The redesign ships as 2.0. The notes are renamed `docs/MIMEO2.md`; DEC-037 and Entry 90 refer to them by the old name. `docs/SITE_ADDRESS.md` is stale and is not an input to the 2.0 design; it stays in the repo for history.
+
+**Alternatives considered**: 3.0 (rejected: skips a major version for no reason). Working SITE_ADDRESS.md's conflicts into the 2.0 notes (rejected: the user considers it stale).
+
+**Consequences**: `docs/NETLIFY.md` still cites SITE_ADDRESS.md as a sibling that shares the repo/host split; that split stays a 2.0 question (MIMEO2.md question 3). Subdomain sites become 2.0 question 6.
+
+---

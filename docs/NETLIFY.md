@@ -4,7 +4,7 @@ Status: **Proposed design** — not yet decided or scheduled. Open questions
 are listed at the end; once settled they should be promoted to
 `DECISIONS.md`. This is the second host that DEC-030 anticipated ("revisit
 the factory if a second registrar or host lands"). Sibling of
-`docs/SITE_ADDRESS.md` (proposed); the two share the repo-provisioning
+`docs/SITE_ADDRESS.md` (stale since 2026-11-15, DEC-038); the two share the repo-provisioning
 work but do not depend on each other. The DNS mode is decided (DEC-033):
 Netlify's nameservers. The remaining open questions are listed at the end.
 

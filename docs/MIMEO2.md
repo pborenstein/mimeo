@@ -1,6 +1,8 @@
-# mimeo 3.0: Design Notes
+# mimeo 2.0: Design Notes
 
-Status: **Input for a design session** -- nothing here is decided.
+Status: **Input for a design session** -- nothing here is decided
+except the version number: the redesign ships as 2.0 (DEC-038; the
+current release is 1.3.0).
 Gathered 2026-11-13 to 2026-11-15 (Entry 90). Decisions that come out
 of the session go to `DECISIONS.md`.
 
@@ -116,17 +118,17 @@ Not checked against vendor docs (2026-11-15):
    or a per-provider default?
 2. When `delegate` creates a zone, does it copy all records or only
    the ones mimeo manages?
-3. `docs/SITE_ADDRESS.md` makes the site address the operand of every
-   command and always creates a repo. Under this model a
-   `*.github.io` site has no zone and no records, so mimeo has
-   nothing to do for it. Accepting this scope rejects most of
-   SITE_ADDRESS.md; `docs/SUBDOMAINS.md` (on ice) needs rethinking.
-4. Netlify staging pass 1 (repo/host split, `docs/NETLIFY.md`) is the
-   refactor `SITE` needs. Does it land first, on 1.x?
-5. Which accounts and hosts does `status` scan, and where in config
+3. Netlify staging pass 1 (splitting "which repo" from "which host"
+   in the code, `docs/NETLIFY.md`) is the refactor the `SITE`
+   argument needs. Does it land first, on 1.x?
+4. Which accounts and hosts does `status` scan, and where in config
    are they listed?
-6. Is the registrar a separate interface from the DNS provider, given
+5. Is the registrar a separate interface from the DNS provider, given
    Porkbun stays the registrar and may stay a DNS provider for some
    zones?
-7. Versioning: the current release is 1.3.0. Whether the redesign
-   ships as 2.0 or 3.0 is open.
+6. Subdomain sites (`docs/SUBDOMAINS.md`, on ice since 2026-09-29):
+   does a subdomain get its own records in the parent zone under
+   `link`, or stay out of scope?
+
+`docs/SITE_ADDRESS.md` (sites addressed as `org.github.io/x`, repo
+always created) is stale and is not an input to this design (DEC-038).

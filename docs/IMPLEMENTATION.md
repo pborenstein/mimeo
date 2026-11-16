@@ -679,9 +679,10 @@ front-door verbs than it started with. See DEC-021.
         it moved instead of the bare HTTP code
 - [x] `status` treats Porkbun records as live only when the
       nameservers are Porkbun's (2026-11-15, Entry 90, DEC-037)
-- [ ] mimeo 3.0 design session: scope, entities and command sketch
-      in `docs/MIMEO3.md` (Entry 90); outcome decides the fate of
-      `docs/SITE_ADDRESS.md` and Netlify staging pass 1
+- [ ] mimeo 2.0 design session: scope, entities and command sketch
+      in `docs/MIMEO2.md` (Entry 90, DEC-038); outcome decides when
+      Netlify staging pass 1 lands
+- [x] `docs/SITE_ADDRESS.md` set aside as stale (2026-11-15, DEC-038)
 
 ---
 

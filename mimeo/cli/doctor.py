@@ -87,7 +87,9 @@ def _check_pages_ips() -> tuple[bool, str, str]:
     which also carries legacy and IPv6 entries, so the list is used only to
     confirm the hardcoded set, never as the source of records.
     """
-    from ..providers.host.github import GITHUB_PAGES_IPS
+    from ..providers.host.github import GITHUB_PAGES_IPS, GITHUB_PAGES_IPV6
+
+    hardcoded = GITHUB_PAGES_IPS + GITHUB_PAGES_IPV6
     try:
         result = subprocess.run(
             ["gh", "api", "meta", "--jq", ".pages"],
@@ -107,27 +109,59 @@ def _check_pages_ips() -> tuple[bool, str, str]:
     if not isinstance(listed, list):
         return False, unreachable, "Unexpected response from 'gh api meta'."
     addresses = {str(entry).split("/")[0] for entry in listed}
-    missing = [ip for ip in GITHUB_PAGES_IPS if ip not in addresses]
+    missing = [ip for ip in hardcoded if ip not in addresses]
     if missing:
         return (
             False,
             f"not listed by GitHub: {', '.join(missing)}",
-            "Update GITHUB_PAGES_IPS in mimeo/providers/host/github.py from "
+            "Update GITHUB_PAGES_IPS / GITHUB_PAGES_IPV6 in mimeo/providers/host/github.py from "
             "GitHub's Pages docs, then run 'mimeo sync --all'.",
         )
-    return True, f"all {len(GITHUB_PAGES_IPS)} listed by GitHub", ""
+    return True, f"all {len(hardcoded)} listed by GitHub", ""
 
 
 def _check_nameservers(domain: str) -> tuple[bool, str, str]:
-    """Check that a domain's nameservers point to Porkbun."""
-    from ..providers.registrar.porkbun import PORKBUN_NAMESERVERS, lookup_nameservers
+    """Check that a domain's nameservers belong to a DNS provider mimeo can write to."""
+    from ..providers.registrar.porkbun import lookup_nameservers
     ns = lookup_nameservers(domain)
-    expected = sorted(PORKBUN_NAMESERVERS)
     if not ns:
         return False, "no NS records found", "Check that the domain is registered and DNS is reachable."
-    if sorted(ns) == expected:
+    if all(n.endswith(".porkbun.com") for n in ns):
         return True, "porkbun", ""
-    return False, ", ".join(ns), "Nameservers don't point to Porkbun -- DNS config will be skipped on create."
+    if all(n.endswith(".ns.cloudflare.com") for n in ns):
+        return True, "cloudflare (needs [cloudflare] api_token in config)", ""
+    return (
+        False,
+        ", ".join(ns),
+        "mimeo cannot write records at this DNS provider -- link will list them for you to add.",
+    )
+
+
+def _check_porkbun_credentials(cfg: Config) -> tuple[bool, str, str]:
+    """Check that the Porkbun keys are accepted."""
+    from ..providers.registrar.porkbun import PorkbunRegistrar
+    try:
+        with PorkbunRegistrar(cfg.porkbun_api_key, cfg.porkbun_secret) as registrar:
+            registrar._make_request("/ping", {})
+    except Exception as e:
+        return False, str(e), "Check porkbun.api_key and porkbun.secret_key, and that API access is on."
+    return True, "accepted", ""
+
+
+def _check_cloudflare_credentials(cfg: Config) -> tuple[bool, str, str]:
+    """Check that the Cloudflare token is active."""
+    from ..providers.dns.cloudflare import CloudflareDNS
+    try:
+        with CloudflareDNS(cfg.cloudflare_api_token or "", cfg.cloudflare_account_id) as cloudflare:
+            result = cloudflare._call("GET", "/user/tokens/verify").get("result") or {}
+    except Exception as e:
+        return False, str(e), "Check cloudflare.api_token (needs Zone:Read and DNS:Edit)."
+    token_status = str(result.get("status", "unknown"))
+    if token_status != "active":
+        return False, f"token is {token_status}", "Create a new API token in Cloudflare."
+    if not cfg.cloudflare_account_id:
+        return True, "active (no account_id: cannot create zones)", ""
+    return True, "active", ""
 
 
 def _check_config(config_path: Path | None) -> tuple[bool, str, str]:
@@ -168,7 +202,9 @@ def doctor(config: Path | None, domains: tuple[str, ...]) -> None:
       - GitHub token has the 'workflow' scope
       - Config file exists and is valid
       - GitHub still lists mimeo's Pages IPs (api.github.com/meta)
-      - NS records for each DOMAIN point to Porkbun (if domains provided)
+      - Porkbun keys, and the Cloudflare token if configured, are accepted
+      - NS records for each DOMAIN belong to a DNS provider mimeo can
+        write to (if domains provided)
 
     \b
     Examples:
@@ -189,6 +225,16 @@ def doctor(config: Path | None, domains: tuple[str, ...]) -> None:
         ("config file", lambda: _check_config(config)),
         ("Pages IPs", _check_pages_ips),
     ]
+
+    try:
+        cfg: Config | None = Config.load(config)
+    except Exception:
+        cfg = None  # reported by the config file check
+    if cfg is not None:
+        loaded = cfg
+        checks.append(("Porkbun keys", lambda: _check_porkbun_credentials(loaded)))
+        if cfg.cloudflare_api_token:
+            checks.append(("Cloudflare token", lambda: _check_cloudflare_credentials(loaded)))
 
     for domain in domains:
         checks.append((f"NS: {domain}", lambda d=domain: _check_nameservers(d)))

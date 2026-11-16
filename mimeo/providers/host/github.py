@@ -1,10 +1,10 @@
 """GitHub Pages host provider implementation."""
 
-from typing import Any, Dict
+from typing import Any
 
 from mimeo.exceptions import HostError
 from mimeo.models import DNSRecord, Site, SiteState
-from mimeo.providers.base import DeployResult, Host
+from mimeo.providers.base import Host
 from mimeo.providers.gh import GhCli
 from mimeo.providers.repo.github import DEFAULT_TEMPLATE, TEMPLATE_ORG, GitHubRepoProvider
 
@@ -14,7 +14,6 @@ __all__ = [
     "GITHUB_PAGES_IPV6",
     "TEMPLATE_ORG",
     "GitHubHost",
-    "health_status",
 ]
 
 GITHUB_PAGES_IPV6 = [
@@ -30,20 +29,6 @@ GITHUB_PAGES_IPS = [
     "185.199.110.153",
     "185.199.111.153",
 ]
-
-
-def health_status(health: Dict[str, Any]) -> str:
-    """Derive a human-readable health status from a get_pages_health() result."""
-    if not health["pages_configured"]:
-        return "pages_error"
-    if health["https_enforced"]:
-        return "healthy"
-    cert = health["cert_state"]
-    if cert == "approved":
-        return "fixable"
-    if cert in ("new", "authorization_created", "issued"):
-        return "cert_pending"
-    return "no_cert"
 
 
 class GitHubHost(Host):
@@ -78,6 +63,7 @@ class GitHubHost(Host):
         self.gh = GhCli(token)
         self.default_org = default_org
         self.organizations = list(organizations or ([default_org] if default_org else []))
+        self._login: str | None = None
         self.repos = GitHubRepoProvider(self.gh, template_org)
 
     name = "github"
@@ -103,32 +89,45 @@ class GitHubHost(Host):
                 return Site(host=self.name, ref=ref)
         return None
 
+    def _pages_repositories(self, org: str) -> list[str]:
+        """Full names of the repositories in an organization that have Pages on.
+
+        GitHub lists repositories through three endpoints, and only two
+        of them include private ones: `user/repos` for the authenticated
+        account and `orgs/{org}/repos` for an organization the account
+        belongs to. `users/{name}/repos` covers any other account and
+        shows public repositories only.
+
+        Raises:
+            HostError: If listing fails for a reason other than the
+                account not being an organization
+        """
+        select = ".[] | select(.has_pages) | .full_name"
+        if self._login is None:
+            self._login = self.gh.authenticated_user()
+        if org.lower() == self._login.lower():
+            endpoints = ["user/repos?affiliation=owner&per_page=100"]
+        else:
+            endpoints = [f"orgs/{org}/repos?per_page=100", f"users/{org}/repos?per_page=100"]
+        for i, endpoint in enumerate(endpoints):
+            try:
+                listing = self.gh.run(["api", "--paginate", endpoint, "--jq", select])
+            except HostError as e:
+                if e.status_code == 404 and i + 1 < len(endpoints):
+                    continue
+                raise
+            return [line.strip() for line in listing.splitlines() if line.strip()]
+        return []
+
     def scan(self) -> dict[str, list[Site]]:
         """Find every Pages site with a custom domain in the listed organizations.
-
-        Lists each organization's repositories (the same endpoint serves
-        organizations and user accounts), keeps the ones with Pages on,
-        and reads each one's custom domain. Only repositories the
-        endpoint lists publicly are seen.
 
         Raises:
             HostError: If an API call fails for a reason other than 404
         """
         found: dict[str, list[Site]] = {}
         for org in self.organizations:
-            listing = self.gh.run(
-                [
-                    "api",
-                    "--paginate",
-                    f"users/{org}/repos?per_page=100",
-                    "--jq",
-                    ".[] | select(.has_pages) | .full_name",
-                ]
-            )
-            for ref in listing.splitlines():
-                ref = ref.strip()
-                if not ref:
-                    continue
+            for ref in self._pages_repositories(org):
                 try:
                     data = self.gh.api(f"repos/{ref}/pages")
                 except HostError as e:
@@ -210,28 +209,6 @@ class GitHubHost(Host):
         """Organization holding template repositories."""
         return self.repos.template_org
 
-    def validate_template(self, template_repo: str) -> None:
-        """Verify a template repository exists and is offered as a template.
-
-        Args:
-            template_repo: Template repository name (without org prefix)
-
-        Raises:
-            HostError: If the template is not found or not flagged
-        """
-        self.repos.validate_template(template_repo)
-
-    def get_template_repository(self, repo_full_name: str) -> str | None:
-        """Return the name of the template repository used to create a repo.
-
-        Args:
-            repo_full_name: Full repository name (owner/repo)
-
-        Returns:
-            Template repository name, or None if not created from a template
-        """
-        return self.repos.get_template_repository(repo_full_name)
-
     def _enable_github_pages(
         self,
         repo_full_name: str,
@@ -273,26 +250,6 @@ class GitHubHost(Host):
             data=data,
         )
 
-    def _set_custom_domain(self, repo_full_name: str, domain: str) -> None:
-        """Set custom domain for GitHub Pages.
-
-        Args:
-            repo_full_name: Full repository name (owner/repo)
-            domain: Custom domain name
-
-        Raises:
-            HostError: If custom domain configuration fails
-        """
-        data = {
-            "cname": domain,
-        }
-
-        self.gh.api(
-            f"repos/{repo_full_name}/pages",
-            method="PUT",
-            data=data,
-        )
-
     def enable_https_enforcement(self, repo_full_name: str) -> bool:
         """Enable HTTPS enforcement for GitHub Pages.
 
@@ -325,215 +282,6 @@ class GitHubHost(Host):
                 return False
             # Other errors should be raised
             raise
-
-    def deploy_site(
-        self, domain: str, template: str = DEFAULT_TEMPLATE, force: bool = False
-    ) -> DeployResult:
-        """Deploy a site to GitHub Pages using a template repository.
-
-        This will:
-        1. Create a GitHub repository from the template (domain name as repo name)
-        2. Enable GitHub Pages
-        3. Configure custom domain
-        4. Set the repository Website field to https://{domain}/ (DEC-032)
-        5. Enable HTTPS enforcement (if certificate is ready)
-
-        If the repository already exists, skips creation and only configures
-        GitHub Pages settings and custom domain.
-
-        Args:
-            domain: Domain name for the site
-            template: Template repository name in the template org
-
-        Returns:
-            DeployResult with url, repo_created, and https_enabled flags
-
-        Raises:
-            HostError: If deployment fails
-        """
-        try:
-            owner = self.default_org or self.gh.authenticated_user()
-
-            repo_full_name, repo_created, repo_existed = self.repos.create_from_template(
-                repo_name=domain,
-                owner=owner,
-                template_repo=template,
-                force=force,
-            )
-
-            self._enable_github_pages(repo_full_name)
-            self._set_custom_domain(repo_full_name, domain)
-            self.repos.set_homepage(repo_full_name, domain)
-            https_enabled = self.enable_https_enforcement(repo_full_name)
-
-            return DeployResult(
-                url=f"https://{domain}",
-                repo_created=repo_created,
-                https_enabled=https_enabled,
-                repo_existed=repo_existed,
-            )
-
-        except Exception as e:
-            if isinstance(e, HostError):
-                raise
-            raise HostError(f"Failed to deploy site for {domain}: {e}") from e
-
-    def disable_pages(self, repo_full_name: str) -> bool:
-        """Disable GitHub Pages for a repository.
-
-        Removes the Pages configuration, including any custom domain.
-        Idempotent: a repository without Pages is already in the target
-        state.
-
-        Args:
-            repo_full_name: Full repository name (owner/repo)
-
-        Returns:
-            True if Pages was disabled, False if it was not enabled
-
-        Raises:
-            HostError: If the API call fails for a reason other than
-                Pages not being configured
-        """
-        try:
-            self.gh.api(f"repos/{repo_full_name}/pages", method="DELETE")
-        except HostError as e:
-            if e.status_code != 404:
-                raise
-            return False
-        return True
-
-    def teardown_site(
-        self, domain: str, delete_repository: bool = True
-    ) -> Dict[str, Any]:
-        """Tear down a site's GitHub side (inverse of deploy_site).
-
-        Deletes the repository -- the Pages configuration and custom
-        domain go with it -- or, when the repository is kept, disables
-        Pages so the site stops serving. Repository deletion uses the
-        REST endpoint rather than `gh repo delete` so a missing
-        repository surfaces as a structured 404 instead of CLI text.
-
-        Args:
-            domain: Site domain; also the repository name (repo name ==
-                domain until the site-address redesign lands)
-            delete_repository: If False, keep the repository and only
-                disable its Pages configuration
-
-        Returns:
-            Dict with keys: repo_full_name, repo_existed, repo_deleted,
-            pages_disabled
-
-        Raises:
-            HostError: If an API call fails for a reason other than the
-                target already being gone
-        """
-        owner = self.default_org or self.gh.authenticated_user()
-        repo_full_name = f"{owner}/{domain}"
-        result: Dict[str, Any] = {
-            "repo_full_name": repo_full_name,
-            "repo_existed": True,
-            "repo_deleted": False,
-            "pages_disabled": False,
-        }
-
-        if delete_repository:
-            if self.repos.delete_repository_if_exists(repo_full_name):
-                result["repo_deleted"] = True
-            else:
-                result["repo_existed"] = False
-        else:
-            result["pages_disabled"] = self.disable_pages(repo_full_name)
-
-        return result
-
-    def get_pages_health(self, repo_full_name: str) -> Dict[str, Any]:
-        """Fetch Pages configuration health for a repository.
-
-        Args:
-            repo_full_name: Full repository name (owner/repo)
-
-        Returns:
-            Dict with keys: pages_configured, https_enforced, cert_state, pages_status
-
-        Raises:
-            HostError: If the health check itself fails for any reason other
-                than Pages not being configured (404)
-        """
-        try:
-            data = self.gh.api(f"repos/{repo_full_name}/pages")
-            cert = data.get("https_certificate") or {}
-            return {
-                "pages_configured": True,
-                "https_enforced": data.get("https_enforced", False),
-                "cert_state": cert.get("state"),
-                "pages_status": data.get("status"),
-            }
-        except HostError as e:
-            # Only a genuine 404 means Pages is not configured; any other
-            # failure is "couldn't check" and must propagate rather than be
-            # reported as a broken site.
-            if e.status_code != 404:
-                raise
-            return {
-                "pages_configured": False,
-                "https_enforced": False,
-                "cert_state": None,
-                "pages_status": None,
-            }
-
-    def list_mimeo_repositories(self) -> list[Dict[str, Any]]:
-        """List all repositories tagged with the 'mimeo' topic.
-
-        Returns:
-            List of repository data dictionaries
-
-        Raises:
-            HostError: If listing repositories fails
-        """
-        owner = self.default_org or self.gh.authenticated_user()
-
-        # Use GitHub search API to find repos with mimeo topic
-        try:
-            result = self.gh.run(
-                [
-                    "search",
-                    "repos",
-                    f"user:{owner}",
-                    "topic:mimeo",
-                    "--limit",
-                    "1000",  # Maximum allowed by GitHub search API
-                    "--json",
-                    "name,url,homepage,updatedAt",
-                    "--jq",
-                    ".",
-                ]
-            )
-            import json
-
-            repos: list[Dict[str, Any]] = json.loads(result)
-            return repos
-        except Exception as e:
-            raise HostError(f"Failed to list mimeo repositories: {e}") from e
-
-    def required_dns_records(self, domain: str) -> list[DNSRecord]:
-        """Return DNS records required for GitHub Pages to serve the domain.
-
-        Args:
-            domain: Domain name for the site
-
-        Returns:
-            List of DNS records: 4 A records for the apex + 1 CNAME for www
-        """
-        owner = self.default_org or self.gh.authenticated_user()
-        records: list[DNSRecord] = []
-
-        for ip in GITHUB_PAGES_IPS:
-            records.append(DNSRecord(type="A", name="", content=ip, ttl=600))
-
-        records.append(DNSRecord(type="CNAME", name="www", content=f"{owner}.github.io", ttl=600))
-
-        return records
 
     def __enter__(self) -> "GitHubHost":
         """Context manager entry."""

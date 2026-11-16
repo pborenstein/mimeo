@@ -2,7 +2,7 @@
 
 import pytest
 
-from mimeo.providers.base import DNSProvider, DeployResult, Host, Registrar, RepoProvider
+from mimeo.providers.base import DNSProvider, Host, Registrar, RepoProvider
 from tests.fakes import FakeDNS, FakeHost, FakeRegistrar
 
 
@@ -27,8 +27,3 @@ def test_partial_implementation_is_rejected() -> None:
 
     with pytest.raises(TypeError):
         Partial()  # type: ignore[abstract]
-
-
-def test_deploy_result_defaults() -> None:
-    result = DeployResult(url="https://example.com", repo_created=True, https_enabled=False)
-    assert result.repo_existed is False

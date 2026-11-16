@@ -51,15 +51,6 @@ class DNSRecord:
         return f"{self.type} {self.name or '@'} -> {self.content}"
 
 
-@dataclass
-class NameserverCheckResult:
-    """Result of a nameserver check for a domain."""
-
-    ok: bool
-    actual: list[str]
-    expected: list[str]
-
-
 @dataclass(frozen=True)
 class Site:
     """A site at a host, written `host:ref` (`github:owner/repo`)."""

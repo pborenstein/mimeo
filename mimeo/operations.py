@@ -41,6 +41,7 @@ def link(
     dry_run: bool = False,
     wait: int = 0,
     sleep: Callable[[float], None] = time.sleep,
+    records: bool = True,
 ) -> Outcome:
     """Connect a hostname to a site.
 
@@ -56,6 +57,7 @@ def link(
         wait: Seconds to wait for the certificate before giving up on
             enforcing HTTPS (0: do not wait)
         sleep: Called between certificate checks (replaced in tests)
+        records: False leaves DNS alone and only configures the host
 
     Raises:
         OperationError: If another site already serves the hostname, or
@@ -87,7 +89,11 @@ def link(
         conn.state = SiteState(configured=True, custom_domain=hostname)
     plan = compare(conn, fleet.host)
 
-    _note_unwritable_dns(conn, fleet, site, outcome)
+    if records:
+        _note_unwritable_dns(conn, fleet, site, outcome)
+    else:
+        plan.changes = [c for c in plan.changes if c.target != "dns"]
+        outcome.notes.append("DNS records left alone, as asked")
 
     if dry_run:
         outcome.actions += [f"would {c.summary}" for c in plan.changes]

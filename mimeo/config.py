@@ -147,6 +147,9 @@ class Config:
         ) or cloudflare_config.get("account_id")
 
         organizations = github_config.get("organizations", [])
+        env_organizations = os.getenv("MIMEO_GITHUB_ORGANIZATIONS")
+        if env_organizations:
+            organizations = [o.strip() for o in env_organizations.split(",") if o.strip()]
         if not isinstance(organizations, list) or not all(
             isinstance(o, str) and o for o in organizations
         ):

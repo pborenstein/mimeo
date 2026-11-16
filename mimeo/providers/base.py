@@ -9,7 +9,6 @@ Four roles, each a separate interface (DEC-041, DEC-044):
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import Any
 
 from mimeo.models import DNSRecord, Site, SiteState
@@ -135,13 +134,3 @@ class RepoProvider(ABC):
     @abstractmethod
     def delete_repository_if_exists(self, repo_full_name: str) -> bool:
         """Delete a repository. Returns False when it did not exist."""
-
-
-@dataclass
-class DeployResult:
-    """Result of a site deployment."""
-
-    url: str
-    repo_created: bool
-    https_enabled: bool
-    repo_existed: bool = False

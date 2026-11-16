@@ -6,7 +6,7 @@ import pytest
 
 from mimeo.cache import SiteCache
 from mimeo.connection import Fleet
-from tests.fakes import FakeDNS, FakeHost, FakeRegistrar
+from tests.fakes import FakeDNS, FakeHost, FakeRegistrar, FakeRepos
 
 
 class World:
@@ -18,7 +18,10 @@ class World:
         self.registrar = FakeRegistrar()
         self.host = FakeHost(["sites", "other"])
         self.cache = SiteCache(cache_path)
-        self.fleet = Fleet(self.registrar, [self.pb, self.cf], self.host, self.cache)
+        self.repos = FakeRepos(self.host)
+        self.fleet = Fleet(
+            self.registrar, [self.pb, self.cf], self.host, self.cache, repos=self.repos  # type: ignore[arg-type]
+        )
 
     def register(self, domain: str, dns: FakeDNS | None = None) -> None:
         """Register a domain with its zone at a provider (default: pb)."""

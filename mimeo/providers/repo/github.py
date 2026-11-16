@@ -518,19 +518,6 @@ class GitHubRepoProvider(RepoProvider):
                 f"it may have been retired"
             )
 
-    def get_template_repository(self, repo_full_name: str) -> str | None:
-        """Return the name of the template repository used to create a repo.
-
-        Args:
-            repo_full_name: Full repository name (owner/repo)
-
-        Returns:
-            Template repository name, or None if not created from a template
-        """
-        data = self.gh.api(f"repos/{repo_full_name}")
-        tmpl = data.get("template_repository")
-        return tmpl.get("name") if tmpl else None
-
     def delete_repository_if_exists(self, repo_full_name: str) -> bool:
         """Delete a repository through the REST endpoint.
 

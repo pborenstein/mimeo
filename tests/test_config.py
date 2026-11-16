@@ -278,3 +278,57 @@ template_org = 123
     with pytest.raises(ConfigurationError) as exc_info:
         Config.load(config_file)
     assert "github.template_org" in str(exc_info.value)
+
+
+class TestSchemaTwo:
+    """Config keys added for 2.0."""
+
+    _BASE = (
+        'schema_version = 2\n'
+        '[porkbun]\napi_key = "pk1_x"\nsecret_key = "sk1_x"\n'
+    )
+
+    def _load(self, tmp_path: Path, body: str) -> Config:
+        path = tmp_path / "config.toml"
+        path.write_text(self._BASE + body)
+        return Config.load(path)
+
+    def test_version_one_file_gets_one_organization_and_porkbun_dns(self, tmp_path: Path) -> None:
+        path = tmp_path / "config.toml"
+        path.write_text(
+            'schema_version = 1\n[porkbun]\napi_key = "pk1_x"\nsecret_key = "sk1_x"\n'
+            '[github]\ndefault_org = "sites"\n'
+        )
+        cfg = Config.load(path)
+        assert cfg.organizations == ["sites"]
+        assert cfg.default_dns == "porkbun"
+        assert cfg.cloudflare_api_token is None
+
+    def test_organizations_and_cloudflare(self, tmp_path: Path) -> None:
+        cfg = self._load(
+            tmp_path,
+            '[github]\ndefault_org = "sites"\norganizations = ["sites", "other"]\n'
+            '[defaults]\ndns = "cloudflare"\n'
+            '[cloudflare]\napi_token = "tok"\naccount_id = "acct"\n',
+        )
+        assert cfg.organizations == ["sites", "other"]
+        assert cfg.default_org == "sites"
+        assert cfg.default_dns == "cloudflare"
+        assert (cfg.cloudflare_api_token, cfg.cloudflare_account_id) == ("tok", "acct")
+
+    def test_cloudflare_default_needs_a_token(self, tmp_path: Path) -> None:
+        with pytest.raises(ConfigurationError, match="cloudflare.api_token"):
+            self._load(tmp_path, '[github]\ndefault_org = "sites"\n[defaults]\ndns = "cloudflare"\n')
+
+    def test_unknown_dns_provider_is_rejected(self, tmp_path: Path) -> None:
+        with pytest.raises(ConfigurationError, match="defaults.dns"):
+            self._load(tmp_path, '[github]\ndefault_org = "sites"\n[defaults]\ndns = "route53"\n')
+
+    def test_organizations_must_be_a_list_of_names(self, tmp_path: Path) -> None:
+        with pytest.raises(ConfigurationError, match="github.organizations"):
+            self._load(tmp_path, '[github]\ndefault_org = "sites"\norganizations = "sites"\n')
+
+    def test_organizations_from_environment(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MIMEO_GITHUB_ORGANIZATIONS", "a, b")
+        cfg = self._load(tmp_path, '[github]\ndefault_org = "sites"\n')
+        assert cfg.organizations == ["a", "b"]

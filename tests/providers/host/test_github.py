@@ -8,7 +8,7 @@ import pytest
 
 from mimeo.exceptions import HostError
 from mimeo.models import Site
-from mimeo.providers.host.github import DEFAULT_TEMPLATE, TEMPLATE_ORG, GitHubHost, health_status
+from mimeo.providers.host.github import DEFAULT_TEMPLATE, TEMPLATE_ORG, GitHubHost
 from mimeo.providers.host.template_manifest import (
     DEFAULT_DEV_PATHS,
     MANIFEST_FILENAME,
@@ -92,90 +92,6 @@ class TestGitHubHost:
             # Never fell through to the enable POST
             assert mock_api.call_count == 1
 
-    def test_set_custom_domain(self, host: GitHubHost) -> None:
-        """Test setting custom domain for GitHub Pages."""
-        with patch.object(host.gh, "api") as mock_api:
-            mock_api.return_value = {}
-
-            host._set_custom_domain("testorg/example.com", "example.com")
-
-            mock_api.assert_called_once()
-            call_args = mock_api.call_args
-            assert call_args[0][0] == "repos/testorg/example.com/pages"
-            assert call_args[1]["method"] == "PUT"
-            assert call_args[1]["data"]["cname"] == "example.com"
-
-    def test_deploy_site_new_repo(self, host: GitHubHost) -> None:
-        """Test successful deployment creates repo from template."""
-        with patch.object(host.repos, "create_from_template") as mock_create:
-            with patch.object(host, "_enable_github_pages") as mock_pages:
-                with patch.object(host, "_set_custom_domain") as mock_domain:
-                    with patch.object(host.repos, "set_homepage") as mock_homepage:
-                        with patch.object(host, "enable_https_enforcement") as mock_https:
-                            mock_create.return_value = ("testorg/example.com", True, False)
-                            mock_https.return_value = True
-
-                            result = host.deploy_site("example.com")
-
-                            assert result.url == "https://example.com"
-                            assert result.repo_created is True
-                            assert result.repo_existed is False
-                            assert result.https_enabled is True
-                            mock_create.assert_called_once_with(
-                                repo_name="example.com",
-                                owner="testorg",
-                                template_repo=DEFAULT_TEMPLATE,
-                                force=False,
-                            )
-                            mock_pages.assert_called_once_with("testorg/example.com")
-                            mock_domain.assert_called_once_with("testorg/example.com", "example.com")
-                            mock_homepage.assert_called_once_with(
-                                "testorg/example.com", "example.com"
-                            )
-
-    def test_deploy_site_existing_repo(self, host: GitHubHost) -> None:
-        """Test deployment with existing repo returns repo_created=False."""
-        with patch.object(host.repos, "create_from_template") as mock_create:
-            with patch.object(host, "_enable_github_pages"):
-                with patch.object(host, "_set_custom_domain"):
-                    with patch.object(host.repos, "set_homepage"):
-                        with patch.object(host, "enable_https_enforcement") as mock_https:
-                            mock_create.return_value = ("testorg/example.com", False, True)
-                            mock_https.return_value = False
-
-                            result = host.deploy_site("example.com")
-
-                            assert result.repo_created is False
-                            assert result.repo_existed is True
-
-    def test_deploy_site_custom_template(self, host: GitHubHost) -> None:
-        """Test deployment passes custom template to _create_from_template."""
-        with patch.object(host.repos, "create_from_template") as mock_create:
-            with patch.object(host, "_enable_github_pages"):
-                with patch.object(host, "_set_custom_domain"):
-                    with patch.object(host.repos, "set_homepage"):
-                        with patch.object(host, "enable_https_enforcement", return_value=True):
-                            mock_create.return_value = ("testorg/example.com", True, False)
-
-                            host.deploy_site("example.com", template="pandoc-simple")
-
-                            mock_create.assert_called_once_with(
-                                repo_name="example.com",
-                                owner="testorg",
-                                template_repo="pandoc-simple",
-                                force=False,
-                            )
-
-    def test_deploy_site_error_handling(self, host: GitHubHost) -> None:
-        """Test unexpected errors are wrapped in HostError."""
-        with patch.object(host.repos, "create_from_template") as mock_create:
-            mock_create.side_effect = Exception("Unexpected error")
-
-            with pytest.raises(HostError) as exc_info:
-                host.deploy_site("example.com")
-
-            assert "failed to deploy" in str(exc_info.value).lower()
-
     def testenable_https_enforcement_success(self, host: GitHubHost) -> None:
         """Test enabling HTTPS enforcement when certificate is ready."""
         with patch.object(host.gh, "api") as mock_api:
@@ -207,176 +123,9 @@ class TestGitHubHost:
 
             assert "Some other error" in str(exc_info.value)
 
-    def test_get_pages_health_healthy(self, host: GitHubHost) -> None:
-        """Test get_pages_health returns healthy data when Pages is fully configured."""
-        with patch.object(host.gh, "api") as mock_api:
-            mock_api.return_value = {
-                "https_enforced": True,
-                "https_certificate": {"state": "approved"},
-                "status": None,
-            }
-            result = host.get_pages_health("testorg/example.com")
-
-            assert result["pages_configured"] is True
-            assert result["https_enforced"] is True
-            assert result["cert_state"] == "approved"
-            assert result["pages_status"] is None
-            mock_api.assert_called_once_with("repos/testorg/example.com/pages")
-
-    def test_get_pages_health_no_cert(self, host: GitHubHost) -> None:
-        """Test get_pages_health when response has no https_certificate key."""
-        with patch.object(host.gh, "api") as mock_api:
-            mock_api.return_value = {
-                "https_enforced": False,
-                "status": None,
-            }
-            result = host.get_pages_health("testorg/example.com")
-
-            assert result["pages_configured"] is True
-            assert result["https_enforced"] is False
-            assert result["cert_state"] is None
-
-    def test_get_pages_health_pages_error(self, host: GitHubHost) -> None:
-        """Test get_pages_health when Pages is not configured (404)."""
-        with patch.object(host.gh, "api") as mock_api:
-            mock_api.side_effect = HostError("Not Found", status_code=404)
-            result = host.get_pages_health("testorg/example.com")
-
-            assert result["pages_configured"] is False
-            assert result["https_enforced"] is False
-            assert result["cert_state"] is None
-            assert result["pages_status"] is None
-
-    def test_get_pages_health_check_failure_raises(self, host: GitHubHost) -> None:
-        """A failed health check (non-404) propagates instead of reporting no Pages."""
-        with patch.object(host.gh, "api") as mock_api:
-            mock_api.side_effect = HostError("gh: Server Error (HTTP 502)", status_code=502)
-
-            with pytest.raises(HostError):
-                host.get_pages_health("testorg/example.com")
-
-    def test_required_dns_records(self, host: GitHubHost) -> None:
-        """required_dns_records returns 4 A records + 1 CNAME."""
-        from mimeo.providers.host.github import GITHUB_PAGES_IPS
-
-        with patch.object(host.gh, "authenticated_user", return_value="testorg"):
-            records = host.required_dns_records("example.com")
-
-        assert len(records) == 5
-
-        a_records = [r for r in records if r.type == "A"]
-        assert len(a_records) == 4
-        assert {r.content for r in a_records} == set(GITHUB_PAGES_IPS)
-        for r in a_records:
-            assert r.name == ""
-            assert r.ttl == 600
-
-        cname_records = [r for r in records if r.type == "CNAME"]
-        assert len(cname_records) == 1
-        assert cname_records[0].name == "www"
-        assert cname_records[0].content == "testorg.github.io"
-        assert cname_records[0].ttl == 600
-
-    def test_required_dns_records_uses_default_org(self, host: GitHubHost) -> None:
-        """required_dns_records uses default_org without calling _get_authenticated_user."""
-        with patch.object(host.gh, "authenticated_user") as mock_user:
-            records = host.required_dns_records("example.com")
-
-        # default_org is "testorg" on the host fixture — no need to look up user
-        mock_user.assert_not_called()
-        cname = next(r for r in records if r.type == "CNAME")
-        assert cname.content == "testorg.github.io"
-
-    def test_list_mimeo_repositories(self, host: GitHubHost) -> None:
-        """Test listing mimeo-managed repositories."""
-        with patch.object(host.gh, "run") as mock_gh:
-            mock_gh.return_value = '[{"name":"example.com","url":"https://github.com/testorg/example.com","homepage":"https://example.com","updatedAt":"2026-02-15"}]'
-
-            repos = host.list_mimeo_repositories()
-
-            assert len(repos) == 1
-            assert repos[0]["name"] == "example.com"
-            mock_gh.assert_called_once()
-            call_args = mock_gh.call_args[0][0]
-            assert "search" in call_args
-            assert "repos" in call_args
-            assert "topic:mimeo" in call_args
-            assert "--limit" in call_args
-            assert "1000" in call_args
-
 
 class TestHealthStatus:
     """Tests for health_status helper function."""
-
-    def test_healthy(self) -> None:
-        """Returns healthy when https_enforced is True."""
-        health = {
-            "pages_configured": True,
-            "https_enforced": True,
-            "cert_state": "approved",
-            "pages_status": None,
-        }
-        assert health_status(health) == "healthy"
-
-    def test_fixable(self) -> None:
-        """Returns fixable when cert is approved but https not enforced."""
-        health = {
-            "pages_configured": True,
-            "https_enforced": False,
-            "cert_state": "approved",
-            "pages_status": None,
-        }
-        assert health_status(health) == "fixable"
-
-    def test_cert_pending_new(self) -> None:
-        """Returns cert_pending when cert state is new."""
-        health = {
-            "pages_configured": True,
-            "https_enforced": False,
-            "cert_state": "new",
-            "pages_status": None,
-        }
-        assert health_status(health) == "cert_pending"
-
-    def test_cert_pending_authorization_created(self) -> None:
-        """Returns cert_pending when cert state is authorization_created."""
-        health = {
-            "pages_configured": True,
-            "https_enforced": False,
-            "cert_state": "authorization_created",
-            "pages_status": None,
-        }
-        assert health_status(health) == "cert_pending"
-
-    def test_cert_pending_issued(self) -> None:
-        """Returns cert_pending when cert state is issued."""
-        health = {
-            "pages_configured": True,
-            "https_enforced": False,
-            "cert_state": "issued",
-            "pages_status": None,
-        }
-        assert health_status(health) == "cert_pending"
-
-    def test_no_cert(self) -> None:
-        """Returns no_cert when cert_state is None."""
-        health = {
-            "pages_configured": True,
-            "https_enforced": False,
-            "cert_state": None,
-            "pages_status": None,
-        }
-        assert health_status(health) == "no_cert"
-
-    def test_pages_error(self) -> None:
-        """Returns pages_error when pages not configured."""
-        health = {
-            "pages_configured": False,
-            "https_enforced": False,
-            "cert_state": None,
-            "pages_status": None,
-        }
-        assert health_status(health) == "pages_error"
 
 
 class TestTeardownSite:
@@ -393,70 +142,6 @@ class TestTeardownSite:
     def host(self, mock_gh_auth: Mock) -> GitHubHost:
         """Create GitHubHost for testing."""
         return GitHubHost(token="ghp_test_token", default_org="testorg")
-
-    def test_disable_pages(self, host: GitHubHost) -> None:
-        """Disabling Pages issues a DELETE against the pages endpoint."""
-        with patch.object(host.gh, "api") as mock_api:
-            mock_api.return_value = {}
-            assert host.disable_pages("testorg/example.com") is True
-            mock_api.assert_called_once_with(
-                "repos/testorg/example.com/pages", method="DELETE"
-            )
-
-    def test_disable_pages_not_configured(self, host: GitHubHost) -> None:
-        """A 404 (Pages not enabled) is a no-op, not an error."""
-        with patch.object(host.gh, "api") as mock_api:
-            mock_api.side_effect = HostError("Not Found", status_code=404)
-            assert host.disable_pages("testorg/example.com") is False
-
-    def test_disable_pages_other_failure_raises(self, host: GitHubHost) -> None:
-        """Non-404 failures surface instead of masquerading as success."""
-        with patch.object(host.gh, "api") as mock_api:
-            mock_api.side_effect = HostError("Forbidden", status_code=403)
-            with pytest.raises(HostError):
-                host.disable_pages("testorg/example.com")
-
-    def test_teardown_site_deletes_repository(self, host: GitHubHost) -> None:
-        """Full teardown deletes the repo via the REST endpoint; Pages goes with it."""
-        with patch.object(host.gh, "api") as mock_api:
-            mock_api.return_value = {}
-            result = host.teardown_site("example.com")
-
-            mock_api.assert_called_once_with("repos/testorg/example.com", method="DELETE")
-            assert result == {
-                "repo_full_name": "testorg/example.com",
-                "repo_existed": True,
-                "repo_deleted": True,
-                "pages_disabled": False,
-            }
-
-    def test_teardown_site_repository_missing(self, host: GitHubHost) -> None:
-        """A missing repository is reported, not raised -- DNS may still need cleanup."""
-        with patch.object(host.gh, "api") as mock_api:
-            mock_api.side_effect = HostError("Not Found", status_code=404)
-            result = host.teardown_site("example.com")
-
-            assert result["repo_deleted"] is False
-            assert result["repo_existed"] is False
-
-    def test_teardown_site_other_failure_raises(self, host: GitHubHost) -> None:
-        """A non-404 failure (auth, 5xx) must surface loudly."""
-        with patch.object(host.gh, "api") as mock_api:
-            mock_api.side_effect = HostError("Forbidden", status_code=403)
-            with pytest.raises(HostError):
-                host.teardown_site("example.com")
-
-    def test_teardown_site_keep_repo_disables_pages(self, host: GitHubHost) -> None:
-        """delete_repository=False spares the repo and disables Pages instead."""
-        with patch.object(host.gh, "api") as mock_api:
-            mock_api.return_value = {}
-            result = host.teardown_site("example.com", delete_repository=False)
-
-            mock_api.assert_called_once_with(
-                "repos/testorg/example.com/pages", method="DELETE"
-            )
-            assert result["repo_deleted"] is False
-            assert result["pages_disabled"] is True
 
 
 class TestGitHubHostInterface:
@@ -491,7 +176,9 @@ class TestGitHubHostInterface:
                 host.find_site("example.com")
 
     def test_scan_reads_custom_domain_of_every_pages_repo(self, host: GitHubHost) -> None:
-        with patch.object(host.gh, "run") as run, patch.object(host.gh, "api") as api:
+        with patch.object(host.gh, "authenticated_user", return_value="someone"), patch.object(
+            host.gh, "run"
+        ) as run, patch.object(host.gh, "api") as api:
             run.side_effect = ["sites/a.com\nsites/plain\n", "other/odd-name\n"]
             api.side_effect = [{"cname": "a.com"}, {"cname": None}, {"cname": "b.com"}]
             found = host.scan()
@@ -499,7 +186,28 @@ class TestGitHubHostInterface:
             "a.com": [Site("github", "sites/a.com")],
             "b.com": [Site("github", "other/odd-name")],
         }
-        assert run.call_args_list[0].args[0][2] == "users/sites/repos?per_page=100"
+        assert run.call_args_list[0].args[0][2] == "orgs/sites/repos?per_page=100"
+
+    def test_scan_lists_own_account_through_the_endpoint_that_shows_private_repos(
+        self, host: GitHubHost
+    ) -> None:
+        host.organizations = ["Someone"]
+        with patch.object(host.gh, "authenticated_user", return_value="someone"), patch.object(
+            host.gh, "run", return_value=""
+        ) as run:
+            host.scan()
+        assert run.call_args.args[0][2] == "user/repos?affiliation=owner&per_page=100"
+
+    def test_scan_falls_back_to_the_user_endpoint_for_a_non_organization(
+        self, host: GitHubHost
+    ) -> None:
+        host.organizations = ["a-user"]
+        with patch.object(host.gh, "authenticated_user", return_value="someone"), patch.object(
+            host.gh, "run"
+        ) as run:
+            run.side_effect = [HostError("Not Found", status_code=404), ""]
+            host.scan()
+        assert run.call_args_list[1].args[0][2] == "users/a-user/repos?per_page=100"
 
     def test_state(self, host: GitHubHost) -> None:
         with patch.object(host.gh, "api") as api:

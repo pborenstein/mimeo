@@ -63,6 +63,22 @@ class TestRead:
         assert conn.site is None
         assert world.cache.get("example.com") is None
 
+    def test_first_lookup_scans_when_the_cache_never_has(self, world: World) -> None:
+        world.register("example.com")
+        world.host.add("other/odd-name", "example.com")
+        conn = world.fleet.read("example.com")
+        assert conn.site == Site("github", "other/odd-name")
+        assert world.host.scans == 1
+        # A later miss does not scan again.
+        world.fleet.read("parked.com")
+        assert world.host.scans == 1
+
+    def test_thorough_lookup_scans_even_after_a_scan(self, world: World) -> None:
+        world.fleet.rescan()
+        world.host.add("other/odd-name", "example.com")
+        assert world.fleet.site_for("example.com")[0] is None
+        assert world.fleet.site_for("example.com", thorough=True)[0] == Site("github", "other/odd-name")
+
     def test_fleet_read_does_not_search(self, world: World) -> None:
         world.register("example.com")
         world.host.add("sites/example.com", "example.com")

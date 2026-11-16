@@ -12,7 +12,7 @@ from typing import Any, Dict
 
 from mimeo.cache import SiteCache
 from mimeo.models import DNSRecord, Site, SiteState
-from mimeo.providers.base import DNSProvider, Host, Registrar
+from mimeo.providers.base import DNSProvider, Host, Registrar, RepoProvider
 
 
 @dataclass
@@ -45,6 +45,7 @@ class Fleet:
         dns_providers: list[DNSProvider],
         host: Host,
         cache: SiteCache,
+        repos: RepoProvider | None = None,
     ) -> None:
         """Bundle the providers.
 
@@ -53,7 +54,10 @@ class Fleet:
             dns_providers: Every configured DNS provider
             host: The host serving sites
             cache: Hostname-to-site cache
+            repos: Creates and deletes repositories (`create` and
+                `delete` only)
         """
+        self.repos = repos
         self.registrar = registrar
         self.dns_providers = dns_providers
         self.host = host
@@ -135,14 +139,23 @@ class Fleet:
         self.cache.replace({hostname: sites[0] for hostname, sites in found.items()})
         return {hostname: sites for hostname, sites in found.items() if len(sites) > 1}
 
-    def site_for(self, hostname: str, search: bool = True) -> tuple[Site | None, SiteState | None]:
+    def site_for(
+        self, hostname: str, search: bool = True, thorough: bool = False
+    ) -> tuple[Site | None, SiteState | None]:
         """Find the site whose custom domain is the hostname.
 
         A cached pair is confirmed against the host and dropped when the
         host disagrees. With `search`, a hostname with no confirmed pair
-        is then looked for in the default places (Host.find_site). A
-        fleet-wide run passes search=False and relies on the scan that
-        filled the cache.
+        is then looked for in the default places (Host.find_site), and
+        after that by a full scan when the cache has never been filled
+        by one, or when `thorough` is set. A fleet-wide run passes
+        search=False and relies on the scan that filled the cache.
+
+        Args:
+            hostname: The hostname to find the site for
+            search: Look beyond the cache
+            thorough: Always scan before concluding there is no site.
+                For callers about to do something that cannot be undone.
         """
         cached = self.cache.get(hostname)
         if cached is not None:
@@ -153,6 +166,9 @@ class Fleet:
         if not search:
             return None, None
         found = self.host.find_site(hostname)
+        if found is None and (thorough or not self.cache.scanned):
+            self.rescan()
+            found = self.cache.get(hostname)
         if found is None:
             return None, None
         self.cache.set(hostname, found)

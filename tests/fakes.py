@@ -3,7 +3,7 @@
 from typing import Any
 
 from mimeo.models import DNSRecord, Site, SiteState
-from mimeo.providers.base import DNSProvider, Host, Registrar
+from mimeo.providers.base import DNSProvider, Host, Registrar, RepoProvider
 
 PAGES_V4 = ["185.199.108.153", "185.199.109.153", "185.199.110.153", "185.199.111.153"]
 PAGES_V6 = [
@@ -154,4 +154,44 @@ class FakeHost(Host):
         if state.cert_state != "approved":
             return False
         state.https_enforced = True
+        return True
+
+
+class FakeRepos(RepoProvider):
+    """Repositories as entries in a FakeHost's site table."""
+
+    def __init__(self, host: FakeHost, templates: tuple[str, ...] = ("mimeo",)) -> None:
+        self.host = host
+        self.templates = templates
+        self.created: list[tuple[str, str]] = []
+        self.deleted: list[str] = []
+
+    def validate_template(self, template_repo: str) -> None:
+        from mimeo.exceptions import HostError
+
+        if template_repo not in self.templates:
+            raise HostError(f"Template '{template_repo}' not found")
+
+    def create_from_template(
+        self,
+        repo_name: str,
+        owner: str,
+        template_repo: str,
+        private: bool = False,
+        force: bool = False,
+    ) -> tuple[str, bool, bool]:
+        ref = f"{owner}/{repo_name}"
+        existed = ref in self.host.sites
+        if existed and not force:
+            return ref, False, True
+        # A fresh repository has Pages off and no custom domain.
+        self.host.sites[ref] = SiteState(configured=True, cert_state="approved", cert_expires="2099-01-01")
+        self.created.append((ref, template_repo))
+        return ref, True, existed
+
+    def delete_repository_if_exists(self, repo_full_name: str) -> bool:
+        if repo_full_name not in self.host.sites:
+            return False
+        del self.host.sites[repo_full_name]
+        self.deleted.append(repo_full_name)
         return True

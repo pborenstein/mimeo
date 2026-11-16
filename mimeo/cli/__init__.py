@@ -21,6 +21,7 @@ from .doctor import (
     _check_python_version,
     doctor,
 )
+from .connect import delegate, link, scan, unlink
 from .status import status
 from .sync import sync
 
@@ -49,13 +50,17 @@ from .sync import sync
 def main(
     log_format: str, template_org: str | None, deploy_org: str | None
 ) -> None:
-    """Provision and manage custom-domain sites on GitHub Pages."""
+    """Connect domains to the sites that serve them, and keep the connection correct."""
     set_log_format(log_format)
     set_cli_overrides(template_org, deploy_org)
 
 
 main.add_command(create)
 main.add_command(delete)
+main.add_command(link)
+main.add_command(unlink)
+main.add_command(delegate)
+main.add_command(scan)
 main.add_command(status)
 main.add_command(sync)
 main.add_command(doctor)
@@ -65,6 +70,10 @@ __all__ = [
     "main",
     "create",
     "delete",
+    "link",
+    "unlink",
+    "delegate",
+    "scan",
     "status",
     "sync",
     "doctor",

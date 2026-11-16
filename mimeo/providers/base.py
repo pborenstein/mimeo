@@ -39,6 +39,8 @@ class DNSProvider(ABC):
     """A DNS provider: zones and the records in them."""
 
     name: str
+    # Record types the provider cannot hold; `delegate` does not copy them.
+    unsupported_types: frozenset[str] = frozenset()
 
     @abstractmethod
     def serves(self, nameservers: list[str]) -> bool:

@@ -173,6 +173,13 @@ class GitHubHost(Host):
         if hostname is not None:
             self._enable_github_pages(site.ref)
         self.gh.api(f"repos/{site.ref}/pages", method="PUT", data={"cname": hostname})
+        if hostname is not None:
+            # The repository's Website field (DEC-032). Not worth failing a
+            # link over.
+            try:
+                self.repos.set_homepage(site.ref, hostname)
+            except HostError:
+                pass
 
     def required_records(self, site: Site, label: str) -> list[DNSRecord]:
         """Records GitHub Pages needs for a hostname.

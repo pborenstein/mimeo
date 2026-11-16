@@ -44,6 +44,9 @@ class Plan:
     site: str | None = None
     missing: list[DNSRecord] = field(default_factory=list)
     extra: list[DNSRecord] = field(default_factory=list)
+    # True when any of the site's records is proxied; None when the
+    # provider has no such setting or nothing was compared.
+    proxied: bool | None = None
 
     @property
     def has_problem(self) -> bool:
@@ -104,6 +107,8 @@ def _compare_records(conn: Connection, host: Host, plan: Plan) -> None:
     live = [r for r in conn.records if r.name in names and r.type in ADDRESS_TYPES]
     live_keys = {r.key() for r in live}
     required_keys = {r.key() for r in required}
+    if any(r.proxied is not None for r in live):
+        plan.proxied = any(r.proxied for r in live)
 
     plan.extra = [r for r in live if r.key() not in required_keys]
     plan.missing = [r for r in required if r.key() not in live_keys]

@@ -11,7 +11,9 @@ import click
 from mimeo.exceptions import ConfigurationError
 from mimeo.providers.host.github import DEFAULT_TEMPLATE, TEMPLATE_ORG
 
-CURRENT_SCHEMA_VERSION = 1
+CURRENT_SCHEMA_VERSION = 2
+
+DNS_PROVIDER_NAMES = ("porkbun", "cloudflare")
 
 
 def _notice(message: str) -> None:
@@ -29,6 +31,22 @@ class Config:
     template_org: str = TEMPLATE_ORG
     default_template: str = DEFAULT_TEMPLATE
     ignore_domains: list[str] = field(default_factory=list)
+    # GitHub organizations and user accounts searched for sites (DEC-040).
+    organizations: list[str] = field(default_factory=list)
+    # DNS provider `create` and `delegate` put a zone at.
+    default_dns: str = "porkbun"
+    cloudflare_api_token: str | None = None
+    cloudflare_account_id: str | None = None
+
+    def __post_init__(self) -> None:
+        """Default the organization list to the one sites are created in."""
+        if not self.organizations:
+            self.organizations = [self.github_username]
+
+    @property
+    def default_org(self) -> str:
+        """The organization new site repositories are created in."""
+        return self.github_username
 
     @classmethod
     def load(cls, config_path: Optional[Path] = None) -> "Config":
@@ -120,6 +138,32 @@ class Config:
                 "Missing required configuration:\n" + "\n".join(f"  - {m}" for m in missing)
             )
 
+        cloudflare_config = data.get("cloudflare", {})
+        cloudflare_api_token = os.getenv("MIMEO_CLOUDFLARE_API_TOKEN") or cloudflare_config.get(
+            "api_token"
+        )
+        cloudflare_account_id = os.getenv(
+            "MIMEO_CLOUDFLARE_ACCOUNT_ID"
+        ) or cloudflare_config.get("account_id")
+
+        organizations = github_config.get("organizations", [])
+        if not isinstance(organizations, list) or not all(
+            isinstance(o, str) and o for o in organizations
+        ):
+            raise ConfigurationError(
+                f"github.organizations in {config_path} must be a list of organization names"
+            )
+
+        default_dns = os.getenv("MIMEO_DEFAULT_DNS") or defaults_config.get("dns") or "porkbun"
+        if default_dns not in DNS_PROVIDER_NAMES:
+            raise ConfigurationError(
+                f"defaults.dns in {config_path} must be one of: {', '.join(DNS_PROVIDER_NAMES)}"
+            )
+        if default_dns == "cloudflare" and not cloudflare_api_token:
+            raise ConfigurationError(
+                f"defaults.dns is cloudflare but {config_path} has no cloudflare.api_token"
+            )
+
         ignore_domains = defaults_config.get("ignore_domains", [])
         if not isinstance(ignore_domains, list) or not all(
             isinstance(d, str) for d in ignore_domains
@@ -144,4 +188,8 @@ class Config:
             template_org=template_org or TEMPLATE_ORG,
             default_template=default_template or DEFAULT_TEMPLATE,
             ignore_domains=[d.lower() for d in ignore_domains],
+            organizations=list(organizations),
+            default_dns=default_dns,
+            cloudflare_api_token=cloudflare_api_token,
+            cloudflare_account_id=cloudflare_account_id,
         )

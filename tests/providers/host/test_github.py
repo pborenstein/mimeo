@@ -2,7 +2,7 @@
 
 import base64
 import json
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 import pytest
 
@@ -520,7 +520,12 @@ class TestGitHubHostInterface:
         with patch.object(host, "_enable_github_pages") as enable, patch.object(host.gh, "api") as api:
             host.set_custom_domain(Site("github", "sites/x"), "example.com")
         enable.assert_called_once_with("sites/x")
-        api.assert_called_once_with("repos/sites/x/pages", method="PUT", data={"cname": "example.com"})
+        assert api.call_args_list[0] == call(
+            "repos/sites/x/pages", method="PUT", data={"cname": "example.com"}
+        )
+        assert api.call_args_list[1] == call(
+            "repos/sites/x", method="PATCH", data={"homepage": "https://example.com/"}
+        )
 
     def test_removing_custom_domain_sends_null(self, host: GitHubHost) -> None:
         with patch.object(host, "_enable_github_pages") as enable, patch.object(host.gh, "api") as api:

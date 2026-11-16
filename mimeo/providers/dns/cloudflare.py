@@ -21,6 +21,8 @@ class CloudflareDNS(DNSProvider):
     """Cloudflare zones and records, through the v4 API with a bearer token."""
 
     name = "cloudflare"
+    # Cloudflare has no ALIAS type; it flattens a CNAME at the apex instead.
+    unsupported_types = frozenset({"ALIAS"})
     BASE_URL = "https://api.cloudflare.com/client/v4"
 
     def __init__(self, api_token: str, account_id: str | None = None) -> None:

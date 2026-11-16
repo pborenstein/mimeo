@@ -723,3 +723,132 @@ A fourth, related fix landed in the same session at the provider layer (`mimeo/p
 **Consequences**: `docs/NETLIFY.md` still cites SITE_ADDRESS.md as a sibling that shares the repo/host split; that split stays a 2.0 question (MIMEO2.md question 3). Subdomain sites become 2.0 question 6.
 
 ---
+
+### DEC-039: 2.0 Scope -- mimeo Connects a Domain to Its Host; `create` Stays as a Wrapper (2026-11-15)
+
+**Status**: Active (Phase 8). User call, 2.0 design session.
+
+**Context**: 1.x assumes Porkbun is registrar and DNS provider, GitHub Pages is the host, and every site repo is under one account. All three assumptions broke in Entry 90 (`docs/MIMEO2.md`, "Why Now"). The failures were all in the connection between a domain and its host: unserved Porkbun records reported as live, a site in another account shown as `no repo`, and mail records mimeo did not know about. Templates and content are already tracked in the tepiton meta-repo.
+
+**Decision**: In 2.0, mimeo connects a domain to the host serving its site (nameservers, DNS records, the host's custom-domain setting, HTTPS) and keeps that connection correct. It adds no new site-creation features. `create` stays: it runs `delegate` if needed, the existing template repo creation, then `link`. The `is_template` rule (DEC-034) carries over unchanged.
+
+**Alternatives considered**: Drop `create` and provision by hand with `delegate`, `gh repo create --template`, `link` (rejected: gives up the one-command path from domain name to running site).
+
+**Consequences**: mimeo keeps its GitHub repo-creation code. `link` and `unlink` must work on a site that already exists in any account, so a site is no longer assumed to be the repo named after the domain under the configured account; how mimeo finds the site for a domain is decided separately (MIMEO2.md question 4).
+
+---
+
+### DEC-040: The Host's Custom-Domain Setting Records the Link; mimeo Caches It; Config Lists `organizations` (2026-11-15)
+
+**Status**: Active (Phase 8). User call, 2.0 design session. Answers MIMEO2.md question 4.
+
+**Context**: 1.x finds a domain's site by looking for a repo named after the domain under one configured account (`github_username`). gilborenstein.com is in `tepiton` and blueberryhill.fyi in `pborenstein`, so `status` shows them as `no repo`. Under DEC-039 a domain can be linked to any repo in any account, so the repo name no longer identifies the site.
+
+**Decision**: A site belongs to a domain when the host's custom-domain setting names that domain (GitHub: the repo's Pages custom domain). That setting is the authority. mimeo keeps a cache of domain-to-site pairs at `~/.cache/mimeo/sites.json` so commands do not scan every time. The cache is never the authority: it can be deleted and rebuilt, and a command that uses a cached pair confirms it against the host before acting on it.
+
+- Config gains `github.organizations`, a list of the GitHub organizations and user accounts mimeo scans. It replaces the single `github_username`. `github.default_org` still names where `create` and a bare `link` put a repo.
+- `link`, `unlink` and `create` update the cache for the domain they act on.
+- `mimeo scan` rebuilds the cache: it lists the repos in every listed organization and reads each one's custom domain.
+- A single-domain command whose domain is missing from the cache, or whose cached repo no longer has that custom domain, tries `<organization>/<domain>` in each listed organization, then falls back to a scan.
+- `status` reports two repos claiming one domain as a problem.
+- `create` takes an optional `--repo owner/name`; the default stays `<default_org>/<domain>`.
+
+**Alternatives considered**: No cache, scan on every command (rejected by the user: a fleet `status` would make one Pages API call per repo in every listed organization, including repos with no site). A registry that is the authority (rejected: it can disagree with the host's setting, the same kind of failure as the unserved Porkbun records in DEC-037).
+
+**Consequences**: A site linked outside mimeo does not appear in fleet `status` until `mimeo scan` runs. The key is named `organizations` but also holds user accounts (`pborenstein`); GitHub lists repos for the two through different API endpoints, so the code must handle both. The cache holds repo names from every listed organization and lives outside the repo. Organizations and accounts are a GitHub notion, which is why the key sits under `github`; another host gets its own equivalent in its own config section.
+
+---
+
+### DEC-041: Registrar and DNS Provider Are Separate Interfaces; the Nameservers Pick the DNS Provider (2026-11-15)
+
+**Status**: Active (Phase 8). User call, 2.0 design session. Answers MIMEO2.md question 5.
+
+**Context**: 1.x treats Porkbun as registrar and DNS provider at once. DNS for the fleet is moving to Cloudflare while Porkbun stays the registrar, and some zones may stay on Porkbun DNS. Separating the two roles is one of the reasons for the redesign. `mimeo/providers/base.py` already has separate `Registrar` and `DNSProvider` base classes, both implemented by Porkbun; `DNSProvider` has one method (`configure_dns`) and `Registrar.update_nameservers` can only reset to Porkbun's nameservers.
+
+**Decision**: The two stay separate interfaces.
+
+- `Registrar` (Porkbun): list domains, read nameservers, set nameservers. `update_nameservers` takes the nameserver list to set.
+- `DNSProvider` (Porkbun, Cloudflare): whether the zone exists, create the zone, the zone's nameservers, list records, add, change and delete a record.
+- For any domain, mimeo reads the nameservers from the registrar and uses the configured DNS provider whose nameservers match. This extends DEC-037 from "Porkbun's or not" to "which provider". When no configured provider matches, DNS status is `external` as in DEC-037, and `link` and `sync` write no records.
+- Config gains a `[cloudflare]` section holding an API token. `doctor` checks the credentials of every configured DNS provider.
+
+**Alternatives considered**: One combined interface per vendor (rejected: Cloudflare would stub out the registrar half, and choosing a provider by nameserver needs the roles separate).
+
+**Consequences**: Cloudflare is the first vendor implementing only `DNSProvider`. A second registrar is not designed for; `Registrar` has one implementation. Records at a provider the nameservers do not point to are never treated as live, by construction.
+
+---
+
+### DEC-042: `delegate` Copies Every Record Except NS and SOA, and Verifies Before Changing Nameservers (2026-11-15)
+
+**Status**: Active (Phase 8). User call, 2.0 design session. Answers MIMEO2.md question 2.
+
+**Context**: `delegate DOMAIN --dns PROVIDER` moves a zone to another DNS provider. A zone can hold records mimeo does not manage: xhosi.com has MX and SPF records for mail. Records that are not at the new provider when the nameservers change stop being served.
+
+**Decision**: `delegate` copies every record from the provider currently serving the zone, except NS and SOA. Those two describe the provider itself (which servers answer for the zone, and the zone's bookkeeping), and each provider generates its own.
+
+- Order: read all records from the current provider, create the zone at the new provider, write the records, read them back and compare, then set the nameservers at the registrar. A failed comparison stops before the nameserver change.
+- The old zone's records are left in place. Under DEC-041 they are not treated as live, and switching back is one nameserver change.
+- Copied records are written DNS-only, not proxied.
+- `delegate` refuses to change nameservers while DNSSEC is enabled at the registrar. The registry's DS records point at the current provider's keys, so the switch would stop the domain resolving (the reasoning in `docs/NETLIFY.md`, open decision "Unmanaged records at the NS switch").
+- `--dry-run` prints the records that would be copied.
+- When the current nameservers match no configured provider, there is nothing to read. `delegate` creates the zone and leaves the nameservers alone unless given `--empty`.
+
+**Alternatives considered**: Copy only the records mimeo manages and warn about the rest (rejected: mail breaks if the warning is missed).
+
+**Consequences**: `DNSProvider` implementations must list and write every record type the fleet uses, not only A, AAAA and CNAME. Unverified (2026-11-15): Cloudflare may import records on its own when a zone is created through the API, as it does in the dashboard. If it does, `delegate` must reconcile with what Cloudflare put there; check Cloudflare's docs before implementing.
+
+---
+
+### DEC-043: `link` Writes DNS-Only Records and mimeo Leaves the Proxy Setting Alone (2026-11-15)
+
+**Status**: Active (Phase 8). User call, 2.0 design session. Answers MIMEO2.md question 1.
+
+**Context**: Each Cloudflare record has a proxy setting. With it off (DNS-only), the record resolves to the host's address and visitors connect to the host directly, as on Porkbun. With it on (proxied), the record resolves to Cloudflare's address and Cloudflare fetches the page from the host. blueberryhill.fyi and xhosi.com are proxied.
+
+Checked 2026-11-15:
+
+- [GitHub's docs](https://docs.github.com/en/pages/getting-started-with-github-pages/securing-your-github-pages-site-with-https) say a certificate can fail to generate when records are "not pointing to the IP addresses for GitHub Pages". They do not name Cloudflare; a proxied record resolves to Cloudflare's addresses.
+- GitHub's Pages API reports xhosi.com's certificate as `bad_authz`, expiring 2026-12-12, and blueberryhill.fyi's as `approved`, expiring 2027-01-22.
+- [Cloudflare's docs](https://developers.cloudflare.com/ssl/origin-configuration/ssl-modes/) say SSL mode Full does not check the host's certificate and Full (strict) requires it to be unexpired. The SSL mode of the two zones was not read.
+
+**Decision**: `link` writes its records DNS-only. After that mimeo never changes a record's proxy setting: `status` and `sync` compare type, name and value, read through the provider's API, and a proxied record is not a problem. `status` shows the setting. There is no `--proxied` flag in 2.0; proxying is turned on in Cloudflare.
+
+**Alternatives considered**: Proxied by default, with `link` writing DNS-only, waiting for the certificate and then turning proxying on, and `sync` repeating that for renewals (set aside by the user: decide from practice once domains are running this way). A `--proxied` flag (deferred with it).
+
+**Consequences**: A domain that should be proxied needs one manual change in Cloudflare after `link`. mimeo does nothing about GitHub certificate renewal on proxied domains; xhosi.com's failed renewal is the first case to watch. This decision is expected to be revisited after live use.
+
+---
+
+### DEC-044: The Repo/Host Split Lands First, on 1.x (2026-11-15)
+
+**Status**: Active (Phase 8). User call, 2.0 design session. Answers MIMEO2.md question 3.
+
+**Context**: `GitHubHost` does repo work (create from template, manifest, dev-file strip, topics, delete, rename) and Pages work (enable Pages, custom domain, HTTPS enforcement, health). `docs/NETLIFY.md` change 1 moves the repo work to `providers/repo/github.py` with no behavior change. The 2.0 commands divide the same way: `link` and `unlink` use only the Pages work, and `create` is the repo work followed by `link` (DEC-039).
+
+**Decision**: The split lands before any 2.0 work and ships as a 1.x release. It changes no behavior; the existing tests are the check.
+
+**Alternatives considered**: Do the split as the first commits of 2.0 (rejected: mixes moved code with changed behavior, and leaves 1.x on a structure that differs from what follows).
+
+**Consequences**: 2.0 starts from a codebase where the Pages host can be used without the repo code. The split is done whether or not Netlify is added.
+
+---
+
+### DEC-045: Subdomain Sites Are in 2.0 (2026-11-15)
+
+**Status**: Active (Phase 8). User call, 2.0 design session. Answers MIMEO2.md question 6. Takes `docs/SUBDOMAINS.md` off ice; its design predates DEC-039 to DEC-041 and is input, not the plan.
+
+**Context**: In 1.x one string is the site's hostname, the DNS zone, and the key matching repos to registrations. For `service.example.com` those differ: the zone is `example.com` and the record name is `service`, and one zone can hold several sites. Two of the three roles are already separated by this session's decisions: the matching key is the host's custom-domain setting (DEC-040), and DNS providers work on zones and records (DEC-041).
+
+**Decision**: 2.0 commands take a hostname, and the zone is derived from it.
+
+- The zone for a hostname is its longest suffix that is a domain at the registrar.
+- `link service.example.com SITE` writes one record in the zone: CNAME `service` to the host's target (GitHub: `<owner>.github.io`). A subdomain site gets no `www` record.
+- A site's records are the ones named for its hostname: for an apex site, the apex A/AAAA records and `www`; for a subdomain site, its one CNAME. `status`, `sync` and `unlink` read and change only those and leave every other record in the zone alone.
+- `delegate` takes a zone. Given a subdomain it is an error.
+- `create service.example.com` follows the same path; the repo defaults to `<default_org>/service.example.com`.
+
+**Alternatives considered**: Write the interfaces with hostname and zone separate but defer the feature (rejected by the user in favor of doing it in 2.0).
+
+**Consequences**: Tests must cover several sites in one zone, including `sync` and `unlink` on one site leaving the others' records intact. `sync` can no longer clear and rewrite a zone for any site; DEC-035's clear-and-recreate in `create` has to be narrowed to the site's own records.
+
+---

@@ -1,10 +1,11 @@
 # mimeo 2.0: Design Notes
 
-Status: **Input for a design session** -- nothing here is decided
-except the version number: the redesign ships as 2.0 (DEC-038; the
-current release is 1.3.0).
-Gathered 2026-11-13 to 2026-11-15 (Entry 90). Decisions that come out
-of the session go to `DECISIONS.md`.
+Status: **Design session held 2026-11-15** -- scope and all six open
+questions are decided in `DECISIONS.md` (DEC-039 to DEC-045). Where
+this file and those entries differ, the entries are correct. The
+design built from them is [MIMEO2_DESIGN.md](MIMEO2_DESIGN.md). The
+redesign ships as 2.0 (DEC-038; the current release is 1.3.0).
+Gathered 2026-11-13 to 2026-11-15 (Entry 90).
 
 ## Why Now
 
@@ -103,7 +104,8 @@ Zone:DNS:Read).
 
 ## Unverified Vendor Claims
 
-Not checked against vendor docs (2026-11-15):
+Partly checked later on 2026-11-15; what was found is in DEC-043.
+As written before the check:
 
 - GitHub Pages cannot issue or renew its certificate while records
   are proxied, because the validation request reaches Cloudflare.
@@ -113,6 +115,10 @@ Not checked against vendor docs (2026-11-15):
   without anyone noticing; it matters only in Full (strict) mode.
 
 ## Open Questions
+
+All answered 2026-11-15. Scope: DEC-039. Question 1: DEC-043.
+Question 2: DEC-042. Question 3: DEC-044. Question 4: DEC-040.
+Question 5: DEC-041. Question 6: DEC-045.
 
 1. Does `link` write proxied or DNS-only records, and is that a flag
    or a per-provider default?

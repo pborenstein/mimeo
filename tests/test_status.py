@@ -379,7 +379,6 @@ class TestStatusCommand:
         mock_config_load.return_value = mock_config
         mock_registrar_class.return_value = _make_registrar(
             [{"domain": "drifty.com", "expireDate": "2027-01-01", "autoRenew": "1"}],
-            ns_ok=False,
         )
         mock_host_class.return_value = _make_host(
             [{"name": "drifty.com"}],
@@ -398,7 +397,6 @@ class TestStatusCommand:
         data = json.loads(result.stdout)
         assert data[0]["dns_status"] == "missing"
         assert data[0]["site_health"] == "fixable"
-        assert data[0]["ns_ok"] is False
 
     @patch("mimeo.config.Config.load")
     @patch(f"{_STATUS}.GitHubHost")
@@ -417,7 +415,6 @@ class TestStatusCommand:
         mock_config_load.return_value = mock_config
         mock_registrar_class.return_value = _make_registrar(
             [{"domain": "drifty.com", "expireDate": "2027-01-01", "autoRenew": "1"}],
-            ns_ok=False,
         )
         mock_host_class.return_value = _make_host(
             [{"name": "drifty.com"}],
@@ -1042,6 +1039,14 @@ class TestStatusSourceDns:
         },
     ]
 
+    @pytest.fixture(autouse=True)
+    def _porkbun_ns(self) -> Any:
+        """Default every NS lookup to Porkbun; tests override with @patch."""
+        from mimeo.providers.registrar.porkbun import PORKBUN_NAMESERVERS
+
+        with patch(f"{_STATUS}.lookup_nameservers", return_value=sorted(PORKBUN_NAMESERVERS)):
+            yield
+
     def _mock_dns_provider(self, mock_dns_provider_class: Any) -> MagicMock:
         mock_dns_provider = MagicMock()
         mock_dns_provider.get_domain_records.return_value = self.SAMPLE_RECORDS
@@ -1240,3 +1245,189 @@ class TestStatusSourceDns:
         assert result.exit_code == 0
         assert "example.com" in result.output
         assert "ok" in result.output
+
+
+class TestStatusOffPorkbunNameservers:
+    """Porkbun zone records count only when the nameservers are Porkbun's."""
+
+    def _registrar(self, nameservers: list) -> MagicMock:
+        registrar = _make_registrar(
+            [{"domain": "site.com", "expireDate": "2027-01-01", "autoRenew": "1"}]
+        )
+        registrar.check_nameservers.return_value = NameserverCheckResult(
+            ok=False, actual=nameservers, expected=["curitiba.ns.porkbun.com"]
+        )
+        return registrar
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_STATUS}.GitHubHost")
+    @patch(f"{_STATUS}.PorkbunRegistrar")
+    @patch(f"{_STATUS}.PorkbunDNSProvider")
+    def test_full_external_ns_skips_drift_and_is_not_a_problem(
+        self,
+        mock_dns_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        mock_config_load.return_value = mock_config
+        mock_registrar_class.return_value = self._registrar(["abby.ns.cloudflare.com"])
+        mock_host_class.return_value = _make_host([{"name": "site.com"}])
+        dns_provider = _make_dns_provider(drift_status="missing")
+        mock_dns_class.return_value = dns_provider
+
+        result = runner.invoke(status, ["site.com", "--format", "json"])
+        assert result.exit_code == 0
+        data = json.loads(result.stdout)
+        assert data[0]["dns_status"] == "external"
+        dns_provider.check_dns_drift.assert_not_called()
+
+        result = runner.invoke(status, ["site.com", "--problems", "--format", "json"])
+        assert json.loads(result.stdout) == []
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_STATUS}.GitHubHost")
+    @patch(f"{_STATUS}.PorkbunRegistrar")
+    @patch(f"{_STATUS}.PorkbunDNSProvider")
+    def test_full_text_marks_external_ns_and_inactive_records(
+        self,
+        mock_dns_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        mock_config_load.return_value = mock_config
+        mock_registrar_class.return_value = self._registrar(["abby.ns.cloudflare.com"])
+        mock_host_class.return_value = _make_host([{"name": "site.com"}])
+        dns_provider = _make_dns_provider()
+        dns_provider.get_domain_records.return_value = [
+            {"type": "A", "name": "site.com", "content": "185.199.108.153", "ttl": "600"}
+        ]
+        mock_dns_class.return_value = dns_provider
+
+        result = runner.invoke(status, ["site.com", "--with-dns"])
+
+        assert result.exit_code == 0
+        assert " ext " in result.output
+        assert "external" in result.output
+        assert "not in use" in result.output
+        assert "0 with issues" in result.output
+        assert "fixable with" not in result.output
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_STATUS}.GitHubHost")
+    @patch(f"{_STATUS}.PorkbunRegistrar")
+    @patch(f"{_STATUS}.PorkbunDNSProvider")
+    def test_full_empty_ns_lookup_is_a_problem_sync_cannot_fix(
+        self,
+        mock_dns_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        mock_config_load.return_value = mock_config
+        mock_registrar_class.return_value = self._registrar([])
+        mock_host_class.return_value = _make_host([{"name": "site.com"}])
+        mock_dns_class.return_value = _make_dns_provider()
+
+        result = runner.invoke(status, ["site.com"])
+
+        assert result.exit_code == 0
+        assert "none" in result.output
+        assert "unknown" in result.output
+        assert "1 with issues" in result.output
+        assert "fixable with" not in result.output
+
+    @patch(f"{_STATUS}.lookup_nameservers")
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_STATUS}.PorkbunDNSProvider")
+    def test_show_flags_records_when_ns_elsewhere(
+        self,
+        mock_dns_class: Any,
+        mock_config_load: Any,
+        mock_lookup: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        mock_config_load.return_value = mock_config
+        dns_provider = _make_dns_provider()
+        dns_provider.get_domain_records.return_value = [
+            {"type": "A", "name": "site.com", "content": "185.199.108.153", "ttl": "600"},
+            {"type": "NS", "name": "site.com", "content": "curitiba.porkbun.com", "ttl": "86400"},
+        ]
+        mock_dns_class.return_value = dns_provider
+        mock_lookup.return_value = ["abby.ns.cloudflare.com", "valentin.ns.cloudflare.com"]
+
+        result = runner.invoke(status, ["--source", "dns", "site.com"])
+        assert result.exit_code == 0
+        assert "abby.ns.cloudflare.com" in result.output
+        assert "not in use" in result.output
+
+        result = runner.invoke(status, ["--source", "dns", "site.com", "--format", "json"])
+        data = json.loads(result.stdout)
+        assert data[0]["active"] is False
+        assert data[0]["nameservers"] == ["abby.ns.cloudflare.com", "valentin.ns.cloudflare.com"]
+        assert len(data[0]["records"]) == 2
+
+    @patch(f"{_STATUS}.lookup_nameservers")
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_STATUS}.PorkbunDNSProvider")
+    def test_show_no_note_when_ns_is_porkbun(
+        self,
+        mock_dns_class: Any,
+        mock_config_load: Any,
+        mock_lookup: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        from mimeo.providers.registrar.porkbun import PORKBUN_NAMESERVERS
+
+        mock_config_load.return_value = mock_config
+        dns_provider = _make_dns_provider()
+        dns_provider.get_domain_records.return_value = [
+            {"type": "A", "name": "site.com", "content": "185.199.108.153", "ttl": "600"},
+        ]
+        mock_dns_class.return_value = dns_provider
+        mock_lookup.return_value = sorted(PORKBUN_NAMESERVERS)
+
+        result = runner.invoke(status, ["--source", "dns", "site.com", "--format", "json"])
+
+        data = json.loads(result.stdout)
+        assert data[0]["active"] is True
+        assert data[0]["note"] is None
+
+    @patch("mimeo.config.Config.load")
+    @patch(f"{_STATUS}.GitHubHost")
+    @patch(f"{_STATUS}.PorkbunRegistrar")
+    @patch(f"{_STATUS}.PorkbunDNSProvider")
+    def test_check_external_ns_skips_drift(
+        self,
+        mock_dns_class: Any,
+        mock_registrar_class: Any,
+        mock_host_class: Any,
+        mock_config_load: Any,
+        runner: CliRunner,
+        mock_config: Config,
+    ) -> None:
+        mock_config_load.return_value = mock_config
+        mock_registrar_class.return_value = self._registrar(["abby.ns.cloudflare.com"])
+        mock_host_class.return_value = _make_host([])
+        dns_provider = _make_dns_provider(drift_status="ok")
+        mock_dns_class.return_value = dns_provider
+
+        result = runner.invoke(status, ["--source", "dns", "site.com", "--problems"])
+        assert result.exit_code == 0
+        assert "external" in result.output
+        assert "not compared" in result.output
+        dns_provider.check_dns_drift.assert_not_called()
+
+        result = runner.invoke(
+            status, ["--source", "dns", "site.com", "--problems", "--format", "json"]
+        )
+        assert json.loads(result.stdout)[0]["dns_status"] == "external"

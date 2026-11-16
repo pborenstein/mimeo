@@ -260,7 +260,8 @@ mimeo status [domains ...] | --all [--source {github,porkbun,dns}] [--problems] 
         │     (--with-dns) get_domain_records()
         │     (has repo) get_pages_health() -> site_health, classify via health_status()
         │     (has repo, --show-template) get_template_repository()
-        │     (has repo + registered) required_dns_records() + check_dns_drift() -> dns_status
+        │     (has repo + registered, ns_ok) required_dns_records() + check_dns_drift() -> dns_status
+        │     (has repo + registered, !ns_ok) dns_status = external | unknown (Porkbun zone not served)
         │       │
         │       ▼
         │   (--problems) filter to domains needing attention
@@ -273,13 +274,17 @@ mimeo status [domains ...] | --all [--source {github,porkbun,dns}] [--problems] 
         │       per domain: check_nameservers()
         │       (--with-dns) get_domain_records()
         │
-        └── --source dns ──► live DNS records or drift, no cross-provider join
-                (no --problems) get_domain_records() -- raw records (former `dns show`)
-                (--problems)    required_dns_records() + check_dns_drift() (former `dns check`)
+        └── --source dns ──► Porkbun zone records or drift, no cross-provider join
+                (no --problems) get_domain_records() + lookup_nameservers() -- raw
+                                records, flagged "not in use" when NS is not Porkbun
+                                (former `dns show`)
+                (--problems)    check_nameservers(); when ns_ok, required_dns_records()
+                                + check_dns_drift(); otherwise external | unknown,
+                                not compared (former `dns check`)
                 requires explicit domain names -- no fleet-wide mode
 ```
 
-A bare `mimeo status` refuses to run: the fleet sweep is slow, so it requires the explicit `--all` (this restriction does not apply to `--source dns`, which always requires named domains instead). Registered domains with no site show `no repo`; sites whose domain is not in the Porkbun account show `-` on the registrar side. The DNS column is `-` when there is no repo (no desired state to compare against). Drift and unhealthy sites are findings (exit 0); API errors exit nonzero with partial results.
+A bare `mimeo status` refuses to run: the fleet sweep is slow, so it requires the explicit `--all` (this restriction does not apply to `--source dns`, which always requires named domains instead). Registered domains with no site show `no repo`; sites whose domain is not in the Porkbun account show `-` on the registrar side. The DNS column is `-` when there is no repo (no desired state to compare against). The NS column shows `pb` (Porkbun nameservers), `ext` (another provider) or `none` (the NS lookup returned nothing). Porkbun's records are live only when NS is `pb`: for `ext` the DNS column shows `external` and nothing is compared, because mimeo does not read the other provider; for `none` it shows `unknown`. Nameservers at another provider are not counted as a problem, and are never counted as fixable by `sync` (DEC-037). `--with-dns` flags Porkbun records that are not in use. Drift and unhealthy sites are findings (exit 0); API errors exit nonzero with partial results.
 
 ## Sync Workflow
 

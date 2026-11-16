@@ -33,7 +33,35 @@ _CSV_FIELDS = [
     "error",
 ]
 
-_DNS_COLORS = {"ok": "green", "drift": "yellow", "missing": "red", "error": "red"}
+_DNS_COLORS = {
+    "ok": "green",
+    "drift": "yellow",
+    "missing": "red",
+    "error": "red",
+    "external": "cyan",
+    "unknown": "red",
+}
+
+
+def _dns_status_off_porkbun(nameservers: List[str]) -> str:
+    """DNS status for a domain whose nameservers are not Porkbun's.
+
+    The records in the Porkbun zone are not served, so comparing them to
+    expectations says nothing about the live site. "external" means
+    another provider answers for the domain (mimeo does not read its
+    records); "unknown" means the NS lookup returned nothing.
+    """
+    return "external" if nameservers else "unknown"
+
+
+def _porkbun_inactive_note(nameservers: List[str]) -> str:
+    """Explain why Porkbun zone records are not the live records."""
+    if nameservers:
+        return (
+            f"nameservers point to {', '.join(nameservers)} -- "
+            "these Porkbun records are not in use"
+        )
+    return "NS lookup returned nothing -- these Porkbun records may not be in use"
 _SITE_COLORS = {
     "healthy": "green",
     "fixable": "yellow",
@@ -56,9 +84,11 @@ def _has_problem(row: Dict[str, Any]) -> bool:
         return True
     if not row["registered"] or not row["repo"]:
         return True
-    if not row["ns_ok"]:
+    # Nameservers at another provider are a choice, not a problem; an
+    # empty NS lookup (no delegation, lookup failure) is.
+    if row["ns_ok"] is False and not row["nameservers"]:
         return True
-    if row["dns_status"] not in ("ok", None):
+    if row["dns_status"] not in ("ok", "external", None):
         return True
     if row["site_health"] not in ("healthy", None):
         return True
@@ -68,17 +98,17 @@ def _has_problem(row: Dict[str, Any]) -> bool:
 def _fixable_by_sync(row: Dict[str, Any]) -> bool:
     """True when `mimeo sync` can act on this domain's problem.
 
-    Missing/drifted DNS, NS mismatch, and HTTPS-enforceable certs are all
-    things sync converges. Missing repos, unregistered domains, other
-    site-health states (no_cert, cert_pending, pages_error), and API
-    errors are not -- sync has nothing to do for those.
+    Missing/drifted DNS and HTTPS-enforceable certs are things sync
+    converges. Missing repos, unregistered domains, other site-health
+    states (no_cert, cert_pending, pages_error), and API errors are not.
+    Neither are non-Porkbun nameservers: sync skips those domains, and
+    its only remedy (--reset-nameservers) would undo a deliberate move
+    to another DNS provider.
     """
     if row.get("error"):
         return False
     if not row["registered"] or not row["repo"]:
         return False
-    if row["ns_ok"] is False:
-        return True
     if row["dns_status"] in ("drift", "missing"):
         return True
     if row["site_health"] == "fixable":
@@ -115,12 +145,14 @@ def _text(rows: List[Dict[str, Any]], with_dns: bool = False, show_template: boo
         expires = (row["expires"] or "-")[:10] if row["registered"] else "-"
         click.echo(f"{expires:<{expires_w}}  ", nl=False)
 
-        if not row["registered"]:
-            click.secho(f"{'-':<4}", fg="red", nl=False)
+        if not row["registered"] or row["ns_ok"] is None:
+            click.secho(f"{'-':<4}", fg="red" if not row["registered"] else "white", nl=False)
         elif row["ns_ok"]:
-            click.secho(f"{'ok':<4}", fg="green", nl=False)
+            click.secho(f"{'pb':<4}", fg="green", nl=False)
+        elif row["nameservers"]:
+            click.secho(f"{'ext':<4}", fg="cyan", nl=False)
         else:
-            click.secho(f"{'no':<4}", fg="red", nl=False)
+            click.secho(f"{'none':<4}", fg="red", nl=False)
         click.echo("  ", nl=False)
 
         dns_status = row["dns_status"]
@@ -145,18 +177,15 @@ def _text(rows: List[Dict[str, Any]], with_dns: bool = False, show_template: boo
             click.secho(f"  [{row['error']}]", fg="red", nl=False)
         click.echo()
 
-        if (
-            with_dns
-            and row["registered"]
-            and not row.get("dns_records")
-            and row["ns_ok"] is False
-            and row["nameservers"]
-        ):
-            click.secho(
-                f"      (no records at Porkbun; nameservers point to "
-                f"{', '.join(row['nameservers'])})",
-                fg="yellow",
-            )
+        if with_dns and row["registered"] and row["ns_ok"] is False:
+            if row.get("dns_records"):
+                click.secho(f"      ({_porkbun_inactive_note(row['nameservers'])})", fg="yellow")
+            elif row["nameservers"]:
+                click.secho(
+                    f"      (no records at Porkbun; nameservers point to "
+                    f"{', '.join(row['nameservers'])})",
+                    fg="yellow",
+                )
 
         if with_dns and row.get("dns_records"):
             recs = row["dns_records"]
@@ -264,6 +293,9 @@ def _text_dns_show(rows: List[Dict[str, Any]]) -> None:
             click.echo()
             continue
 
+        if entry.get("note"):
+            click.secho(f"    ({entry['note']})", fg="yellow")
+
         recs = [
             (
                 rec.get("type", ""),
@@ -299,11 +331,22 @@ def _text_dns_check(rows: List[Dict[str, Any]]) -> None:
             if r["nameservers"]
             else "unknown"
         )
+        ns_color = (
+            _ns_colors.get(r["ns_ok"], "white")
+            if r["ns_ok"] or not r["nameservers"]
+            else "cyan"
+        )
         click.echo("    NS: ", nl=False)
-        click.secho(ns_label, fg=_ns_colors.get(r["ns_ok"], "white"))
+        click.secho(ns_label, fg=ns_color)
 
         click.echo("    DNS: ", nl=False)
-        click.secho(r["dns_status"], fg=_DNS_COLORS.get(r["dns_status"], "white"))
+        click.secho(r["dns_status"], fg=_DNS_COLORS.get(r["dns_status"], "white"), nl=False)
+        if r["dns_status"] == "external":
+            click.secho("  (Porkbun records not in use; not compared)", dim=True)
+        elif r["dns_status"] == "unknown":
+            click.secho("  (NS lookup returned nothing; not compared)", dim=True)
+        else:
+            click.echo()
 
         for rec in r.get("missing", []):
             click.secho(
@@ -356,13 +399,14 @@ def _text_dns_check(rows: List[Dict[str, Any]]) -> None:
 @click.option(
     "--problems",
     is_flag=True,
-    help="Show only domains that need attention (with --source dns, compares live "
-    "records against expected instead of just showing them)",
+    help="Show only domains that need attention (with --source dns, compares "
+    "Porkbun records against expected instead of just showing them)",
 )
 @click.option(
     "--with-dns",
     is_flag=True,
-    help="Include the full live DNS records for each registered domain",
+    help="Include the Porkbun zone records for each registered domain "
+    "(flagged when the nameservers point elsewhere)",
 )
 @click.option(
     "--health",
@@ -401,15 +445,22 @@ def status(
     \b
         github    mimeo-managed repositories only (like the old `list`)
         porkbun   registered domains only (like the old `registrar list`)
-        dns       live DNS records ("dns show"), or with --problems,
-                  drift against expected records ("dns check")
+        dns       Porkbun zone records ("dns show"), or with --problems,
+                  drift against expected records ("dns check").
+                  Porkbun records are live only when the domain's
+                  nameservers are Porkbun's; otherwise they are
+                  flagged as not in use and not compared.
 
     \b
     Columns (full join):
         EXPIRES  registration expiry ("-" if not in Porkbun account)
-        NS       nameservers point to Porkbun
-        DNS      live records vs GitHub Pages expectations
-                 ("-" when there is no repo: no desired state to compare)
+        NS       pb (Porkbun), ext (another provider), none (NS
+                 lookup returned nothing)
+        DNS      Porkbun records vs GitHub Pages expectations
+                 ("-" when there is no repo: no desired state to compare;
+                 "external" when NS is another provider: Porkbun records
+                 are not in use and mimeo does not read the other one;
+                 "unknown" when the NS lookup returned nothing)
         SITE     Pages health (ok / fixable / pending / no cert / error)
 
     \b
@@ -543,7 +594,9 @@ def _status_full(
                     if show_template:
                         row["template"] = host.get_template_repository(f"{owner}/{domain}")
 
-                    if row["registered"]:
+                    if row["registered"] and not row["ns_ok"]:
+                        row["dns_status"] = _dns_status_off_porkbun(row["nameservers"])
+                    elif row["registered"]:
                         expected = host.required_dns_records(domain)
                         drift = dns_provider.check_dns_drift(
                             domain, expected, live_records=live_records
@@ -818,16 +871,21 @@ def _status_dns_show(
 
         def _fetch(domain: str) -> Dict[str, Any]:
             records = dns_provider.get_domain_records(domain)
+            ns = lookup_nameservers(domain)
+            active = ns == sorted(PORKBUN_NAMESERVERS)
             note = None
-            if not records:
-                ns = lookup_nameservers(domain)
-                if ns and ns != sorted(PORKBUN_NAMESERVERS):
+            if not active:
+                if records:
+                    note = _porkbun_inactive_note(ns)
+                elif ns:
                     note = (
                         f"no records at Porkbun; nameservers point to "
                         f"{', '.join(ns)} -- records are managed there"
                     )
             return {
                 "domain": domain,
+                "nameservers": ns,
+                "active": active,
                 "records": records,
                 "note": note,
                 "error": None,
@@ -837,6 +895,8 @@ def _status_dns_show(
             _, category = _categorize_error(exc)
             return {
                 "domain": domain,
+                "nameservers": [],
+                "active": None,
                 "records": [],
                 "note": None,
                 "error": str(exc),
@@ -881,10 +941,13 @@ def _status_dns_check(
             PorkbunDNSProvider(cfg.porkbun_api_key, cfg.porkbun_secret) as dns_provider:
 
         def _check_domain(domain: str) -> Dict[str, Any]:
-            expected = host.required_dns_records(domain)
             ns_result = registrar.check_nameservers(domain)
             try:
-                drift = dns_provider.check_dns_drift(domain, expected)
+                if ns_result.ok:
+                    expected = host.required_dns_records(domain)
+                    drift = dns_provider.check_dns_drift(domain, expected)
+                else:
+                    drift = {"status": _dns_status_off_porkbun(ns_result.actual)}
             except Exception as exc:
                 drift = {
                     "status": "error",

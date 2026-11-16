@@ -695,3 +695,17 @@ A fourth, related fix landed in the same session at the provider layer (`mimeo/p
 **Consequences**: Detection is manual, since it runs only when someone runs `doctor`. The `meta` list includes IPv6, but this decision does not cover AAAA records: mimeo writes none, and that question remains open.
 
 ---
+
+### DEC-037: Porkbun Records Count Only When the Nameservers Are Porkbun's (2026-11-15)
+
+**Status**: Active (Phase 8). Implemented in Entry 90.
+
+**Context**: `status` read records from the Porkbun zone and treated them as live. blueberryhill.fyi and xhosi.com have Cloudflare nameservers, so their Porkbun records are not served, yet `status --source dns` printed them as the domain's DNS and `--problems` reported `DNS: ok`. The full view also counted non-Porkbun nameservers as "fixable with: mimeo sync", but sync skips those domains, and its only remedy (`--reset-nameservers`) would undo a deliberate move to Cloudflare. DNS for the fleet is moving to Cloudflare.
+
+**Decision**: Every `status` view looks up the nameservers first. When they are Porkbun's, behavior is unchanged. Otherwise the Porkbun records are labelled not in use and are not compared: DNS status is `external` when another provider answers, `unknown` when the NS lookup returns nothing. Nameservers at another provider are not counted as a problem; an empty NS lookup is. Non-Porkbun nameservers are never counted as fixable by sync. The NS column shows `pb`, `ext` or `none`; `--source dns` JSON gains `nameservers` and `active`.
+
+**Alternatives considered**: Check the records through public DNS (rejected for now: Cloudflare-proxied records resolve to Cloudflare IPs, so the check cannot confirm them). Read the Cloudflare zone (deferred to the 3.0 design, `docs/MIMEO3.md`).
+
+**Consequences**: For domains on another DNS provider, `status` checks nothing about their records. A domain delegated somewhere by mistake no longer shows as a problem unless its site health shows it. `sync` is unchanged.
+
+---

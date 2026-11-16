@@ -113,11 +113,11 @@ One view of the fleet: registration expiry, nameservers, DNS drift, and Pages he
 | Whole fleet: union of registered domains and mimeo repos | `mimeo status --all` |
 | Only domains that need attention | `mimeo status --all --problems` |
 | Full detail for scripting | `mimeo status --all --format json \| jq '.[] \| select(.dns_status == "drift")'` |
-| Include the full live DNS records | `mimeo status example.com --with-dns` |
+| Include the Porkbun zone records | `mimeo status example.com --with-dns` |
 
 A bare `mimeo status` refuses to run: the fleet sweep makes several API calls per domain and is slow on large accounts, so it requires the explicit `--all`.
 
-Registered domains with no site show `no repo`; sites whose domain is not in the Porkbun account show `-` on the registrar side. The DNS column is `-` when there is no repo (no desired state to compare against). Drift and unhealthy sites are findings (exit 0); API errors exit nonzero with partial results.
+Registered domains with no site show `no repo`; sites whose domain is not in the Porkbun account show `-` on the registrar side. The DNS column is `-` when there is no repo (no desired state to compare against). The NS column shows `pb` (Porkbun nameservers), `ext` (another provider) or `none` (the NS lookup returned nothing). Porkbun's records are live only when NS is `pb`: for `ext` the DNS column shows `external` and nothing is compared, because mimeo does not read the other provider; for `none` it shows `unknown`. Nameservers at another provider are not counted as a problem, and are never counted as fixable by `sync` (DEC-037). `--with-dns` flags Porkbun records that are not in use. Drift and unhealthy sites are findings (exit 0); API errors exit nonzero with partial results.
 
 `--source` narrows the report to a single provider instead of the cross-provider join.
 
@@ -137,7 +137,7 @@ With `--health`, each site is classified as `healthy`, `fixable`, `cert_pending`
 
 #### --source porkbun
 
-Registrar inventory: all domains in the Porkbun account, regardless of whether mimeo manages them. Output fields: `domain`, `tld`, `expires`, `auto_renew`, `ns_ok` (whether NS points to Porkbun), `nameservers`. `--with-dns` includes each domain's live DNS records (doubles the API calls).
+Registrar inventory: all domains in the Porkbun account, regardless of whether mimeo manages them. Output fields: `domain`, `tld`, `expires`, `auto_renew`, `ns_ok` (whether NS points to Porkbun), `nameservers`. `--with-dns` includes each domain's Porkbun zone records (doubles the API calls); they are the live records only when `ns_ok` is true.
 
 | Task | Command |
 |:-----|:--------|

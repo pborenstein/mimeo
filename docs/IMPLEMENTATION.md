@@ -2,7 +2,7 @@
 
 Living document tracking progress on the domain landing page provisioning tool.
 
-**Last updated**: 2026-08-25
+**Last updated**: 2026-11-15
 
 ---
 
@@ -677,6 +677,11 @@ front-door verbs than it started with. See DEC-021.
         plus README and ARCHITECTURE.md references to `tepiton`
   - [ ] On a 307 from `generate`, look up the repo and report where
         it moved instead of the bare HTTP code
+- [x] `status` treats Porkbun records as live only when the
+      nameservers are Porkbun's (2026-11-15, Entry 90, DEC-037)
+- [ ] mimeo 3.0 design session: scope, entities and command sketch
+      in `docs/MIMEO3.md` (Entry 90); outcome decides the fate of
+      `docs/SITE_ADDRESS.md` and Netlify staging pass 1
 
 ---
 

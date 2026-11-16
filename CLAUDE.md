@@ -117,9 +117,14 @@ Stable facts that sessions need. Current work state lives in
 - **Orgs**: templates live in the `mimeo-templates` GitHub org
   (`github.template_org`; moved from `tepiton`, found 2026-11-02,
   Entry 89 -- the code default still says `tepiton`); site repos
-  live in the `mimeo-sites` org
-  (`github.default_org`). The exception is gilborenstein.com, whose
-  repo stays in `tepiton`.
+  default to the `mimeo-sites` org
+  (`github.default_org`), but a site can live in any account:
+  gilborenstein.com is in `tepiton`, blueberryhill.fyi in
+  `pborenstein`. `status`/`sync` only see repos under the configured
+  account.
+- **DNS**: Porkbun is the registrar. DNS is moving to Cloudflare
+  (blueberryhill.fyi, xhosi.com already delegated); Porkbun zone
+  records are live only on Porkbun nameservers (DEC-037).
 - **On disk**: template working copies and the tepiton meta-repo are
   at `~/projects/tepiton/`; site working copies are at
   `~/projects/WEBSITES/mimeo-sites/`. Older doc references to

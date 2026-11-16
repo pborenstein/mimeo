@@ -1264,3 +1264,19 @@ created nothing (it stopped before the repo existed).
 **Decisions**: none. Follow-ups in IMPLEMENTATION.md Phase 8.
 
 **Files**: CLAUDE.md (Project Facts), IMPLEMENTATION.md, CONTEXT.md.
+
+---
+
+## Entry 90: status trusts Porkbun records only on Porkbun nameservers; 3.0 design notes (2026-11-15)
+
+**What**: Fixed `status` reporting Porkbun zone records as live for domains with Cloudflare nameservers (DEC-037). Then worked out a narrower scope for a redesign, written up in `docs/MIMEO3.md`.
+
+**Why**: `mimeo status --source dns blueberryhill.fyi` showed GitHub Pages records and Porkbun NS records; the real nameservers are Cloudflare's. The fleet's DNS is moving to Cloudflare, and sites can live in any GitHub account (blueberryhill.fyi is in `pborenstein`).
+
+**How**: Every status view now checks the nameservers before using Porkbun records; 6 new tests, 411 total. Public DNS and HTTP headers showed blueberryhill.fyi and xhosi.com are proxied by Cloudflare to GitHub Pages; their real records are readable only through the Cloudflare API. The design discussion settled on four entities (domain, nameservers, DNS records, site) plus where certificates come from, and sketched `delegate`/`link`/`unlink` commands.
+
+**Correction**: the session first called blueberryhill.fyi's repo location a violation of the org model. Sites can live in any account; `CLAUDE.md` Project Facts now says so.
+
+**Decisions**: DEC-037.
+
+**Files**: `mimeo/cli/status.py`, `tests/test_status.py`, `docs/MIMEO3.md`, README.md, ARCHITECTURE.md.

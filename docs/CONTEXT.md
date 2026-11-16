@@ -1,50 +1,50 @@
 ---
 phase: 8
 phase_name: Consolidation
-updated: 2026-11-02
-last_commit: 189c75b
-last_entry: 89
+updated: 2026-11-15
+last_commit: d09c24b
+last_entry: 90
 ---
 
 ## Current Focus
 
-`create` fails with `gh: HTTP 307` because the templates moved from
-`tepiton` to `mimeo-templates` and `template_org` still says
-`tepiton` (Entry 89). Diagnosed, not yet fixed.
+Preparing a mimeo 3.0 design session. Proposed scope: mimeo connects
+a domain to the host serving its site (domain, nameservers, DNS
+records, site) and stops growing site creation. Notes, command
+sketch and open questions: `docs/MIMEO3.md`.
 
 ## Active Tasks
 
-- [ ] **Template org move**: set config `template_org`, change the
-      code default and README/ARCHITECTURE refs, report 307s as
-      "moved to X". twohorses.org is still uncreated.
-- [ ] **Netlify second host**: DNS decided (DEC-033); OD #1, #3, #6
-      decided — open: #2, #4, #5, #7, #8; staging pass 1 (repo/host
-      split) is a pure refactor, landable on its own.
-- [ ] **Command model**: `docs/SITE_ADDRESS.md` proposed,
-      undecided; more command questions queued from the user.
-- [ ] **Backlog**: CODE_REVIEW rec #6 done (DEC-035, DEC-036). Open:
-      AAAA records, undecided.
+- [ ] **3.0 design session**: work `docs/MIMEO3.md` open questions
+      into DECISIONS.md entries.
+- [ ] **Template org move** (Entry 89): config `template_org`, code
+      default, README/ARCHITECTURE refs, 307 message. twohorses.org
+      still uncreated.
+- [ ] **Netlify second host**: staging pass 1 (repo/host split) is
+      what 3.0's `SITE` argument needs; open: OD #2, #4, #5, #7, #8.
+- [ ] **Command model**: `docs/SITE_ADDRESS.md` mostly conflicts with
+      the 3.0 scope (MIMEO3.md open question 3).
+- [ ] **Backlog**: AAAA records, undecided.
 
 ## On Ice (2026-09-29, user call)
 
-- **Template apply**: Entry 68 design (open questions preserved
-      there). **Subdomain sites**: `docs/SUBDOMAINS.md`; parked.
+- **Template apply** (Entry 68). **Subdomain sites**:
+      `docs/SUBDOMAINS.md`.
 
 ## Blockers: none
 
 ## Context
 
-- Stable project facts (templates, org model, disk layout, doc
-      style, releases, tests) live in `CLAUDE.md` "Project Facts";
-      config and exit codes in `docs/ARCHITECTURE.md`.
-- Netlify design and its unverified-claims table:
-      `docs/NETLIFY.md` (Entries 72–77).
-- Template docs (incl. sub-repo decisions) live in the tepiton
-      meta-repo (`~/projects/tepiton/`), not here.
-- `pborenstein.ooo` expired 2026-10-05; parking CNAME stays (Entry 84).
+- DNS is moving to Cloudflare; blueberryhill.fyi and xhosi.com are
+      delegated and proxied to GitHub Pages. `status` now treats
+      Porkbun records as live only on Porkbun nameservers (DEC-037).
+- Sites can live in any GitHub account; `status`/`sync` only see the
+      configured one (blueberryhill.fyi shows `no repo`).
+- Stable facts: `CLAUDE.md` "Project Facts"; config and exit codes:
+      `docs/ARCHITECTURE.md`; Netlify: `docs/NETLIFY.md`.
+- Current release is 1.3.0.
 
 ## Next Session
 
-Finish the template-org move, then retry `mimeo create twohorses.org`.
-After that: `docs/SITE_ADDRESS.md` one decision at a time, or Netlify
-staging pass 1.
+Start the 3.0 design session from `docs/MIMEO3.md`: settle scope,
+then open questions one at a time, recording each as a DEC entry.

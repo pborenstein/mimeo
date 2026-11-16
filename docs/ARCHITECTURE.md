@@ -6,7 +6,7 @@ Mimeo is a CLI tool that automates the full provisioning pipeline for static lan
 
 The tool is structured around a provider abstraction that separates the registrar (DNS) and host (deployment) concerns. The current implementation supports Porkbun as the registrar and GitHub Pages as the host. The abstractions allow adding other providers without changing the core orchestration logic.
 
-Site content comes from GitHub template repositories, generated via GitHub's template repo API (`POST /repos/{owner}/{repo}/generate`). The org holding the templates is configurable (`github.template_org` in config, default `tepiton`) and is independent of the destination org (`github.default_org`) where new site repos are created. There is no local content generation step.
+Site content comes from GitHub template repositories, generated via GitHub's template repo API (`POST /repos/{owner}/{repo}/generate`). The org holding the templates is configurable (`github.template_org` in config, default `mimeo-templates`) and is independent of the destination org (`github.default_org`) where new site repos are created. There is no local content generation step.
 
 The CLI surface is five verbs: `create`, `delete`, `status`, `sync`, and `doctor`. Each of `create`, `status`, and `sync` absorbed one or more single-purpose commands from an earlier design (DEC-025); `delete` (DEC-030) completes the lifecycle as the inverse of `create`. The provider layer underneath was untouched by that collapse.
 
@@ -69,20 +69,30 @@ mimeo/
 │   │                     configure_dns: delete conflicts, create records
 │   │                     verify_dns: poll with dnspython
 │   │
+│   ├── gh.py           GhCli: the gh CLI as an API client
+│   │                     run() and api(), shared by the GitHub providers
+│   │                     Recovers the HTTP status from gh's error text
+│   │                     into HostError.status_code
+│   │
+│   ├── repo/
+│   │   └── github.py   GitHubRepoProvider (split from GitHubHost, DEC-044)
+│   │                     TEMPLATE_ORG = "mimeo-templates", DEFAULT_TEMPLATE = "mimeo"
+│   │                     (both configurable: github.template_org,
+│   │                      defaults.template in config)
+│   │                     create_from_template (force, rename recovery),
+│   │                     validate_template, get_template_repository,
+│   │                     topics, Website field, delete, rename
+│   │                     _fetch_template_manifest / _apply_template_manifest:
+│   │                     deploy-time manifest read + substitution (below)
+│   │
 │   └── host/
 │       ├── github.py   GitHub Pages provider
-│       │                 gh CLI for API calls and git authentication
 │       │                 GITHUB_PAGES_IPS constant (185.199.108-111.153)
-│       │                 TEMPLATE_ORG = "tepiton", DEFAULT_TEMPLATE = "mimeo"
-│       │                 (both configurable: github.template_org,
-│       │                  defaults.template in config)
-│       │                 Repository creation from template via GitHub API
 │       │                 Pages enable, custom domain, HTTPS enforcement
 │       │                 health_status() classifier
-│       │                 get_pages_health(), list_mimeo_repositories(),
-│       │                 get_template_repository()
-│       │                 _fetch_template_manifest / _apply_template_manifest:
-│       │                 deploy-time manifest read + substitution (below)
+│       │                 get_pages_health(), list_mimeo_repositories()
+│       │                 deploy_site / teardown_site call the repo
+│       │                 provider in `repos`, which shares the host's GhCli
 │       └── template_manifest.py  DEC-024 manifest: parse_manifest(),
 │                         apply_substitutions(), DEFAULT_DEV_PATHS
 │                         Three format handlers: string-replace,
@@ -415,7 +425,7 @@ raise ConfigurationError if missing
 return Config dataclass
 ```
 
-`github.template_org` (default `tepiton`) is the org templates are read from; `github.default_org` is the org new site repos are created in. `--template-org` and `--deploy-org` override them for one invocation.
+`github.template_org` (default `mimeo-templates`) is the org templates are read from; `github.default_org` is the org new site repos are created in. `--template-org` and `--deploy-org` override them for one invocation.
 
 `ignore_domains` only trims fleet-wide sweeps (`status --all`, `sync --all`); explicitly named domains are always processed regardless of the ignore list.
 

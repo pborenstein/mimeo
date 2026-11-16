@@ -154,7 +154,7 @@ class TestCreateCommand:
 
         mock_config_load.assert_called_once()
         mock_host_class.assert_called_with(
-            default_org="testuser", template_org="tepiton"
+            default_org="testuser", template_org="mimeo-templates"
         )
         mock_host.deploy_site.assert_called_once()
         mock_host.required_dns_records.assert_called_once_with("example.com")
@@ -536,7 +536,7 @@ class TestCreateCommand:
 
         assert result.exit_code == 0
         mock_host_class.assert_called_with(
-            default_org="testuser", template_org="tepiton"
+            default_org="testuser", template_org="mimeo-templates"
         )
 
     @patch("mimeo.config.Config.load")

@@ -48,7 +48,7 @@ These options go before the subcommand and apply to every command.
 | Option | Effect | Default |
 |:-------|:-------|:--------|
 | `--log-format text` <br> `--log-format json` | Log format for diagnostic output on stderr | `text` |
-| `--template-org ORG` | Org holding template repositories | `github.template_org` (`tepiton`) |
+| `--template-org ORG` | Org holding template repositories | `github.template_org` (`mimeo-templates`) |
 | `--deploy-org ORG` | GitHub user/org where site repositories are created | `github.default_org` (required) |
 
 Templates and sites live in different places: the template org holds the repositories `create` copies from, while the deploy org — usually your username — is where new site repositories land. The two need not match; pass `--template-org` or `--deploy-org` to override either for a single invocation:

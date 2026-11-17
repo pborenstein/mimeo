@@ -34,6 +34,7 @@ _CSV_FIELDS = [
     "changes",
     "problems",
     "fixes",
+    "notes",
     "error",
 ]
 
@@ -61,6 +62,11 @@ def _dns_label(row: Dict[str, Any]) -> str:
     return f"{dns}*" if row.get("proxied") else dns
 
 
+def _registered_elsewhere(row: Dict[str, Any]) -> bool:
+    """True for a hostname outside the registrar account that DNS answers for."""
+    return row.get("registered") is False and bool(row.get("nameservers"))
+
+
 def _text(rows: List[Dict[str, Any]], detail: bool) -> None:
     if not rows:
         click.echo("Nothing to report.")
@@ -86,7 +92,8 @@ def _text(rows: List[Dict[str, Any]], detail: bool) -> None:
         fixable += bool(row["fixable"])
         proxied = proxied or bool(row.get("proxied"))
 
-        click.echo(f"  {row['hostname']:<{host_w}}  {(row['expires'] or '-'):<10}  ", nl=False)
+        expires = row["expires"] or ("elsewhere" if _registered_elsewhere(row) else "-")
+        click.echo(f"  {row['hostname']:<{host_w}}  {expires:<10}  ", nl=False)
         dns_color = {"external": "cyan", "none": "red"}.get(row["dns"] or "", None)
         click.secho(f"{_dns_label(row):<{dns_w}}", fg=dns_color, nl=False)
         click.echo("  ", nl=False)
@@ -233,6 +240,7 @@ def status(
             flat["changes"] = "|".join(row["changes"])
             flat["problems"] = "|".join(row["problems"])
             flat["fixes"] = "|".join(row["fixes"])
+            flat["notes"] = "|".join(row["notes"])
             return [flat]
 
         detail = bool(hostnames) or problems or with_records

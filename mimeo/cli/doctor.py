@@ -120,7 +120,7 @@ def _check_pages_ips() -> tuple[bool, str, str]:
     return True, f"all {len(hardcoded)} listed by GitHub", ""
 
 
-def _check_nameservers(domain: str) -> tuple[bool, str, str]:
+def _check_nameservers(domain: str, cloudflare_configured: bool = False) -> tuple[bool, str, str]:
     """Check that a domain's nameservers belong to a DNS provider mimeo can write to."""
     from ..providers.registrar.porkbun import lookup_nameservers
     ns = lookup_nameservers(domain)
@@ -129,7 +129,13 @@ def _check_nameservers(domain: str) -> tuple[bool, str, str]:
     if all(n.endswith(".porkbun.com") for n in ns):
         return True, "porkbun", ""
     if all(n.endswith(".ns.cloudflare.com") for n in ns):
-        return True, "cloudflare (needs [cloudflare] api_token in config)", ""
+        if cloudflare_configured:
+            return True, "cloudflare", ""
+        return (
+            False,
+            "cloudflare",
+            "Add a [cloudflare] section with api_token to the config so mimeo can write the records.",
+        )
     return (
         False,
         ", ".join(ns),
@@ -248,8 +254,11 @@ def doctor(config: Path | None, domains: tuple[str, ...]) -> None:
         if cfg.cloudflare_api_token:
             checks.append(("Cloudflare token", lambda: _check_cloudflare_credentials(loaded)))
 
+    cloudflare_configured = bool(cfg and cfg.cloudflare_api_token)
     for domain in domains:
-        checks.append((f"NS: {domain}", lambda d=domain: _check_nameservers(d)))
+        checks.append(
+            (f"NS: {domain}", lambda d=domain: _check_nameservers(d, cloudflare_configured))
+        )
 
     all_ok = True
     if log_format == "text":

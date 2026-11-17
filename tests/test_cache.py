@@ -40,3 +40,20 @@ def test_corrupt_file_is_an_empty_cache(tmp_path: Path) -> None:
     path = tmp_path / "sites.json"
     path.write_text("{not json")
     assert SiteCache(path).hostnames() == []
+
+
+def test_cache_records_the_organizations_it_was_built_from(tmp_path: Path) -> None:
+    path = tmp_path / "sites.json"
+    SiteCache(path).replace({}, organizations=["b", "a"])
+    reloaded = SiteCache(path)
+    assert reloaded.organizations == ["a", "b"]
+    assert reloaded.covers(["a", "b"])
+    assert not reloaded.covers(["a", "b", "c"])
+
+
+def test_cache_from_before_organizations_were_recorded_covers_nothing(tmp_path: Path) -> None:
+    path = tmp_path / "sites.json"
+    path.write_text('{"scanned_at": "2026-11-17T00:00:00+00:00", "sites": {}}')
+    cache = SiteCache(path)
+    assert cache.scanned
+    assert not cache.covers(["a"])

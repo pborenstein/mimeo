@@ -91,6 +91,8 @@ class Host(ABC):
     """A hosting provider: serves sites and links each to a hostname."""
 
     name: str
+    # The organizations or accounts `scan` searches.
+    organizations: list[str]
 
     @abstractmethod
     def find_site(self, hostname: str) -> Site | None:

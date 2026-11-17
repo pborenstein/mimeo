@@ -145,8 +145,16 @@ class Fleet:
             first claim for each.
         """
         found = self.host.scan()
-        self.cache.replace({hostname: sites[0] for hostname, sites in found.items()})
+        self.cache.replace(
+            {hostname: sites[0] for hostname, sites in found.items()},
+            organizations=self.host.organizations,
+        )
         return {hostname: sites for hostname, sites in found.items() if len(sites) > 1}
+
+    @property
+    def cache_current(self) -> bool:
+        """True when the cache was filled by a scan of the organizations listed now."""
+        return self.cache.covers(self.host.organizations)
 
     def site_for(
         self, hostname: str, search: bool = True, thorough: bool = False
@@ -157,7 +165,8 @@ class Fleet:
         host disagrees. With `search`, a hostname with no confirmed pair
         is then looked for in the default places (Host.find_site), and
         after that by a full scan when the cache has never been filled
-        by one, or when `thorough` is set. A fleet-wide run passes
+        by one or was filled from a different list of organizations, or when
+        `thorough` is set. A fleet-wide run passes
         search=False and relies on the scan that filled the cache.
 
         Args:
@@ -175,7 +184,7 @@ class Fleet:
         if not search:
             return None, None
         found = self.host.find_site(hostname)
-        if found is None and (thorough or not self.cache.scanned):
+        if found is None and (thorough or not self.cache_current):
             self.rescan()
             found = self.cache.get(hostname)
         if found is None:

@@ -32,6 +32,9 @@ class SiteCache:
         self._lock = threading.Lock()
         self._sites: Dict[str, Site] = {}
         self.scanned_at: str | None = None
+        # The organizations the last scan covered; None for a cache
+        # written before this was recorded.
+        self.organizations: list[str] | None = None
         self._load()
 
     def _load(self) -> None:
@@ -39,6 +42,8 @@ class SiteCache:
         try:
             data: Dict[str, Any] = json.loads(self.path.read_text())
             self.scanned_at = data.get("scanned_at")
+            orgs = data.get("organizations")
+            self.organizations = sorted(str(o) for o in orgs) if isinstance(orgs, list) else None
             self._sites = {
                 str(hostname): Site.parse(str(ref))
                 for hostname, ref in (data.get("sites") or {}).items()
@@ -46,11 +51,13 @@ class SiteCache:
         except (OSError, ValueError, AttributeError):
             self._sites = {}
             self.scanned_at = None
+            self.organizations = None
 
     def _save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "scanned_at": self.scanned_at,
+            "organizations": self.organizations,
             "sites": {h: str(s) for h, s in sorted(self._sites.items())},
         }
         tmp = self.path.with_suffix(".tmp")
@@ -61,6 +68,10 @@ class SiteCache:
     def scanned(self) -> bool:
         """True once a full scan has filled the cache."""
         return self.scanned_at is not None
+
+    def covers(self, organizations: list[str]) -> bool:
+        """True when the last full scan covered exactly these organizations."""
+        return self.scanned and self.organizations == sorted(organizations)
 
     def get(self, hostname: str) -> Site | None:
         """The cached site for a hostname, if any."""
@@ -86,9 +97,10 @@ class SiteCache:
             if self._sites.pop(hostname, None) is not None:
                 self._save()
 
-    def replace(self, sites: Dict[str, Site]) -> None:
-        """Replace the whole cache with the result of a scan."""
+    def replace(self, sites: Dict[str, Site], organizations: list[str] | None = None) -> None:
+        """Replace the whole cache with the result of a scan of these organizations."""
         with self._lock:
             self._sites = dict(sites)
+            self.organizations = sorted(organizations) if organizations is not None else None
             self.scanned_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
             self._save()

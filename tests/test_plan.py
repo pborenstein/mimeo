@@ -436,3 +436,45 @@ class TestDomainIsGone:
         self._site_without_domain(world, [])
         unlink(world.fleet, "gone.com")
         assert world.host.sites["sites/gone.com"].custom_domain is None
+
+
+class TestRegisteredElsewhere:
+    def test_site_registered_elsewhere_is_judged_on_its_certificate_with_a_note(
+        self, world: World
+    ) -> None:
+        site = world.host.add("sites/away.com", "away.com")
+        world.cache.set("away.com", site)
+        world.fleet.lookup = lambda name: ["ns1.elsewhere.net", "ns2.elsewhere.net"]
+        _, plan = _plan(world, "away.com")
+        assert plan.records == "external"
+        assert plan.site == "ok"
+        assert not plan.has_problem
+        assert plan.notes == [
+            "away.com is not in this registrar account. Its nameservers are"
+            " ns1.elsewhere.net, ns2.elsewhere.net, so mimeo cannot read or change its records."
+        ]
+
+    def test_certificate_steps_for_a_site_registered_elsewhere_do_not_say_lapsed(
+        self, world: World
+    ) -> None:
+        site = world.host.add("sites/away.com", "away.com", cert_state="bad_authz")
+        world.cache.set("away.com", site)
+        world.fleet.lookup = lambda name: ["ns1.elsewhere.net"]
+        _, plan = _plan(world, "away.com")
+        assert plan.fixes[0].startswith("away.com is registered outside this account.")
+        assert "lapsed" not in " ".join(plan.fixes)
+
+
+class TestCacheOrganizations:
+    def test_changing_the_organizations_makes_a_miss_rescan(self, world: World) -> None:
+        world.fleet.rescan()
+        assert world.fleet.cache_current
+        scans = world.host.scans
+        world.host.organizations = ["sites", "other", "third"]
+        assert not world.fleet.cache_current
+        # A repo not named after the hostname is found only by a scan.
+        world.host.add("third/portfolio", "new.com")
+        site, _ = world.fleet.site_for("new.com")
+        assert site == Site("github", "third/portfolio")
+        assert world.host.scans > scans
+        assert world.fleet.cache_current

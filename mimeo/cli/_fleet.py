@@ -64,8 +64,13 @@ def targets_for(
     if hostnames:
         return [h.lower() for h in hostnames], True
 
-    if not fleet.cache.scanned:
-        click.secho("Looking for sites in every listed organization (first run)...", dim=True, err=True)
+    if not fleet.cache_current:
+        why = (
+            "the list of organizations changed"
+            if fleet.cache.scanned
+            else "first run"
+        )
+        click.secho(f"Looking for sites in every listed organization ({why})...", dim=True, err=True)
         report_duplicates(fleet.rescan())
 
     everything = fleet.hostnames()
@@ -108,10 +113,12 @@ def _record_dict(record: DNSRecord) -> Dict[str, Any]:
 def result_row(conn: Connection, plan: Plan, with_records: bool = False) -> Dict[str, Any]:
     """Flatten a Connection and its Plan into one output row."""
     registration = conn.registration or {}
+    dns: str | None
     if conn.dns is not None:
         dns = conn.dns.name
     elif conn.zone is None:
-        dns = None
+        # Registered outside this account: say whether DNS answers for it.
+        dns = "external" if conn.public_nameservers else None
     else:
         dns = "external" if conn.nameservers else "none"
     state = conn.state
@@ -123,7 +130,7 @@ def result_row(conn: Connection, plan: Plan, with_records: bool = False) -> Dict
         "auto_renew": (
             registration.get("autoRenew") in ("1", 1, True) if registration and not conn.label else None
         ),
-        "nameservers": conn.nameservers,
+        "nameservers": conn.nameservers or conn.public_nameservers or [],
         "dns": dns,
         "proxied": plan.proxied,
         "records": plan.records,
@@ -138,6 +145,7 @@ def result_row(conn: Connection, plan: Plan, with_records: bool = False) -> Dict
         "problems": list(plan.problems),
         "fixes": list(plan.fixes),
         "fixes_are_choices": plan.fixes_are_choices,
+        "notes": list(plan.notes),
         "has_problem": plan.has_problem,
         "fixable": plan.fixable,
         "error": None,
@@ -148,7 +156,9 @@ def result_row(conn: Connection, plan: Plan, with_records: bool = False) -> Dict
 
 
 def echo_problems(row: Dict[str, Any], color: str) -> None:
-    """Print what is wrong with a hostname and the steps that fix it."""
+    """Print notes about a hostname, what is wrong with it, and the steps that fix it."""
+    for note in row.get("notes") or []:
+        click.secho(f"      note: {note}", dim=True)
     for problem in row.get("problems") or []:
         click.secho(f"      problem: {problem}", fg=color)
     fixes = row.get("fixes") or []
@@ -184,6 +194,7 @@ def error_row(hostname: str, exc: BaseException, category: str) -> Dict[str, Any
         "changes": [],
         "problems": [],
         "fixes": [],
+        "notes": [],
         "has_problem": True,
         "fixable": False,
         "error": str(exc),

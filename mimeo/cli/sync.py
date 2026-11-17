@@ -19,7 +19,7 @@ from ._processing import (
 )
 
 
-def _text(rows: List[Dict[str, Any]]) -> None:
+def _text(rows: List[Dict[str, Any]], dry_run: bool = False) -> None:
     if not rows:
         click.echo("Nothing to sync.")
         return
@@ -48,8 +48,9 @@ def _text(rows: List[Dict[str, Any]]) -> None:
 
     click.echo()
     already_ok = len(rows) - changed - skipped - errors
+    verb = "would change" if dry_run else "changed"
     click.secho(
-        f"{len(rows)} hostname(s): {changed} changed, {already_ok} unchanged, "
+        f"{len(rows)} hostname(s): {changed} {verb}, {already_ok} unchanged, "
         f"{skipped} skipped, {errors} errors; {unresolved} with problems sync cannot fix",
         fg="green" if errors == 0 else "yellow",
     )
@@ -198,7 +199,7 @@ def sync(
             output_format,
             csv_fields=["hostname", "actions", "problems", "fixes", "skipped", "error"],
             csv_rows=_csv_rows,
-            text=_text,
+            text=lambda rows: _text(rows, dry_run),
         )
         exit_on_errors(results)
     except Exception as e:

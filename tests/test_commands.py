@@ -167,6 +167,13 @@ class TestSync:
         row = json.loads(run(sync, "example.com", "--format", "json").output)[0]
         assert row["actions"] == ["enforce HTTPS"]
 
+    def test_dry_run_summary_says_would_change(self, run: Any, world: World) -> None:
+        world.register("example.com")
+        world.host.add("sites/example.com", "example.com")
+        result = run(sync, "example.com", "--dry-run")
+        assert "1 hostname(s): 1 would change, 0 unchanged" in result.output
+        assert " 1 changed," not in result.output
+
     def test_unfixable_problem_is_reported(self, run: Any, world: World) -> None:
         world.registrar.ns["example.com"] = ["ns1.somewhere.else"]
         world.host.add("sites/example.com", "example.com", cert_state="bad_authz")

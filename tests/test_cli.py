@@ -234,6 +234,15 @@ class TestDoctorHelpers:
         assert "cannot write" in fix
 
     @patch("mimeo.providers.registrar.porkbun.lookup_nameservers")
+    def test_check_nameservers_cloudflare(self, mock_lookup: Any) -> None:
+        """Cloudflare passes when a token is configured and fails without one."""
+        mock_lookup.return_value = ["abby.ns.cloudflare.com", "valentin.ns.cloudflare.com"]
+        assert _check_nameservers("example.com", cloudflare_configured=True) == (True, "cloudflare", "")
+        ok, detail, fix = _check_nameservers("example.com")
+        assert ok is False
+        assert "[cloudflare]" in fix
+
+    @patch("mimeo.providers.registrar.porkbun.lookup_nameservers")
     def test_check_nameservers_empty(self, mock_lookup: Any) -> None:
         """_check_nameservers fails when no NS records are found."""
         mock_lookup.return_value = []
@@ -428,7 +437,7 @@ class TestDoctorCommand:
         assert "NS: example.com" in result.output
         assert "porkbun" in result.output
         assert "All checks passed" in result.output
-        mock_ns.assert_called_once_with("example.com")
+        mock_ns.assert_called_once_with("example.com", False)
 
     @patch(f"{_DOCTOR}._check_nameservers")
     def test_doctor_ns_check_mismatch(

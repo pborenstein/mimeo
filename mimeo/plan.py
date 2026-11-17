@@ -50,6 +50,8 @@ class Plan:
     fixes: list[str] = field(default_factory=list)
     # True when the fixes are alternatives to pick one from, not steps.
     fixes_are_choices: bool = False
+    # Things worth saying that are not problems.
+    notes: list[str] = field(default_factory=list)
     # ok, missing, extra, external, unknown; None when there is nothing to compare.
     records: str | None = None
     # ok, fixable, pending, no cert, cert error, expiring, no pages, no domain;
@@ -113,6 +115,15 @@ def compare(conn: Connection, host: Host, today: date | None = None) -> Plan:
     if conn.zone is None and conn.public_nameservers == []:
         _domain_is_gone(conn, plan)
         return plan
+    if conn.zone is None and conn.public_nameservers:
+        # Registered outside this account but answering in DNS: the
+        # records cannot be read from here, the certificate still can.
+        plan.records = "external"
+        plan.notes.append(
+            f"{conn.hostname} is not in this registrar account. Its nameservers are"
+            f" {', '.join(conn.public_nameservers)}, so mimeo cannot read or change its"
+            " records."
+        )
 
     _compare_records(conn, host, plan)
     _compare_site(conn, plan, today)
@@ -365,7 +376,12 @@ def _certificate_steps(conn: Connection, plan: Plan) -> list[str]:
     domain = conn.state.custom_domain or name
     steps: list[str] = []
 
-    if conn.zone is None:
+    if conn.zone is None and conn.public_nameservers:
+        steps.append(
+            f"{name} is registered outside this account. Wherever its DNS is managed,"
+            f" make sure {name} points at the site, then continue."
+        )
+    elif conn.zone is None:
         steps.append(
             f"{name} is not in the registrar account, so its DNS cannot be read from here."
             f" If the registration lapsed and you do not want it back, open"

@@ -369,3 +369,74 @@ including tequitl.dev served by `pborenstein/twohorses`). Not run
 live: anything that writes, the Cloudflare provider, `delegate`, and
 Porkbun's DNSSEC lookup. The items under "To Verify at
 Implementation" are still unverified.
+
+### Since first live use (2026-11-16 to 2026-11-17)
+
+2.0 was merged to `main` on 2026-11-17. Live use changed four things
+(Entries 93 and 94).
+
+- **A problem is reported with what to do about it** (DEC-048). The
+  table under "What `status` Reports" has a "Fixed by `sync`" column
+  and nothing for the rows that say no. Each such problem is now a
+  sentence followed by steps, built from what was read: the hostname,
+  the commands, the settings page to open, the records to change.
+  Steps to do in order are numbered under `to fix:`; alternatives are
+  listed under `do one of:`. In JSON and CSV they are the `fixes`
+  field.
+- **`sync` fixes certificate trouble** (DEC-048, DEC-050). The table
+  says a certificate that is not issued, in an error state or
+  expiring is not fixed by `sync`, and the paragraph under it says
+  mimeo does not act on a failed renewal behind the proxy. Both are
+  superseded. When the zone can be written and the records are right,
+  `sync` removes the custom domain and sets it again, which is when
+  GitHub requests a certificate. When the site's records are proxied
+  it first switches them to DNS-only, waits up to 15 minutes for the
+  certificate, and switches the same records back. That sequence is
+  the only time mimeo changes a proxy setting; the rest of DEC-043
+  stands. When the records are wrong, one run fixes them and a later
+  run requests the certificate. By-hand steps remain for a zone mimeo
+  cannot write.
+- **A site whose domain is gone is its own finding**, `no domain`
+  (DEC-048). For a site whose hostname is not at the registrar, mimeo
+  asks public DNS for nameservers. With none, the registration has
+  most likely lapsed, the certificate is not judged, and the choices
+  offered are about the repository: `unlink`, `delete`, transfer, or
+  register again. When the lookup cannot be made, nothing is
+  concluded. A hostname not at the registrar that does answer in DNS
+  is judged on its certificate alone.
+- **`delegate` asks before a move that would stop a service**
+  (DEC-051). The design has `delegate` copy every record and switch.
+  Some records point at a service the provider runs only for zones it
+  serves (Cloudflare Email Routing, Cloudflare's proxy), and copying
+  the record does not move the service. `delegate` lists these and
+  asks; `--yes` skips the question; `create` leaves such a zone where
+  it is.
+- **Requests to Porkbun are spaced 0.25 seconds apart** and retried
+  five times (DEC-049), after fleet sweeps lost single domains to
+  503s.
+
+Run live since the paragraph above was written: `scan` (73 sites),
+`sync` on 61 Porkbun-served sites, certificate requests on five
+sites, `delegate` of 002370.xyz to Cloudflare and back, `unlink` and
+`delete` on two sites whose domains had lapsed, and the proxy
+sequence on 002370.xyz while its certificate was still valid. Not
+run live: `sync` removing a record on Cloudflare, `sync` adding a
+record at a name that is already proxied, and the proxy sequence
+against a renewal that has actually failed.
+
+The items under "To Verify at Implementation", as of 2026-11-17:
+
+- **Zone creation.** `delegate` created a Cloudflare zone with the
+  account ID set and a token holding Zone: Edit (2026-11-16). Zone:
+  Read and DNS: Edit cover reading and writing records.
+- **Record import.** On that one zone Cloudflare imported nothing on
+  its own: `delegate` copies only records that are not already there,
+  and it copied all nine.
+- **DNSSEC.** The lookup ran on both moves and reported DNSSEC off,
+  which was correct. How Porkbun reports it as on is still not seen.
+- **AAAA records and certificates.** Adding four AAAA records to 61
+  sites with issued certificates left every certificate approved.
+  How long issuance takes on a domain that starts with both was not
+  measured apart from box350.org, approved within 20 seconds of the
+  request.
+

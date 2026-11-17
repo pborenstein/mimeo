@@ -9,8 +9,8 @@ last_entry: 94
 ## Current Focus
 
 mimeo 2.0 (2.0.0b1) is in live use and was merged to `main` and
-pushed on 2026-11-17. It is not tagged or released. Every site reads `ok`. `sync` now fixes certificate
-trouble itself and `delegate` asks before stopping a service.
+pushed on 2026-11-17. It is not tagged or released. Every site reads
+`ok`. `docs/TROUBLESHOOTING.md` is rewritten for 2.0.
 
 ## Active Tasks
 
@@ -19,17 +19,17 @@ trouble itself and `delegate` asks before stopping a service.
       of DEC-050 on a real failure.
 - [ ] **Not yet run live**: `sync` writing records to a Cloudflare
       zone. (The move back to Porkbun ran 2026-11-17.)
-- [ ] **Auto-renew is off** for tequitl.dev (has a live site) and
-      tequitl.agency, expiring 2026-12-06, and for ayeye.dev and
-      ayeye.rodeo, expiring 2026-11-27. Read 2026-11-17.
+- [ ] **tequitl.dev is being left to expire** (2026-12-06, decided
+      2026-11-17). Its site is `pborenstein/twohorses`; when `status`
+      shows it as `no domain`, pick unlink, delete or move.
 - [ ] **Unverified vendor facts** behind `delegate`'s warnings: Email
       Routing and Porkbun mail forwarding (DEC-051).
 - [ ] **Small fixes**: `sync --dry-run` says "N changed"; `status`
       shows only dashes for spacemang.com and spacemang.org.
 - [ ] **Cache**: record the organizations it was built from.
 - [ ] **mimeo.lol** returns GitHub's 404 (repo has no custom domain).
-- [ ] **Release** (1.4.0 is `62eeff7`); `docs/TROUBLESHOOTING.md` and
-      `docs/MIMEO2_DESIGN.md` "As Built" predate Entry 93.
+- [ ] **Release** (1.4.0 is `62eeff7`); `docs/MIMEO2_DESIGN.md`
+      "As Built" predates Entry 93.
 
 ## Blockers: none
 
@@ -44,5 +44,5 @@ trouble itself and `delegate` asks before stopping a service.
 
 ## Next Session
 
-Rewrite `docs/TROUBLESHOOTING.md` for 2.0. Decide on renewing
-tequitl.dev. Then the 2.0.0 release.
+Bring `docs/MIMEO2_DESIGN.md` "As Built" up to DEC-048 to DEC-051,
+then decide the 2.0.0 release.

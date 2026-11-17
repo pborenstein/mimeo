@@ -738,13 +738,16 @@ front-door verbs than it started with. See DEC-021.
         for mellowtimesphere.com, mellowtimesphere.org and orobia.net;
         off for ayeye.dev and ayeye.rodeo (expire 2026-11-27) and for
         tequitl.dev and tequitl.agency (expire 2026-12-06). tequitl.dev
-        has a live site. Decide whether to renew
+        has a live site (`pborenstein/twohorses`). Decided 2026-11-17:
+        tequitl.dev is left to expire. Once it is out of the Porkbun
+        account and out of DNS, `status` will show the site as
+        `no domain` with the choices for the repository
   - [ ] Verify the vendor facts listed in `docs/MIMEO2_DESIGN.md` "To
         Verify at Implementation" (token permissions for reading are
         verified, Entry 92; zone creation and record copy by `delegate`
         ran live, Entry 93; the rest are not checked off there yet)
   - [ ] Extend the smoke script to cover `delegate` to Cloudflare and back
-  - [ ] `docs/TROUBLESHOOTING.md` still describes 1.x commands
+  - [x] `docs/TROUBLESHOOTING.md` rewritten for 2.0 (2026-11-17)
   - [ ] Decide the release: 1.4.0 from `62eeff7`, 2.0.0 from the branch
         tip (version is 2.0.0b1 until then)
 - [x] xhosi.com: certificate renewed 2026-11-17 by the by-hand steps

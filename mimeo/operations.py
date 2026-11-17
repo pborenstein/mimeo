@@ -291,9 +291,15 @@ def delegate(
 
     if dry_run:
         outcome.notes += [f"would stop: {stop}" for stop in outcome.stops]
-        if not target.zone_exists(zone):
+        # Like the real run, list only what is not at the target already.
+        already: set[tuple[str, str, str]] = set()
+        if target.zone_exists(zone):
+            already = {r.key() for r in target.list_records(zone)}
+        else:
             outcome.actions.append(f"would create zone {zone} at {target.name}")
-        outcome.actions += [f"would copy {r.describe()}" for r in copyable]
+        outcome.actions += [
+            f"would copy {r.describe()}" for r in copyable if r.key() not in already
+        ]
         outcome.actions.append(f"would set the nameservers of {zone} to {target.name}'s")
         return outcome
 

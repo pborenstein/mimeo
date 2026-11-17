@@ -173,6 +173,14 @@ class TestDelegate:
         assert "example.com" not in world.cf.zones
         assert world.registrar.ns["example.com"] == world.pb.nameserver_names
 
+    def test_dry_run_lists_only_what_the_target_lacks(self, world: World) -> None:
+        self._zone_with_mail(world)
+        delegate(world.fleet, "example.com", "cf")
+        delegate(world.fleet, "example.com", "pb")
+        outcome = delegate(world.fleet, "example.com", "cf", dry_run=True)
+        assert [a for a in outcome.actions if a.startswith("would copy")] == []
+        assert outcome.actions == ["would set the nameservers of example.com to cf's"]
+
     def test_already_there(self, world: World) -> None:
         world.register("example.com", world.cf)
         outcome = delegate(world.fleet, "example.com", "cf")

@@ -181,7 +181,7 @@ class CloudflareDNS(DNSProvider):
         Cloudflare's Email Routing docs: "It is available to all
         Cloudflare customers using Cloudflare as an authoritative
         nameserver" (https://developers.cloudflare.com/email-routing/,
-        checked 2026-11-18). A proxied record is answered by Cloudflare
+        checked 2026-11-17). A proxied record is answered by Cloudflare
         itself, so the copy elsewhere is a plain record.
         """
         stops: list[str] = []

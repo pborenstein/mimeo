@@ -201,7 +201,7 @@ Some records point at a service the current provider runs only for zones it serv
 | Cloudflare | MX pointing at `mx.cloudflare.net` | Cloudflare Email Routing: incoming mail |
 | Cloudflare | Any proxied record | Cloudflare's proxy for those names, with whatever is set up on it |
 
-Cloudflare's docs say Email Routing "is available to all Cloudflare customers using Cloudflare as an authoritative nameserver" ([Email Routing](https://developers.cloudflare.com/email-routing/), checked 2026-11-18). Porkbun's mail forwarding is not on the list: Porkbun's guide says it works with DNS hosted elsewhere as long as the MX records point at `fwd1.porkbun.com` and `fwd2.porkbun.com` ([kb.porkbun.com/article/47](https://kb.porkbun.com/article/47-how-to-use-porkbun-email-when-your-dns-is-hosted-elsewhere), checked 2026-11-18), and `delegate` copies them.
+Cloudflare's docs say Email Routing "is available to all Cloudflare customers using Cloudflare as an authoritative nameserver" ([Email Routing](https://developers.cloudflare.com/email-routing/), checked 2026-11-17). Porkbun's mail forwarding is not on the list: Porkbun's guide says it works with DNS hosted elsewhere as long as the MX records point at `fwd1.porkbun.com` and `fwd2.porkbun.com` ([kb.porkbun.com/article/47](https://kb.porkbun.com/article/47-how-to-use-porkbun-email-when-your-dns-is-hosted-elsewhere), checked 2026-11-17), and `delegate` copies them.
 
 #### Refusals
 

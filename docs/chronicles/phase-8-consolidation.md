@@ -1415,9 +1415,9 @@ created nothing (it stopped before the repo existed).
 
 **Files**: `README.md`, `CHANGELOG.md`, `docs/TROUBLESHOOTING.md`, `docs/MIMEO2_DESIGN.md`, `pyproject.toml`, `mimeo/__init__.py`, `uv.lock`.
 
-## Entry 96: the open small tasks (2026-11-18)
+## Entry 96: the open small tasks (2026-11-17)
 
-**What**: Closed five of the six small open tasks from CONTEXT.md. 428 tests pass.
+**What**: Closed the six small open tasks from CONTEXT.md. 428 tests pass.
 
 **How**:
 
@@ -1428,7 +1428,7 @@ created nothing (it stopped before the repo existed).
 - `scripts/e2e_smoke.sh DOMAIN` written and run on 002370.xyz: Cloudflare to Porkbun to Cloudflare, `ok` at each step. `CLAUDE.md` had described the script before it existed.
 - Found while running it: `doctor DOMAIN` said a Cloudflare-served domain "needs [cloudflare] api_token in config" even with a token. It now passes with a token and fails without one.
 
-**Open**: mimeo.lol, which needs a decision about what it should serve.
+- mimeo.lol: the user chose a new site. `mimeo create mimeo.lol` moved the zone to Cloudflare (`defaults.dns`), created `mimeo-sites/mimeo.lol` from the `mimeo` template, linked it, and replaced the `www` CNAME (`pborenstein.github.io` to `mimeo-sites.github.io`). The certificate was approved at the first look; `https://mimeo.lol` answers 200.
 
 **Decisions**: DEC-052.
 

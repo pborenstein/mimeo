@@ -160,7 +160,7 @@ Each message says why. The table adds what to do.
 | `delegate` | `was not moved. Moving it to ... would stop:` | The question was answered no, or there was no terminal to ask on | Same |
 | `delete` | HTTP 403 on deleting the repository | The `gh` token lacks the `delete_repo` scope | `gh auth refresh -h github.com -s delete_repo` |
 
-`delegate` warns about two services only: Cloudflare Email Routing and Cloudflare proxied records. Anything else that depends on the old provider moves without a question. Cloudflare's docs say Email Routing needs Cloudflare as the authoritative nameserver. Porkbun's mail forwarding is not warned about, because Porkbun's guide says it keeps working with DNS elsewhere when the MX records still point at Porkbun, and `delegate` copies them (both checked 2026-11-18).
+`delegate` warns about two services only: Cloudflare Email Routing and Cloudflare proxied records. Anything else that depends on the old provider moves without a question. Cloudflare's docs say Email Routing needs Cloudflare as the authoritative nameserver. Porkbun's mail forwarding is not warned about, because Porkbun's guide says it keeps working with DNS elsewhere when the MX records still point at Porkbun, and `delegate` copies them (both checked 2026-11-17).
 
 ## mimeo cannot find a site
 

@@ -964,11 +964,11 @@ Known cases: Cloudflare MX records at `mx.cloudflare.net` (Email Routing); any p
 
 ---
 
-### DEC-052: Porkbun Mail Is Not a Service `delegate` Warns About (2026-11-18)
+### DEC-052: Porkbun Mail Is Not a Service `delegate` Warns About (2026-11-17)
 
 **Status**: Active (Phase 8). Narrows DEC-051.
 
-**Context**: DEC-051 listed three services a move could stop and marked two of its vendor facts unverified. Checked 2026-11-18:
+**Context**: DEC-051 listed three services a move could stop and marked two of its vendor facts unverified. Checked 2026-11-17:
 
 - Cloudflare's [Email Routing docs](https://developers.cloudflare.com/email-routing/): "It is available to all Cloudflare customers using Cloudflare as an authoritative nameserver." The Email Routing warning stands.
 - Porkbun's guide [How to use Porkbun email when your DNS is hosted elsewhere](https://kb.porkbun.com/article/47-how-to-use-porkbun-email-when-your-dns-is-hosted-elsewhere) says forwarding works with DNS elsewhere when the MX records point at `fwd1.porkbun.com` and `fwd2.porkbun.com`.

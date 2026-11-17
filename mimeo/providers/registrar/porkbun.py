@@ -303,7 +303,7 @@ class PorkbunDNSProvider(_PorkbunClient, DNSProvider):
     # zone is served elsewhere, as long as the MX records still point at
     # fwd1/fwd2.porkbun.com, and delegate copies them. Porkbun's guide
     # "How to use Porkbun email when your DNS is hosted elsewhere",
-    # https://kb.porkbun.com/article/47 (checked 2026-11-18).
+    # https://kb.porkbun.com/article/47 (checked 2026-11-17).
 
     def __enter__(self) -> "PorkbunDNSProvider":
         return self

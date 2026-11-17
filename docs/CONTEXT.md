@@ -1,8 +1,8 @@
 ---
 phase: 8
 phase_name: Consolidation
-updated: 2026-11-18
-last_commit: 274ae0b
+updated: 2026-11-17
+last_commit: 3c319fb
 last_entry: 96
 ---
 
@@ -10,7 +10,7 @@ last_entry: 96
 
 mimeo 2.0.0 was released from `main` on 2026-11-17 (tag `v2.0.0`, the
 repository's first tag). It is in live use and every site reads `ok`.
-README, TROUBLESHOOTING and the design's As Built match 2.0 (Entry 95).
+The small open tasks are closed (Entry 96); mimeo.lol has a new site.
 
 ## Active Tasks
 
@@ -20,9 +20,6 @@ README, TROUBLESHOOTING and the design's As Built match 2.0 (Entry 95).
 - [ ] **tequitl.dev is being left to expire** (2026-12-06, decided
       2026-11-17). Its site is `pborenstein/twohorses`; when `status`
       shows it as `no domain`, pick unlink, delete or move.
-- [ ] **mimeo.lol** returns GitHub's 404: no repository has it as its
-      custom domain since `pborenstein/mimeo.lol` became
-      `mimeo-templates/mimeo`. Needs a decision on what it serves.
 
 ## Blockers: none
 

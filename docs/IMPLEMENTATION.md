@@ -722,7 +722,7 @@ front-door verbs than it started with. See DEC-021.
         for failed and expiring certificates (DEC-050, Entry 94)
   - [x] `delegate` asks before a move that would stop a service
         (DEC-051, Entry 94)
-  - [x] Vendor facts behind `delegate`'s warnings checked 2026-11-18:
+  - [x] Vendor facts behind `delegate`'s warnings checked 2026-11-17:
         Email Routing needs Cloudflare nameservers; Porkbun forwarding
         does not (DEC-052)
   - [x] `delegate 002370.xyz --dns porkbun` (the move back) ran live
@@ -758,9 +758,9 @@ front-door verbs than it started with. See DEC-021.
 - [ ] blueberryhill.fyi: renewal attempt expected near 2026-12-23,
       behind the proxy. If `status` shows `cert error`, `mimeo sync
       blueberryhill.fyi` is the first run of DEC-050 on a real failure
-- [ ] mimeo.lol returns GitHub's 404: `pborenstein/mimeo.lol` is now
-      `mimeo-templates/mimeo`, which has no custom domain (found
-      2026-11-15)
+- [x] mimeo.lol returned GitHub's 404 (its repo became
+      `mimeo-templates/mimeo`). New site `mimeo-sites/mimeo.lol` created
+      2026-11-17, zone on Cloudflare (Entry 96)
 
 ### Phase 7: CLI Redesign (2026-03-19 - 2026-07-06)
 

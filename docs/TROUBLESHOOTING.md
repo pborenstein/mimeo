@@ -72,8 +72,10 @@ A site whose hostname is not in the Porkbun account but does answer in DNS (regi
 
 GitHub requests a certificate for a custom domain at the moment the domain is saved in the repository's Pages settings, and issues it only if it can reach the site directly at records that point to GitHub. Renewal works the same way. Two things follow.
 
-- **Records must be right first.** A certificate requested while the records were wrong is not requested again by GitHub.
-- **Cloudflare's proxy blocks it.** A proxied record resolves to Cloudflare's addresses, not GitHub's.
+| Condition | Why it stops the certificate |
+|:----------|:-----------------------------|
+| The records were wrong when the domain was saved | GitHub does not request the certificate again on its own |
+| The records are proxied through Cloudflare | A proxied record resolves to Cloudflare's addresses, not GitHub's |
 
 `mimeo sync HOSTNAME` handles both. With the records right, it removes the custom domain and sets it again. When the records are proxied, it first switches them to DNS-only, waits for the certificate, and switches them back.
 

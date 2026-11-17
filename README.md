@@ -39,7 +39,17 @@ Every command runs the same three steps.
    - The result is a list of changes.
 3. Print (`status`) or apply (`sync`) the changes
 
-`status` prints the list. `sync` applies it. The other commands do one thing before or after those steps.
+The read step collects five things.
+
+| Thing read | Source |
+|:-----------|:-------|
+| The zone the hostname belongs to | The registrar's list of domains |
+| The zone's nameservers | The registrar |
+| The DNS provider | Whichever configured provider those nameservers belong to |
+| The records | That provider |
+| The site, with its certificate and HTTPS state | The repository whose custom domain is the hostname |
+
+The compare step asks the host which records the site needs and checks them, and the host's settings, against what was read.
 
 | Command | What it does |
 |:--------|:-------------|
@@ -101,27 +111,37 @@ Precedence: CLI flags > `MIMEO_*` environment variables > config file.
 | Column | Values |
 |:-------|:-------|
 | `EXPIRES` | Registration expiry; `-` for a subdomain or a hostname whose domain is not at the registrar |
-| `DNS` | The provider serving the zone: `porkbun`, `cloudflare`, `external` (another provider, which mimeo cannot read), `none` (the registrar reports no nameservers). A trailing `*` means the site's records are proxied. |
+| `DNS` | The provider serving the zone: `porkbun`, `cloudflare`, `external` (another provider, which mimeo cannot read), `none` (the registrar reports no nameservers); a trailing `*` when the site's records are proxied |
 | `RECORDS` | `ok`, `missing`, `extra`, `external` (not compared), `unknown` |
 | `SITE` | `ok`, `fixable` (certificate ready, HTTPS not enforced), `pending`, `no cert`, `cert error`, `expiring` (14 days or less, so renewal is not happening), `no pages`, `no domain` (the hostname is not at the registrar and has no DNS), `no site` |
 | `REPO` | The repository whose custom domain is the hostname |
 
-When hostnames are named, or with `--problems`, each row is followed by the changes `sync` would make and by each problem it cannot fix. A problem is stated in a sentence and followed by what to do about it, with the hostname, the commands and the page to open filled in:
+When hostnames are named, or with `--problems`, detail lines follow each row.
+
+| Line | Meaning |
+|:-----|:--------|
+| `sync would:` | A change `mimeo sync` makes |
+| `problem:` | Something `sync` cannot change, stated in a sentence |
+| `to fix:` | Numbered steps for that problem, done in order |
+| `do one of:` | Alternatives for that problem; pick one |
+
+The steps name the hostname, the commands and the page to open.
 
 ```
-  xhosi.com  2027-08-31  cloudflare*  ok        cert error  mimeo-sites/xhosi.com
-      problem: The HTTPS certificate could not be renewed. It expires 2026-12-12; after that date browsers refuse to open https://xhosi.com.
-      to fix:
-        1. In the Cloudflare dashboard, open xhosi.com > DNS > Records
-        2. Edit each of these and switch Proxy status to DNS only: A @, CNAME www. The proxy is what blocks the certificate.
-        3. Open https://github.com/mimeo-sites/xhosi.com/settings/pages
-        4. Under Custom domain, click Remove
-        5. Type xhosi.com back into Custom domain and click Save
-        6. Wait 15 minutes, then run: mimeo status xhosi.com. Repeat until SITE says ok or fixable; it can take an hour.
-        7. Switch the same records back to Proxied
+  example.com      2027-08-31  cloudflare*  ok   cert error  mimeo-sites/example.com
+      sync would: renew the HTTPS certificate, which expires 2026-12-12 (switches A @, CNAME www to DNS-only, sets the custom domain again, waits for the certificate, switches them back to proxied)
+  operation.rodeo  -           -            -    no domain   mimeo-sites/operation.rodeo
+      problem: operation.rodeo is not in the registrar account and nothing answers for it in DNS, so the registration has most likely lapsed. The repository mimeo-sites/operation.rodeo is still set up to serve it.
+      do one of:
+        - Keep the repository and take the domain off it: mimeo unlink operation.rodeo
+        - Delete the repository: mimeo delete operation.rodeo
+        - Move the repository to another account: open https://github.com/mimeo-sites/operation.rodeo/settings, scroll to Danger Zone, click Transfer ownership
+        - Get the domain back: register operation.rodeo again, then run: mimeo sync operation.rodeo
 ```
 
-`to fix:` lists steps to do in order. `do one of:` lists alternatives. A site shown as `no domain` gets alternatives, because the registration has most likely lapsed and the decision is about the repository: `mimeo unlink` to keep it, `mimeo delete` to remove it, GitHub's transfer page to move it, or registering the domain again. mimeo reaches `no domain` only when public DNS says the name has no nameservers; when that lookup cannot be made, it concludes nothing. In JSON and CSV output the steps are the `fixes` field, and `fixes_are_choices` says which kind they are.
+mimeo reports `no domain` only when public DNS says the name has no nameservers. When that lookup cannot be made, it concludes nothing.
+
+In JSON and CSV output the steps are the `fixes` field, and `fixes_are_choices` says whether they are alternatives.
 
 A registered domain with no site, a zone at an external provider, and proxied records are not problems. A bare `mimeo status` refuses to run; a fleet sweep needs `--all`. Findings exit 0; API errors exit nonzero with partial results.
 
@@ -133,13 +153,47 @@ A registered domain with no site, a zone at an external provider, and proxied re
 | Apply to every site | `mimeo sync --all` |
 | Apply to specific hostnames | `mimeo sync example.com` |
 
-Adds missing address records, removes extra ones at the site's own names, requests the HTTPS certificate when the site has none, and enforces HTTPS when the certificate is ready.
+`sync` makes four kinds of change.
 
-GitHub requests a certificate at the moment the custom domain is saved, and issues it only if it can reach the site directly. So for a site with no certificate, a failed renewal, or a certificate within 14 days of expiry, `sync` removes the custom domain and sets it again. It does that only when the records are already right: a site with wrong records takes two runs a few minutes apart (records, then the request), and a further run enforces HTTPS once the certificate is approved. Verified 2026-11-16 on five sites with no certificate; GitHub approved the first within 20 seconds. If the domain cannot be set again, the error gives the `mimeo link` command that puts it back.
+| Finding | What `sync` does |
+|:--------|:-----------------|
+| A needed address record is missing | Adds it |
+| An address record at the site's names is not needed | Removes it |
+| No certificate, a failed renewal, or a certificate within 14 days of expiry | Removes the custom domain and sets it again |
+| Certificate approved, HTTPS not enforced | Enforces HTTPS |
 
-When the site's records are proxied through Cloudflare, the proxy is what blocks the certificate. `sync` then switches those records to DNS-only, sets the custom domain again, waits up to 15 minutes for the certificate (asking again if a request fails), and switches the records back to proxied. This is the one case in which mimeo changes a proxy setting (DEC-050). If a step fails, the records are switched back before the error is reported. If the certificate does not arrive in 15 minutes, the records are left DNS-only so it still can, and the error says how to switch them back. `status` shows this as `sync would: renew the HTTPS certificate ... (switches A @, AAAA @, CNAME www to DNS-only, ...)`.
+GitHub requests a certificate at the moment the custom domain is saved, and issues it only if it can reach the site directly. That is why setting the domain again works. Verified 2026-11-16 on five sites with no certificate; GitHub approved the first within 20 seconds.
 
-Problems `sync` cannot fix are printed with the same steps `status` prints. It does not change nameservers (`delegate`), does not link anything (`link`), does not change a proxy setting, and does not write to a zone at a provider that is not configured.
+`sync` requests a certificate only when the records are already right. A site with wrong records takes two runs a few minutes apart: records, then the request. A further run enforces HTTPS once the certificate is approved.
+
+If the domain cannot be set again, the error gives the `mimeo link` command that puts it back.
+
+#### Proxied records
+
+Cloudflare's proxy blocks the certificate. When the site's records are proxied, `sync` runs this sequence.
+
+1. Switch the proxied records to DNS-only.
+2. Remove the custom domain and set it again.
+3. Wait up to 15 minutes for the certificate, asking again if a request fails.
+4. Switch the same records back to proxied.
+
+This is the one case in which mimeo changes a proxy setting (DEC-050).
+
+| Outcome | State afterwards |
+|:--------|:-----------------|
+| A step fails | The records are switched back to proxied before the error is reported |
+| No certificate in 15 minutes | The records stay DNS-only so it can still arrive; the error says how to switch them back |
+
+#### What `sync` leaves alone
+
+| Not changed | Command that changes it |
+|:------------|:------------------------|
+| Nameservers | `mimeo delegate` |
+| Which repository serves a hostname | `mimeo link` |
+| A proxy setting, outside the sequence above | Cloudflare's dashboard |
+| A zone at a provider that is not configured | That provider |
+
+Problems `sync` cannot fix are printed with the same steps `status` prints.
 
 ### link and unlink
 
@@ -167,7 +221,9 @@ Problems `sync` cannot fix are printed with the same steps `status` prints. It d
 
 Copies every record except NS and SOA from the provider serving the zone now, reads the copies back to confirm them, and only then sets the nameservers at the registrar. Copies are DNS-only. The old provider's records are left in place. `--dns` defaults to `defaults.dns`.
 
-Some records point at a service the current provider runs only for zones it serves. Copying the record does not move the service. When a move would stop one, `delegate` says which and asks before changing anything; `--yes` skips the question, and `--dry-run` lists each as `would stop:`. It knows three cases:
+Some records point at a service the current provider runs only for zones it serves. Copying the record does not move the service.
+
+When a move would stop one, `delegate` says which and asks before changing anything. `--yes` skips the question, and `--dry-run` lists each as `would stop:`. It knows three cases.
 
 | Leaving | Records | What stops |
 |:--------|:--------|:-----------|
@@ -208,7 +264,9 @@ Does what `unlink` does, then deletes the repository serving the hostname, whate
 
 ### scan
 
-`mimeo scan` reads the custom domain of every Pages repository in every organization listed under `github.organizations` and rewrites the cache. It runs by itself the first time a lookup misses. Run it by hand after linking a site outside mimeo, or after adding an organization to the config. It warns when two repositories claim one hostname.
+`mimeo scan` reads the custom domain of every Pages repository in every organization listed under `github.organizations` and rewrites the cache. It warns when two repositories claim one hostname.
+
+It runs by itself the first time a lookup misses. Run it by hand after linking a site outside mimeo, or after adding an organization to the config.
 
 ### doctor
 
@@ -272,9 +330,21 @@ mimeo/
 ## Known limitations
 
 - One registrar (Porkbun), two DNS providers (Porkbun, Cloudflare), one host (GitHub Pages). The interfaces leave room for more.
-- Against a live Cloudflare account, mimeo has read zones and run one `delegate` from Porkbun to Cloudflare (as of 2026-11-16). It has run one `delegate` back to Porkbun (2026-11-17). `sync` writing records to a Cloudflare zone has not been run live.
-- `sync` renewing a certificate behind Cloudflare's proxy has run live only on a site whose certificate was still valid (2026-11-17): the proxy was switched off and on and the custom domain set again, in 22 seconds. The same steps done by hand fixed xhosi.com's failed renewal the same day. `sync` has not yet met a failed renewal itself.
-- `delegate` warns only about the three services listed under [delegate](#delegate). That Cloudflare Email Routing stops when the zone leaves Cloudflare is from how the service is set up, not checked against Cloudflare's documentation (as of 2026-11-17).
-- Requests to Porkbun are spaced 0.25 seconds apart, so `status --all` over about 100 domains takes about a minute. Whether Porkbun publishes a request limit is unverified; the 0.25 seconds is mimeo's choice. The spacing was added on 2026-11-16 after sweeps with five unspaced workers lost a domain to a 503.
+- `delegate` warns only about the three services listed under [delegate](#delegate).
+- That Cloudflare Email Routing stops when the zone leaves Cloudflare is not checked against Cloudflare's documentation (as of 2026-11-17).
+- Requests to Porkbun are spaced 0.25 seconds apart, so `status --all` over about 100 domains takes about a minute.
+- Whether Porkbun publishes a request limit is unverified. The 0.25 seconds is mimeo's choice, made on 2026-11-16 after sweeps with five unspaced workers lost a domain to a 503.
 - `scan` sees private repositories only in the authenticated account and in organizations it belongs to.
 - DNS propagation is not polled; run `mimeo status` afterwards.
+
+Some paths have not met live services.
+
+| Path | Run against live services |
+|:-----|:--------------------------|
+| Reading Cloudflare zones | Yes, 2026-11-16 |
+| `delegate` from Porkbun to Cloudflare | Once, 2026-11-16 |
+| `delegate` back to Porkbun | Once, 2026-11-17 |
+| `sync` writing records to a Cloudflare zone | No |
+| `sync` renewing behind the proxy, certificate still valid | Once, 2026-11-17, in 22 seconds |
+| `sync` renewing behind the proxy, renewal failed | No; the same steps by hand fixed xhosi.com on 2026-11-17 |
+

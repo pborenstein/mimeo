@@ -27,17 +27,7 @@ Full setup details (prerequisites, `gh` token scope, global vs. dev install, env
 
 Every command runs the same three steps.
 
-1. Read
-   -  For a hostname, collect the zone it belongs to
-   -  the zone's nameservers (from the registrar)
-   -  which configured DNS provider those nameservers belong to
-   -  the records at that provider
-   -  and the site whose custom domain is the hostname, with its certificate and HTTPS state
-2. Compare
-   - Ask the host which records the site needs
-   - compare them  and the host's settings with what was read.
-   - The result is a list of changes.
-3. Print (`status`) or apply (`sync`) the changes
+### 1: Read
 
 The read step collects five things.
 
@@ -49,7 +39,19 @@ The read step collects five things.
 | The records | That provider |
 | The site, with its certificate and HTTPS state | The repository whose custom domain is the hostname |
 
+
+### 2: Compare
+
+   - Ask the host which records the site needs
+   - compare them  and the host's settings with what was read.
+   - The result is a list of changes.
+
+### 3: Print or apply the changes
+
 The compare step asks the host which records the site needs and checks them, and the host's settings, against what was read.
+Print (`status`) or apply (`sync`) the changes
+
+## Command summary
 
 | Command | What it does |
 |:--------|:-------------|

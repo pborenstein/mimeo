@@ -113,6 +113,16 @@ def _compare_records(conn: Connection, host: Host, plan: Plan) -> None:
     plan.extra = [r for r in live if r.key() not in required_keys]
     plan.missing = [r for r in required if r.key() not in live_keys]
 
+    # A proxied name is answered by the DNS provider itself, over IPv4 and
+    # IPv6, whatever address records sit behind it. Once such a name has
+    # some of its required records, the rest of the same kind add nothing.
+    proxied_names = {
+        r.name for r in live if r.proxied and r.key() in required_keys
+    }
+    plan.missing = [
+        r for r in plan.missing if not (r.name in proxied_names and r.type in ("A", "AAAA"))
+    ]
+
     # Removals come first: a name holds one CNAME, and an ALIAS at the
     # apex blocks A records.
     for record in plan.extra:

@@ -191,15 +191,37 @@ class TestCompare:
 
     def test_new_record_takes_proxy_setting_in_use_at_its_name(self, world: World) -> None:
         world.register("example.com", world.cf)
-        site = world.host.add("sites/example.com", "example.com")
-        v4 = [r for r in world.host.required_records(site, "") if r.type == "A"]
-        for record in v4:
-            record.proxied = True
-        world.cf.seed("example.com", *v4)
+        world.host.add("sites/example.com", "example.com")
+        world.cf.seed(
+            "example.com",
+            DNSRecord(type="CNAME", name="www", content="old.example.net", proxied=True),
+        )
         _, plan = _plan(world, "example.com")
         by_summary = {c.summary: c.record for c in plan.changes}
-        assert by_summary["add AAAA @ -> 2606:50c0:8000::153"].proxied is True
-        assert by_summary["add CNAME www -> sites.github.io"].proxied is None
+        assert by_summary["add CNAME www -> sites.github.io"].proxied is True
+        assert by_summary["add A @ -> 185.199.108.153"].proxied is None
+
+    def test_proxied_apex_with_only_a_records_needs_no_aaaa(self, world: World) -> None:
+        world.register("example.com", world.cf)
+        site = world.host.add("sites/example.com", "example.com")
+        present = [r for r in world.host.required_records(site, "") if r.type != "AAAA"]
+        for record in present:
+            record.proxied = True
+        world.cf.seed("example.com", *present)
+        _, plan = _plan(world, "example.com")
+        assert plan.records == "ok"
+        assert not plan.has_problem
+
+    def test_dns_only_apex_still_needs_aaaa(self, world: World) -> None:
+        world.register("example.com", world.cf)
+        site = world.host.add("sites/example.com", "example.com")
+        world.cf.seed(
+            "example.com", *[r for r in world.host.required_records(site, "") if r.type != "AAAA"]
+        )
+        _, plan = _plan(world, "example.com")
+        assert [c.summary for c in plan.changes] == [
+            f"add AAAA @ -> 2606:50c0:800{i}::153" for i in range(4)
+        ]
 
     def test_proxied_records_are_not_a_problem(self, world: World) -> None:
         world.register("example.com", world.cf)

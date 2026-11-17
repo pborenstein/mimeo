@@ -331,9 +331,14 @@ Differences between the text above and the code (2026-11-15):
   and `sync` enforces HTTPS later, as `create` did in 1.x.
 - **`link` has `--skip-dns`**, and `create` keeps it.
 - **A record being added takes the proxy setting in use at its
-  name.** Adding the four AAAA records to an apex whose A records
-  are proxied adds them proxied. This keeps DEC-043's rule that
-  mimeo never changes how a name is served.
+  name.** This keeps DEC-043's rule that mimeo never changes how a
+  name is served.
+- **A proxied name is not asked for more A or AAAA records** once
+  it has some of the required ones. Cloudflare answers for a proxied
+  name over IPv4 and IPv6 itself, so the four AAAA records would add
+  nothing. Found on the first live Cloudflare read (2026-11-16):
+  blueberryhill.fyi and xhosi.com have proxied A records only and
+  were shown as `missing`.
 - **`status` has one view.** `--source`, `--with-dns`, `--health` and
   `--show-template` are gone; `--records` shows the zone. There is no
   `--source registrar`.

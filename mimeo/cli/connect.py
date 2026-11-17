@@ -134,8 +134,13 @@ def unlink(hostname: str, config: Path | None, dry_run: bool, yes: bool) -> None
     is_flag=True,
     help="Move the zone even though its current records cannot be read; it starts empty",
 )
+@click.option(
+    "--yes",
+    is_flag=True,
+    help="Do not ask before a move that stops a service the current provider runs",
+)
 def delegate(
-    zone: str, provider: str | None, config: Path | None, dry_run: bool, empty: bool
+    zone: str, provider: str | None, config: Path | None, dry_run: bool, empty: bool, yes: bool
 ) -> None:
     """Move ZONE to another DNS provider.
 
@@ -146,6 +151,12 @@ def delegate(
 
     Refuses when DNSSEC is enabled for the domain, and when the current
     provider is one mimeo cannot read (unless --empty).
+
+    Some records point at services the current provider runs only for
+    zones it serves, such as Cloudflare Email Routing or Cloudflare's
+    proxy. Copying the records does not move the service. When the move
+    would stop one, delegate says which and asks before changing
+    anything (--yes skips the question).
 
     \b
     Examples:
@@ -158,7 +169,16 @@ def delegate(
         cfg = load_config(config)
         name = (provider or cfg.default_dns).lower()
         with open_fleet(cfg) as fleet:
-            outcome = delegate_zone(fleet, zone, name, dry_run=dry_run, empty=empty)
+
+            def _confirm(stops: list[str]) -> bool:
+                click.secho(f"Moving {zone} to {name} would stop:", fg="yellow")
+                for stop in stops:
+                    click.secho(f"  - {stop}", fg="yellow")
+                return yes or click.confirm(f"Move {zone} anyway?", default=False)
+
+            outcome = delegate_zone(
+                fleet, zone, name, dry_run=dry_run, empty=empty, confirm=_confirm
+            )
         click.echo(f"{zone} -> {name}")
         echo_outcome(outcome)
     except Exception as e:

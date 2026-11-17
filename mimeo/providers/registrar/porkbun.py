@@ -299,6 +299,23 @@ class PorkbunDNSProvider(_PorkbunClient, DNSProvider):
         """Delete a DNS record."""
         self._make_request(f"/dns/delete/{domain}/{record_id}", {})
 
+    def stops_on_leaving(self, zone: str, records: list[DNSRecord]) -> list[str]:
+        """Porkbun's own mail forwarding and hosting may depend on its nameservers.
+
+        Unverified (as of 2026-11-17): whether Porkbun keeps forwarding
+        mail for a domain whose DNS is elsewhere. Reported as "may".
+        """
+        if any(
+            r.type == "MX" and r.content.rstrip(".").lower().endswith(".porkbun.com")
+            for r in records
+        ):
+            return [
+                f"Mail to {zone} is delivered by Porkbun (the MX records point at"
+                " porkbun.com). It may stop once Porkbun no longer serves the zone;"
+                " check Porkbun's email settings for the domain before moving."
+            ]
+        return []
+
     def __enter__(self) -> "PorkbunDNSProvider":
         return self
 

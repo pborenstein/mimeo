@@ -90,9 +90,9 @@ class TestStatus:
         assert row["records"] == "ok"
         assert row["site"] == "github:other/example.com"
         assert row["site_status"] == "cert error"
-        assert row["problems"][0].startswith("The HTTPS certificate could not be renewed.")
-        assert row["fixes"][-1] == "Switch the same records back to Proxied"
-        assert row["fixable"] is False
+        assert row["problems"] == []
+        assert row["changes"][0].startswith("renew the HTTPS certificate, which expires 2026-12-12")
+        assert row["fixable"] is True
 
     def test_all_scans_once_then_covers_registered_and_cached(self, run: Any, world: World) -> None:
         world.register("parked.com")
@@ -168,12 +168,12 @@ class TestSync:
         assert row["actions"] == ["enforce HTTPS"]
 
     def test_unfixable_problem_is_reported(self, run: Any, world: World) -> None:
-        world.healthy_site("example.com")
+        world.registrar.ns["example.com"] = ["ns1.somewhere.else"]
         world.host.add("sites/example.com", "example.com", cert_state="bad_authz")
         result = run(sync, "example.com")
         assert "problem: The HTTPS certificate could not be renewed." in result.output
         assert "to fix:" in result.output
-        assert "1. Open https://github.com/sites/example.com/settings/pages" in result.output
+        assert "Open https://github.com/sites/example.com/settings/pages" in result.output
         assert "1 with problems sync cannot fix" in result.output
 
     def test_all_syncs_every_site(self, run: Any, world: World) -> None:
@@ -242,6 +242,42 @@ class TestDelegateScan:
         assert result.exit_code == 0
         assert world.registrar.ns["example.com"] == world.cf.nameserver_names
 
+    def _mail_at_pb(self, world: World, cfg: Config) -> None:
+        world.healthy_site("example.com")
+        world.pb.seed("example.com", DNSRecord(type="MX", name="", content="mx.pb.test", priority=10))
+        cfg.default_dns = "cf"
+
+    def test_delegate_asks_before_a_move_that_stops_a_service(
+        self, run: Any, world: World, cfg: Config
+    ) -> None:
+        self._mail_at_pb(world, cfg)
+        result = run(delegate, "example.com", input="n\n")
+        assert "Moving example.com to cf would stop:" in result.output
+        assert "Mail to example.com is delivered by pb." in result.output
+        assert result.exit_code != 0
+        assert world.registrar.ns["example.com"] == world.pb.nameserver_names
+        assert "example.com" not in world.cf.zones
+
+    def test_delegate_goes_ahead_when_confirmed(self, run: Any, world: World, cfg: Config) -> None:
+        self._mail_at_pb(world, cfg)
+        result = run(delegate, "example.com", input="y\n")
+        assert result.exit_code == 0
+        assert world.registrar.ns["example.com"] == world.cf.nameserver_names
+
+    def test_delegate_yes_skips_the_question(self, run: Any, world: World, cfg: Config) -> None:
+        self._mail_at_pb(world, cfg)
+        result = run(delegate, "example.com", "--yes")
+        assert result.exit_code == 0
+        assert "would stop:" in result.output
+        assert world.registrar.ns["example.com"] == world.cf.nameserver_names
+
+    def test_delegate_dry_run_lists_what_would_stop(
+        self, run: Any, world: World, cfg: Config
+    ) -> None:
+        self._mail_at_pb(world, cfg)
+        result = run(delegate, "example.com", "--dry-run")
+        assert "would stop: Mail to example.com is delivered by pb." in result.output
+
     def test_delegate_refusal_is_an_error(self, run: Any, world: World, cfg: Config) -> None:
         world.healthy_site("example.com")
         world.registrar.dnssec.add("example.com")
@@ -303,6 +339,18 @@ class TestCreateDelete:
 
         create_one(world.fleet, cfg, "example.com", template="mimeo", dns="pb")
         assert world.registrar.ns["example.com"] == world.pb.nameserver_names
+
+    def test_create_leaves_the_zone_when_moving_it_would_stop_a_service(
+        self, run: Any, world: World, cfg: Config
+    ) -> None:
+        world.register("example.com")
+        world.pb.seed("example.com", DNSRecord(type="MX", name="", content="mx.pb.test", priority=10))
+        cfg.default_dns = "cf"
+        result = run(create, "example.com")
+        assert result.exit_code == 0, result.output
+        assert world.registrar.ns["example.com"] == world.pb.nameserver_names
+        assert "example.com was left at pb" in result.output
+        assert "mimeo delegate example.com --dns cf" in result.output
 
     def test_create_subdomain_adds_one_record_and_never_delegates(self, run: Any, world: World, cfg: Config) -> None:
         world.healthy_site("example.com")

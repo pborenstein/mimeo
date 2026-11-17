@@ -260,16 +260,10 @@ class TestCompareSite:
         self._site(world, cert_state="bad_authz", cert_expires="2026-12-12")
         _, plan = _plan(world, "example.com")
         assert plan.site == "cert error"
-        assert plan.problems == [
-            "The HTTPS certificate could not be renewed. It expires 2026-12-12; after"
-            " that date browsers refuse to open https://example.com."
-        ]
-        assert plan.fixes == [
-            "Open https://github.com/sites/example.com/settings/pages",
-            "Under Custom domain, click Remove",
-            "Type example.com back into Custom domain and click Save",
-            "Wait 15 minutes, then run: mimeo status example.com. Repeat until SITE says"
-            " ok or fixable; it can take an hour.",
+        assert not plan.problems
+        assert [c.summary for c in plan.changes] == [
+            "renew the HTTPS certificate, which expires 2026-12-12"
+            " (removes the custom domain and sets it again)"
         ]
 
     def test_no_certificate_is_requested_by_sync(self, world: World) -> None:
@@ -315,35 +309,72 @@ class TestCompareSite:
         assert plan.fixes[0] == "Run: mimeo sync example.com"
         assert plan.fixes[1].startswith("Wait 5 minutes, then run: mimeo sync example.com again")
 
-    def test_no_certificate_behind_a_proxy_is_fixed_by_hand(self, world: World) -> None:
+    def _proxied_site(self, world: World, **kwargs) -> None:  # type: ignore[no-untyped-def]
         world.register("example.com", world.cf)
-        site = world.host.add("sites/example.com", "example.com", cert_state=None)
+        site = world.host.add("sites/example.com", "example.com", **kwargs)
         records = world.host.required_records(site, "")
         for record in records:
             record.proxied = True
         world.cf.seed("example.com", *records)
+        world.cache.set("example.com", site)
+
+    def _issue_only_when_unproxied(self, world: World) -> None:
+        def _decide(ref: str, hostname: str) -> str | None:
+            proxied = any(r.proxied for r in world.cf.zones[hostname])
+            return "bad_authz" if proxied else "approved"
+
+        world.host.certificate_on_set = _decide
+
+    def test_failed_renewal_behind_a_proxy_is_fixed_by_sync(self, world: World) -> None:
+        self._proxied_site(world, cert_state="bad_authz", cert_expires="2026-12-12")
+        self._issue_only_when_unproxied(world)
+        conn, plan = _plan(world, "example.com")
+        assert plan.site == "cert error"
+        assert plan.fixable and not plan.problems
+        assert plan.changes[0].summary.startswith(
+            "renew the HTTPS certificate, which expires 2026-12-12 (switches "
+        )
+        waits: list[float] = []
+        apply(conn, plan, world.host, sleep=waits.append)
+        assert world.host.sites["sites/example.com"].cert_state == "approved"
+        assert all(r.proxied for r in world.cf.zones["example.com"])
+        kinds = [kind for kind, _, _ in world.cf.calls]
+        assert kinds == ["proxy off"] * 9 + ["proxy on"] * 9
+        assert waits == [15]
+
+    def test_certificate_that_never_arrives_leaves_records_unproxied_and_says_so(
+        self, world: World
+    ) -> None:
+        self._proxied_site(world, cert_state="bad_authz", cert_expires="2026-12-12")
+        world.host.certificate_on_set = lambda ref, hostname: "authorization_pending"
+        conn, plan = _plan(world, "example.com")
+        with pytest.raises(HostError, match="were left DNS-only") as raised:
+            apply(conn, plan, world.host, sleep=lambda seconds: None)
+        assert "switch A @, AAAA @, CNAME www back to Proxied" in str(raised.value)
+        assert not any(r.proxied for r in world.cf.zones["example.com"])
+
+    def test_proxy_is_put_back_when_asking_for_the_certificate_fails(self, world: World) -> None:
+        self._proxied_site(world, cert_state="bad_authz", cert_expires="2026-12-12")
+        conn, plan = _plan(world, "example.com")
+
+        def _fail(site, hostname):  # type: ignore[no-untyped-def]
+            raise HostError("boom", status_code=500)
+
+        world.host.set_custom_domain = _fail  # type: ignore[method-assign]
+        with pytest.raises(HostError):
+            apply(conn, plan, world.host, sleep=lambda seconds: None)
+        assert all(r.proxied for r in world.cf.zones["example.com"])
+
+    def test_certificate_trouble_on_a_zone_mimeo_cannot_write_gives_steps(
+        self, world: World
+    ) -> None:
+        world.registrar.ns["example.com"] = ["ns1.somewhere.else"]
+        world.host.add("sites/example.com", "example.com", cert_state="bad_authz", cert_expires="2026-11-14")
         _, plan = _plan(world, "example.com")
         assert not plan.fixable
-        assert plan.fixes[0] == "In the Cf dashboard, open example.com > DNS > Records"
-
-    def test_certificate_steps_take_the_proxy_out_of_the_way(self, world: World) -> None:
-        world.register("example.com", world.cf)
-        site = world.host.add(
-            "sites/example.com", "example.com", cert_state="bad_authz", cert_expires="2026-12-12"
-        )
-        records = world.host.required_records(site, "")
-        for record in records:
-            record.proxied = True
-        world.cf.seed("example.com", *records)
-        _, plan = _plan(world, "example.com")
-        assert plan.fixes[0] == "In the Cf dashboard, open example.com > DNS > Records"
-        assert plan.fixes[1].startswith("Edit each of these and switch Proxy status to DNS only: ")
-        assert plan.fixes[-1] == "Switch the same records back to Proxied"
-
-    def test_an_expired_certificate_is_said_to_have_expired(self, world: World) -> None:
-        self._site(world, cert_state="bad_authz", cert_expires="2026-11-14")
-        _, plan = _plan(world, "example.com")
         assert "It expired 2026-11-14, so browsers refuse" in plan.problems[0]
+        assert plan.fixes[0].startswith("The DNS for example.com is at a provider mimeo is not")
+        assert "Under Custom domain, click Remove" in plan.fixes
 
     def test_approved_cert_close_to_expiry_is_flagged(self, world: World) -> None:
         self._site(world, cert_expires="2026-11-20")

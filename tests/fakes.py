@@ -1,5 +1,6 @@
 """In-memory providers for testing the read, compare and apply steps."""
 
+from collections.abc import Callable
 from typing import Any
 
 from mimeo.models import DNSRecord, Site, SiteState
@@ -81,6 +82,17 @@ class FakeDNS(DNSProvider):
         self.zones[zone] = [r for r in self.zones[zone] if r.id != record.id]
         self.calls.append(("delete", zone, record.describe()))
 
+    def set_proxied(self, zone: str, record: DNSRecord, proxied: bool) -> None:
+        for stored in self.zones[zone]:
+            if stored.id == record.id:
+                stored.proxied = proxied
+        self.calls.append(("proxy on" if proxied else "proxy off", zone, record.describe()))
+
+    def stops_on_leaving(self, zone: str, records: list[DNSRecord]) -> list[str]:
+        if any(r.type == "MX" and r.content.endswith(f".{self.name}.test") for r in records):
+            return [f"Mail to {zone} is delivered by {self.name}."]
+        return []
+
     def seed(self, zone: str, *records: DNSRecord) -> None:
         """Put records in a zone without recording calls."""
         self.zones.setdefault(zone, [])
@@ -98,6 +110,10 @@ class FakeHost(Host):
         self.organizations = organizations or ["sites"]
         self.sites: dict[str, SiteState] = {}
         self.scans = 0
+        # Called with (ref, hostname) each time a custom domain is set;
+        # returns the certificate state the site then has. Stands in for
+        # the host deciding whether it can issue a certificate.
+        self.certificate_on_set: Callable[[str, str], str | None] | None = None
 
     def add(
         self,
@@ -139,6 +155,8 @@ class FakeHost(Host):
         state = self.sites.setdefault(site.ref, SiteState(configured=True))
         state.configured = True
         state.custom_domain = hostname
+        if hostname is not None and self.certificate_on_set is not None:
+            state.cert_state = self.certificate_on_set(site.ref, hostname)
 
     def required_records(self, site: Site, label: str) -> list[DNSRecord]:
         target = f"{site.ref.split('/')[0]}.github.io"

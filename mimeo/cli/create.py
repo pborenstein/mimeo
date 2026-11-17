@@ -8,7 +8,7 @@ import click
 from ..config import DNS_PROVIDER_NAMES, Config
 from ..connection import Fleet
 from ..models import Site
-from ..operations import OperationError, delegate, link
+from ..operations import OperationError, WouldStopService, delegate, link
 from ._fleet import open_fleet
 from ._processing import (
     _categorize_error,
@@ -79,9 +79,26 @@ def create_one(
         and serving.name != dns_name
         and fleet.provider_named(dns_name) is not None
     ):
-        moved = delegate(fleet, zone, dns_name, dry_run=dry_run)
-        result["actions"] += moved.actions
-        result["notes"] += moved.notes
+        # create runs unattended, so a move that would stop a service is
+        # not made: the site is created with the zone left where it is.
+        try:
+            moved = delegate(fleet, zone, dns_name, dry_run=dry_run)
+        except WouldStopService as stopped:
+            result["notes"].append(
+                f"{zone} was left at {serving.name}. Moving it to {dns_name} would stop:"
+            )
+            result["notes"] += [f"  {stop}" for stop in stopped.stops]
+            result["notes"].append(f"To move it anyway: mimeo delegate {zone} --dns {dns_name}")
+        else:
+            if dry_run and moved.stops:
+                moved.actions = []
+                moved.notes = [
+                    f"{zone} would be left at {serving.name}. Moving it to {dns_name}"
+                    " would stop:",
+                    *[f"  {stop}" for stop in moved.stops],
+                ]
+            result["actions"] += moved.actions
+            result["notes"] += moved.notes
 
     if dry_run:
         verb = "delete and recreate" if force else "create"

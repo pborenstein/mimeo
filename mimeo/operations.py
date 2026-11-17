@@ -24,6 +24,14 @@ class OperationError(MimeoError):
     """Raised when an operation refuses to proceed. The message says why."""
 
 
+class WouldStopService(OperationError):
+    """Raised by delegate when a move would stop a service and was not confirmed."""
+
+    def __init__(self, message: str, stops: list[str]) -> None:
+        super().__init__(message)
+        self.stops = stops
+
+
 @dataclass
 class Outcome:
     """What an operation did, as sentences, plus anything worth a warning."""
@@ -32,6 +40,8 @@ class Outcome:
     notes: list[str] = field(default_factory=list)
     # Set by link: True when HTTPS could not be enforced yet.
     https_pending: bool = False
+    # Set by delegate: what stops working because of the move.
+    stops: list[str] = field(default_factory=list)
 
 
 def link(
@@ -203,6 +213,7 @@ def delegate(
     provider_name: str,
     dry_run: bool = False,
     empty: bool = False,
+    confirm: Callable[[list[str]], bool] | None = None,
 ) -> Outcome:
     """Move a zone to another DNS provider (DEC-042).
 
@@ -217,11 +228,16 @@ def delegate(
         dry_run: Describe the changes without making them
         empty: Change nameservers even though the current records
             cannot be read (the new zone starts empty)
+        confirm: Asked before anything is changed when the move would
+            stop a service the current provider runs for the zone. It
+            is given one sentence per service and returns True to go
+            ahead. With none, such a move is refused.
 
     Raises:
         OperationError: If the zone is not at the registrar, the provider
             is not configured, DNSSEC is on, the current records cannot
-            be read (without `empty`), or the copy does not verify
+            be read (without `empty`), the move would stop a service and
+            was not confirmed, or the copy does not verify
     """
     zone = zone.lower()
     if zone not in fleet.registered:
@@ -270,12 +286,23 @@ def delegate(
         if record.type in target.unsupported_types:
             outcome.notes.append(f"not copied ({target.name} has no {record.type} type): {record.describe()}")
 
+    if current is not None:
+        outcome.stops = current.stops_on_leaving(zone, source)
+
     if dry_run:
+        outcome.notes += [f"would stop: {stop}" for stop in outcome.stops]
         if not target.zone_exists(zone):
             outcome.actions.append(f"would create zone {zone} at {target.name}")
         outcome.actions += [f"would copy {r.describe()}" for r in copyable]
         outcome.actions.append(f"would set the nameservers of {zone} to {target.name}'s")
         return outcome
+
+    if outcome.stops and not (confirm is not None and confirm(outcome.stops)):
+        raise WouldStopService(
+            f"{zone} was not moved. Moving it to {target.name} would stop: "
+            + " ".join(outcome.stops),
+            outcome.stops,
+        )
 
     if not target.zone_exists(zone):
         target.create_zone(zone)

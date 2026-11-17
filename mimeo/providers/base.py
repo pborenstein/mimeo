@@ -69,6 +69,23 @@ class DNSProvider(ABC):
     def delete_record(self, zone: str, record: DNSRecord) -> None:
         """Delete a record previously returned by list_records."""
 
+    def set_proxied(self, zone: str, record: DNSRecord, proxied: bool) -> None:
+        """Turn the provider's proxy on or off for a record list_records returned.
+
+        Only providers that have a proxy setting implement this.
+        """
+        raise NotImplementedError(f"{self.name} has no proxy setting")
+
+    def stops_on_leaving(self, zone: str, records: list[DNSRecord]) -> list[str]:
+        """Say what stops working when the zone moves to another provider.
+
+        Some records point at services the provider runs only for zones
+        it serves. Copying such a record elsewhere keeps the record and
+        loses the service. One sentence per service; empty when the
+        records carry over whole.
+        """
+        return []
+
 
 class Host(ABC):
     """A hosting provider: serves sites and links each to a hostname."""

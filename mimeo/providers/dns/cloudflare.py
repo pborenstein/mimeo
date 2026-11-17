@@ -165,6 +165,43 @@ class CloudflareDNS(DNSProvider):
             raise APIError(f"Cannot delete a record without an ID: {record.describe()}")
         self._call("DELETE", f"/zones/{self._zone_id(zone)}/dns_records/{record.id}")
 
+    def set_proxied(self, zone: str, record: DNSRecord, proxied: bool) -> None:
+        """Turn the proxy on or off for a record, by the ID list_records returned."""
+        if not record.id:
+            raise APIError(f"Cannot change a record without an ID: {record.describe()}")
+        self._call(
+            "PATCH",
+            f"/zones/{self._zone_id(zone)}/dns_records/{record.id}",
+            json={"proxied": proxied},
+        )
+
+    def stops_on_leaving(self, zone: str, records: list[DNSRecord]) -> list[str]:
+        """Email Routing and the proxy work only while Cloudflare serves the zone.
+
+        Email Routing needing Cloudflare as the zone's DNS is from how the
+        service is set up in the dashboard; not checked against
+        Cloudflare's documentation (as of 2026-11-17).
+        """
+        stops: list[str] = []
+        if any(
+            r.type == "MX" and r.content.rstrip(".").lower().endswith(".mx.cloudflare.net")
+            for r in records
+        ):
+            stops.append(
+                f"Mail to {zone} is delivered by Cloudflare Email Routing (the MX records"
+                " point at mx.cloudflare.net), which works only while Cloudflare serves"
+                " the zone. Incoming mail would stop."
+            )
+        proxied = sorted({f"{r.type} {r.name or '@'}" for r in records if r.proxied})
+        if proxied:
+            stops.append(
+                f"Cloudflare's proxy is on for {', '.join(proxied)}. The copies are"
+                " plain records, so visitors would reach the site directly and anything"
+                " set up in Cloudflare for those names (caching, rules, redirects) would"
+                " stop applying."
+            )
+        return stops
+
     def close(self) -> None:
         """Close the HTTP session."""
         self.client.close()

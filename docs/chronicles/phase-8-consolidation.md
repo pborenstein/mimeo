@@ -1430,6 +1430,8 @@ created nothing (it stopped before the repo existed).
 
 - mimeo.lol: the user chose a new site. `mimeo create mimeo.lol` moved the zone to Cloudflare (`defaults.dns`), created `mimeo-sites/mimeo.lol` from the `mimeo` template, linked it, and replaced the `www` CNAME (`pborenstein.github.io` to `mimeo-sites.github.io`). The certificate was approved at the first look; `https://mimeo.lol` answers 200.
 
+**Released**: 2.1.0 (tag `v2.1.0` on `a2de337`), with these changes and the `delegate --dry-run` fix from Entry 95.
+
 **Decisions**: DEC-052.
 
 **Files**: `mimeo/cache.py`, `mimeo/connection.py`, `mimeo/plan.py`, `mimeo/cli/_fleet.py`, `mimeo/cli/status.py`, `mimeo/cli/sync.py`, `mimeo/cli/doctor.py`, `mimeo/providers/base.py`, `mimeo/providers/dns/cloudflare.py`, `mimeo/providers/registrar/porkbun.py`, `scripts/e2e_smoke.sh`, tests, `README.md`, `docs/TROUBLESHOOTING.md`, `CHANGELOG.md`, `CLAUDE.md`.

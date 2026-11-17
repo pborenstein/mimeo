@@ -564,3 +564,46 @@ class TestLogFormatOption:
             assert "message" in record
 
 
+
+
+# Captured at import, before the autouse fixture replaces it.
+_REAL_CLOUDFLARE_CHECK = __import__(
+    "mimeo.cli.doctor", fromlist=["_check_cloudflare_credentials"]
+)._check_cloudflare_credentials
+
+
+class TestCloudflareCredentialCheck:
+    """doctor verifies account-owned tokens through the account endpoint."""
+
+    def _cfg(self, account_id: str | None) -> Config:
+        return Config(
+            porkbun_api_key="pk1_test",
+            porkbun_secret="sk1_test",
+            github_username="testuser",
+            cloudflare_api_token="tok",
+            cloudflare_account_id=account_id,
+        )
+
+    def _check(self, cfg: Config, side_effect: Any) -> tuple[Any, MagicMock]:
+        from mimeo.providers.dns.cloudflare import CloudflareDNS
+
+        with patch.object(CloudflareDNS, "_call", side_effect=side_effect) as call:
+            return _REAL_CLOUDFLARE_CHECK(cfg), call
+
+    def test_account_endpoint_first_when_account_id_is_set(self) -> None:
+        (ok, detail, _), call = self._check(self._cfg("acct"), [{"result": {"status": "active"}}])
+        assert (ok, detail) == (True, "active")
+        assert call.call_args.args == ("GET", "/accounts/acct/tokens/verify")
+
+    def test_falls_back_to_user_endpoint(self) -> None:
+        from mimeo.exceptions import APIError
+
+        (ok, _, _), call = self._check(
+            self._cfg("acct"), [APIError("HTTP 401", status_code=401), {"result": {"status": "active"}}]
+        )
+        assert ok is True
+        assert call.call_args.args == ("GET", "/user/tokens/verify")
+
+    def test_inactive_token_fails(self) -> None:
+        (ok, detail, _), _ = self._check(self._cfg(None), [{"result": {"status": "expired"}}])
+        assert (ok, detail) == (False, "token is expired")

@@ -151,11 +151,23 @@ def _check_porkbun_credentials(cfg: Config) -> tuple[bool, str, str]:
 def _check_cloudflare_credentials(cfg: Config) -> tuple[bool, str, str]:
     """Check that the Cloudflare token is active."""
     from ..providers.dns.cloudflare import CloudflareDNS
-    try:
-        with CloudflareDNS(cfg.cloudflare_api_token or "", cfg.cloudflare_account_id) as cloudflare:
-            result = cloudflare._call("GET", "/user/tokens/verify").get("result") or {}
-    except Exception as e:
-        return False, str(e), "Check cloudflare.api_token (needs Zone:Read and DNS:Edit)."
+    # A token created under "Account API tokens" is verified through the
+    # account; one created under a user profile, through the user.
+    paths = ["/user/tokens/verify"]
+    if cfg.cloudflare_account_id:
+        paths.insert(0, f"/accounts/{cfg.cloudflare_account_id}/tokens/verify")
+    result: Dict[str, Any] = {}
+    error: Exception | None = None
+    with CloudflareDNS(cfg.cloudflare_api_token or "", cfg.cloudflare_account_id) as cloudflare:
+        for path in paths:
+            try:
+                result = cloudflare._call("GET", path).get("result") or {}
+                error = None
+                break
+            except Exception as e:
+                error = e
+    if error is not None:
+        return False, str(error), "Check cloudflare.api_token (needs Zone Read and DNS Edit)."
     token_status = str(result.get("status", "unknown"))
     if token_status != "active":
         return False, f"token is {token_status}", "Create a new API token in Cloudflare."

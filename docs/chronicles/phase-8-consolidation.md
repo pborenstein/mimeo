@@ -1311,3 +1311,29 @@ created nothing (it stopped before the repo existed).
 
 **Files**: `mimeo/connection.py`, `mimeo/plan.py`, `mimeo/operations.py`, `mimeo/cache.py`, `mimeo/models.py`, `mimeo/config.py`, `mimeo/providers/` (base, gh, dns/cloudflare, host/github, repo/github, registrar/porkbun), `mimeo/cli/` (all commands, `_fleet.py`, `connect.py`), `tests/`, README.md, `config.toml.example`, `docs/` (MIMEO2.md, MIMEO2_DESIGN.md, DECISIONS.md, ARCHITECTURE.md, INSTALLATION.md, IMPLEMENTATION.md, CONTEXT.md).
 
+---
+
+## Entry 92: live config on schema 2; first live Cloudflare read (2026-11-16)
+
+**What**: Moved the live config to schema 2, created the Cloudflare API token, and ran `doctor` and `status --records` against the live Cloudflare account. Two fixes came out of it. 404 tests pass. Still nothing that writes has run live.
+
+**Why**: Entry 91 left 2.0 built but unused; with a 1.x config it behaves like 1.x.
+
+**How**:
+
+- Config: `schema_version = 2`, `github.organizations = ["mimeo-sites", "tepiton", "pborenstein"]`, a `[cloudflare]` section (token and account ID added by the user). Edited by script without displaying the file; previous version kept as `config.toml.v1.bak` beside it. `defaults.dns` is still unset, so `create` and `delegate` default to Porkbun.
+- Token: an account-owned token ("Account API tokens" in the dashboard), scope **All Domains**, with **DNS: Edit**, **Zone: Read**, **Zone: Edit**. In the token editor, zone permissions appear only after the scope dropdown is changed from "Entire Account" to "All Domains"; under "Entire Account" the DNS & Zones group lists account-level permissions that mimeo does not use.
+- `doctor` verified only through `/user/tokens/verify`. Account-owned tokens have their own endpoint, `/accounts/{id}/tokens/verify`; `doctor` now tries that first when `account_id` is set (`678b3b7`).
+- `status blueberryhill.fyi xhosi.com --records` read both zones, including proxy settings and xhosi.com's MX, SPF, DKIM and DMARC records. Both showed `missing` for four AAAA records that do nothing on a proxied name; fixed (DEC-047, `22f48c3`).
+
+**Verified live (2026-11-16)**: Zone Read plus DNS Edit is enough to find a zone by name and list its records. The account verify endpoint accepts an account-owned token. Not yet exercised: Zone Edit (zone creation), any record write, `delegate`, Porkbun's DNSSEC lookup.
+
+**Found**:
+
+- The live cache at `~/.cache/mimeo/sites.json` was filled by a scan on 2026-11-15 while the config still listed one organization, so it holds 67 `mimeo-sites` sites and is marked as scanned. Sites in `tepiton` and `pborenstein` are found only when their repo is named after the hostname. `mimeo scan` fixes it. The cache does not record which organizations it was built from, so adding one to the config does not trigger a rescan.
+- Renewal timing: xhosi.com's renewal was failing with 27 days left, so GitHub appears to renew about 30 days before expiry (inferred, not documented). blueberryhill.fyi's certificate expires 2027-01-22, which puts its renewal attempt near 2026-12-23.
+
+**Decisions**: DEC-047.
+
+**Files**: `mimeo/cli/doctor.py`, `mimeo/plan.py`, `tests/test_cli.py`, `tests/test_plan.py`, `docs/MIMEO2_DESIGN.md`.
+

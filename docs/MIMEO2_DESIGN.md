@@ -295,7 +295,12 @@ Choices no DEC entry covers yet, each with its reason.
 
 ## To Verify at Implementation
 
-Not checked against vendor docs as of 2026-11-15:
+Verified by use on 2026-11-16 (Entry 92): a token with Zone Read and
+DNS Edit on all domains can find a zone by name and list its records;
+an account-owned token is verified at
+`/accounts/{account_id}/tokens/verify`.
+
+Not checked as of 2026-11-16:
 
 - Whether creating a Cloudflare zone through the API needs the
   account ID (assumed above), and which token permissions cover zone

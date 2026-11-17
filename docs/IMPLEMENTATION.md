@@ -702,21 +702,33 @@ front-door verbs than it started with. See DEC-021.
   - [x] Step 7: subdomain sites; AAAA records
   - [x] Step 8 (docs): README, ARCHITECTURE, INSTALLATION,
         `config.toml.example`
-  - [ ] Add `github.organizations` to the live config
-        (`["mimeo-sites", "tepiton", "pborenstein"]`), then `mimeo scan`
-  - [ ] Add `[cloudflare]` to the live config; run `mimeo doctor`, then
-        `mimeo status blueberryhill.fyi xhosi.com --records` (first live
-        use of the Cloudflare provider; read-only)
-  - [ ] First live writes: `mimeo sync` on one Porkbun-served site (adds
-        AAAA), then `delegate --dry-run` and `delegate` on a junk domain
+  - [x] Add `github.organizations` to the live config (Entry 92)
+  - [x] Add `[cloudflare]` to the live config; `mimeo doctor` passes;
+        `mimeo status blueberryhill.fyi xhosi.com --records` reads both
+        zones (Entry 92; first live use of the Cloudflare provider)
+  - [x] `doctor` verifies account-owned Cloudflare tokens (`678b3b7`)
+  - [x] A proxied name is not asked for more A/AAAA records (DEC-047)
+  - [ ] Run `mimeo scan`: the live cache was filled while the config
+        listed only `mimeo-sites` (Entry 92)
+  - [ ] Make the cache record the organizations it was built from, and
+        rescan when the config's list differs
+  - [ ] `mimeo status --all`; compare with what 1.3.0 reported
+  - [ ] First live writes: `mimeo sync --dry-run` then `mimeo sync` on
+        one Porkbun-served site (adds AAAA), then `delegate --dry-run`
+        and `delegate` on a junk domain (first use of Zone Edit)
   - [ ] Verify the vendor facts listed in `docs/MIMEO2_DESIGN.md` "To
-        Verify at Implementation"
+        Verify at Implementation" (token permissions for reading are
+        verified, Entry 92; zone creation, record import, DNSSEC lookup
+        and AAAA-versus-certificate are not)
   - [ ] Extend the smoke script to cover `delegate` to Cloudflare and back
   - [ ] `docs/TROUBLESHOOTING.md` still describes 1.x commands
   - [ ] Decide the release: 1.4.0 from `62eeff7`, 2.0.0 from the branch
         tip (version is 2.0.0b1 until then)
 - [ ] xhosi.com: GitHub certificate renewal is failing (`bad_authz`),
-      expires 2026-12-12; records are proxied through Cloudflare
+      expires 2026-12-12; records are proxied through Cloudflare. By
+      hand: set the four A records and `www` to DNS-only, wait for
+      `mimeo status xhosi.com` to show `ok`, set them back to proxied.
+      blueberryhill.fyi will need the same near 2026-12-23
 - [ ] mimeo.lol returns GitHub's 404: `pborenstein/mimeo.lol` is now
       `mimeo-templates/mimeo`, which has no custom domain (found
       2026-11-15)

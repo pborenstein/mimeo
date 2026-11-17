@@ -879,3 +879,17 @@ Checked 2026-11-15:
 **Consequences**: The 1.x command tests were replaced by tests that run the commands against in-memory providers. The first `sync --all` on 2.0 adds four AAAA records to every apex site at a configured provider. The Cloudflare provider and `delegate` have not been run against a live account; the vendor facts they rest on are listed as unverified in `docs/MIMEO2_DESIGN.md`. Other differences between the design text and the code are in that document's "As Built" section.
 
 ---
+
+### DEC-047: A Proxied Name Is Not Asked for More A or AAAA Records (2026-11-16)
+
+**Status**: Active (Phase 8). Found on the first live Cloudflare read (Entry 92). Narrows DEC-046's "AAAA records are written at the apex".
+
+**Context**: 2.0 requires four A and four AAAA records at an apex. blueberryhill.fyi and xhosi.com each have four proxied A records and no AAAA records, so `status` showed both as `missing` and `sync` would have added four AAAA records to each. Cloudflare answers for a proxied name itself, over IPv4 and IPv6: both domains already resolve to Cloudflare AAAA addresses in public DNS with no AAAA record in the zone (observed 2026-11-14, `docs/MIMEO2.md`). The records behind a proxied name only tell Cloudflare where to fetch from.
+
+**Decision**: When a name has at least one required address record that is proxied, `compare` does not report the name's other required A or AAAA records as missing. A name whose records are DNS-only is unchanged: all eight apex records are required. Extra address records are still removed either way.
+
+**Alternatives considered**: Add the AAAA records proxied (rejected: eight records where four do the same job, and every proxied site would show as `missing` until synced). Have the host return different requirements for a proxied zone (rejected: the host does not know about proxying; the proxy setting is read from the DNS provider, and `plan.py` already reads it to follow DEC-043).
+
+**Consequences**: A proxied apex with a single required A record passes as `ok`. If proxying is turned off on such a name, the next `status` shows the missing records and `sync` adds them.
+
+---

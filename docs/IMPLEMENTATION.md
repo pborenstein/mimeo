@@ -731,8 +731,11 @@ front-door verbs than it started with. See DEC-021.
   - [ ] `status` shows only dashes for a site whose domain is not in
         the Porkbun account but does answer in DNS (spacemang.com,
         spacemang.org); say so in the row
-  - [ ] Registrations expiring 2026-11-24 to 2026-12-06 (list in
-        Entry 93): check auto-renew
+  - [ ] Auto-renew (read 2026-11-17 from `status --format json`): on
+        for mellowtimesphere.com, mellowtimesphere.org and orobia.net;
+        off for ayeye.dev and ayeye.rodeo (expire 2026-11-27) and for
+        tequitl.dev and tequitl.agency (expire 2026-12-06). tequitl.dev
+        has a live site. Decide whether to renew
   - [ ] Verify the vendor facts listed in `docs/MIMEO2_DESIGN.md` "To
         Verify at Implementation" (token permissions for reading are
         verified, Entry 92; zone creation and record copy by `delegate`

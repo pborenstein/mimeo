@@ -19,8 +19,9 @@ trouble itself and `delegate` asks before stopping a service.
       of DEC-050 on a real failure.
 - [ ] **Not yet run live**: `delegate 002370.xyz --dns porkbun` (the
       move back); `sync` writing records to a Cloudflare zone.
-- [ ] **Registrations expiring** 2026-11-24 to 2026-12-06 (list in
-      Entry 93); auto-renew not checked.
+- [ ] **Auto-renew is off** for tequitl.dev (has a live site) and
+      tequitl.agency, expiring 2026-12-06, and for ayeye.dev and
+      ayeye.rodeo, expiring 2026-11-27. Read 2026-11-17.
 - [ ] **Unverified vendor facts** behind `delegate`'s warnings: Email
       Routing and Porkbun mail forwarding (DEC-051).
 - [ ] **Small fixes**: `sync --dry-run` says "N changed"; `status`

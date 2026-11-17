@@ -14,7 +14,7 @@ README, TROUBLESHOOTING and the design's As Built match 2.0 (Entry 95).
 
 ## Active Tasks
 
-- [ ] **blueberryhill.fyi** renewal near 2026-12-23, behind the proxy:
+- [ ] **blueberryhill.fyi** certificate renewal near 2026-12-23, proxied:
       on `cert error`, `mimeo sync blueberryhill.fyi` is the first run
       of DEC-050 on a real failure.
 - [ ] **tequitl.dev is being left to expire** (2026-12-06, decided
@@ -41,4 +41,4 @@ README, TROUBLESHOOTING and the design's As Built match 2.0 (Entry 95).
 ## Next Session
 
 Nothing is in progress. The one live path left is the proxy sequence
-on a real failed renewal (blueberryhill.fyi, near 2026-12-23).
+on a real failed certificate renewal (blueberryhill.fyi, near 2026-12-23).

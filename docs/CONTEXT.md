@@ -9,9 +9,8 @@ last_entry: 92
 ## Current Focus
 
 mimeo 2.0 is built on branch `mimeo-2.0-design` (not pushed, merged or
-released; version 2.0.0b1). The live config is on schema 2 and the
-Cloudflare provider reads the live account. No command that writes has
-run live yet.
+released; 2.0.0b1). The live config is on schema 2 and Cloudflare reads
+work live. No command that writes has run live yet.
 
 ## Active Tasks
 
@@ -26,11 +25,9 @@ run live yet.
 - [ ] **xhosi.com certificate** expires 2026-12-12, renewal failing;
       manual steps in IMPLEMENTATION.md. blueberryhill.fyi is next,
       near 2026-12-23.
-- [ ] **mimeo.lol** returns GitHub's 404 (its repo became
-      `mimeo-templates/mimeo`, no custom domain). twohorses.org still
-      uncreated.
-- [ ] **Release**: 1.4.0 is commit `62eeff7`; 2.0.0 from the branch tip.
-- [ ] **Stale docs**: TROUBLESHOOTING.md, SUBDOMAINS.md, NETLIFY.md.
+- [ ] **mimeo.lol** returns GitHub's 404 (repo became
+      `mimeo-templates/mimeo`, no custom domain); twohorses.org uncreated.
+- [ ] **Release** (1.4.0 is `62eeff7`) and stale docs: IMPLEMENTATION.md.
 
 ## Blockers: none
 

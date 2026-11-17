@@ -1,6 +1,12 @@
 # Mimeo
 
-Connects a domain to the site that serves it, and keeps the connection correct. For a site to load at `example.com`, four things have to agree: the registration, the nameservers, the DNS records at whichever provider the nameservers name, and the host's custom-domain setting. mimeo reads all four, shows what disagrees, and fixes what it can.
+Connects a domain to the site that serves it, and keeps the connection correct. For a site to load at `example.com`, four things have to agree. Mimeo reads all four, shows what disagrees, and fixes what it can.
+
+- the registration
+- the nameservers
+- the DNS records at whichever provider the nameservers name
+- the host's custom-domain setting
+
 
 Today that means Porkbun as the registrar, Porkbun or Cloudflare as the DNS provider, and GitHub Pages as the host.
 

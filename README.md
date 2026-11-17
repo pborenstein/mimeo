@@ -307,7 +307,7 @@ A 1.x config file loads unchanged. With no new keys mimeo behaves as before: one
 | Reading Cloudflare zones | Yes, 2026-11-16 |
 | `delegate` from Porkbun to Cloudflare | Once, 2026-11-16 |
 | `delegate` back to Porkbun | Once, 2026-11-17 |
-| `sync` writing records to a Cloudflare zone | No |
+| `sync` removing and adding records in a Cloudflare zone | Once each, 2026-11-17 |
 | `sync` renewing behind the proxy, certificate still valid | Once, 2026-11-17, in 22 seconds |
 | `sync` renewing behind the proxy, renewal failed | No; the same steps by hand fixed xhosi.com on 2026-11-17 |
 

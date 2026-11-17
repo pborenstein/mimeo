@@ -1411,5 +1411,7 @@ created nothing (it stopped before the repo existed).
 
 **Decided**: tequitl.dev (served by `pborenstein/twohorses`) is left to expire on 2026-12-06.
 
+**Later the same day**: moved 002370.xyz to Cloudflare again and tested `sync` there. A stray `A @ 192.0.2.1` added in the dashboard was shown as `extra` and removed; a deleted `A @ 185.199.108.153` was shown as `missing` and added back, DNS-only. The second move showed that `delegate --dry-run` listed every record as `would copy` even when the target already had them; fixed in `ab8085d`.
+
 **Files**: `README.md`, `CHANGELOG.md`, `docs/TROUBLESHOOTING.md`, `docs/MIMEO2_DESIGN.md`, `pyproject.toml`, `mimeo/__init__.py`, `uv.lock`.
 

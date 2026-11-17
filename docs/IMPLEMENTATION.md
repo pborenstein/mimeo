@@ -729,7 +729,9 @@ front-door verbs than it started with. See DEC-021.
         2026-11-17: nothing needed copying (Porkbun's records were left
         in place by the first move), nameservers set, `status` shows
         `porkbun`, records `ok`, site `ok`
-  - [ ] `sync` writing to a Cloudflare zone has not been run live
+  - [x] `sync` writing to a Cloudflare zone ran live 2026-11-17 on
+        002370.xyz: removed a stray `A @ 192.0.2.1`, added back a deleted
+        `A @ 185.199.108.153` (written DNS-only)
   - [ ] `sync --dry-run` summary says "N changed"; nothing changed
   - [ ] `status` shows only dashes for a site whose domain is not in
         the Porkbun account but does answer in DNS (spacemang.com,

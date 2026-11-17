@@ -419,10 +419,12 @@ Run live since the paragraph above was written: `scan` (73 sites),
 `sync` on 61 Porkbun-served sites, certificate requests on five
 sites, `delegate` of 002370.xyz to Cloudflare and back, `unlink` and
 `delete` on two sites whose domains had lapsed, and the proxy
-sequence on 002370.xyz while its certificate was still valid. Not
-run live: `sync` removing a record on Cloudflare, `sync` adding a
-record at a name that is already proxied, and the proxy sequence
-against a renewal that has actually failed.
+sequence on 002370.xyz while its certificate was still valid, and
+`sync` removing and adding a record on Cloudflare (002370.xyz,
+2026-11-17). Not run live: the proxy sequence against a renewal that
+has actually failed. `sync` adding a record at a name that is already
+proxied cannot arise for a GitHub Pages site: a proxied apex is not
+asked for more A or AAAA records (DEC-047), and `www` holds one CNAME.
 
 The items under "To Verify at Implementation", as of 2026-11-17:
 

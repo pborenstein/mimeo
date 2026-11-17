@@ -17,8 +17,6 @@ README, TROUBLESHOOTING and the design's As Built match 2.0 (Entry 95).
 - [ ] **blueberryhill.fyi** renewal near 2026-12-23, behind the proxy:
       on `cert error`, `mimeo sync blueberryhill.fyi` is the first run
       of DEC-050 on a real failure.
-- [ ] **Not yet run live**: `sync` writing records to a Cloudflare
-      zone. (The move back to Porkbun ran 2026-11-17.)
 - [ ] **tequitl.dev is being left to expire** (2026-12-06, decided
       2026-11-17). Its site is `pborenstein/twohorses`; when `status`
       shows it as `no domain`, pick unlink, delete or move.
@@ -38,9 +36,9 @@ README, TROUBLESHOOTING and the design's As Built match 2.0 (Entry 95).
 - The proxy setting changes only during that certificate sequence.
 - Porkbun requests are spaced 0.25s; `status --all` takes a minute.
 - Live config: three organizations, `defaults.dns = "cloudflare"`.
-- 002370.xyz is the junk domain, back on Porkbun since 2026-11-17.
+- 002370.xyz is the junk domain, on Cloudflare again since 2026-11-17.
 
 ## Next Session
 
-Nothing is in progress. Next live test: move 002370.xyz to Cloudflare,
-break a record by hand, and run `mimeo sync 002370.xyz`.
+Nothing is in progress. The one live path left is the proxy sequence
+on a real failed renewal (blueberryhill.fyi, near 2026-12-23).

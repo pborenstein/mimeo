@@ -11,19 +11,23 @@ Versions before 2.0.0 were not tagged. Their history is in
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-17
+
 ### Added
 
-- `scripts/e2e_smoke.sh DOMAIN`: moves a junk domain's zone to the other DNS provider and back, checking that `status` reads `ok` at each step. Not run by pytest.
+- `scripts/e2e_smoke.sh DOMAIN`: moves a junk domain's zone to the other DNS provider and back, checking that `status` reads `ok` at each step. Not run by pytest ([a54a1a5](https://github.com/pborenstein/mimeo/commit/a54a1a5)).
 
 ### Changed
 
 - `delegate` no longer warns that Porkbun mail forwarding may stop. Porkbun's guide says forwarding works with DNS hosted elsewhere when the MX records point at Porkbun, and `delegate` copies them. The Cloudflare Email Routing warning now cites Cloudflare's documentation.
 - The site cache records the organizations it was built from. When `github.organizations` changes, the next lookup that misses rescans.
-- `status` shows a hostname registered outside this Porkbun account as `elsewhere` under `EXPIRES` and `external` under `DNS` and `RECORDS`, with a `note:` naming its nameservers, instead of dashes.
+- `status` shows a hostname registered outside this Porkbun account as `elsewhere` under `EXPIRES` and `external` under `DNS` and `RECORDS`, with a `note:` naming its nameservers, instead of dashes. JSON and CSV output gain a `notes` field ([a54a1a5](https://github.com/pborenstein/mimeo/commit/a54a1a5)).
+- The README is reorganized, and `docs/TROUBLESHOOTING.md` says which vendor facts were checked and when ([0e48ab8](https://github.com/pborenstein/mimeo/commit/0e48ab8)).
 
 ### Fixed
 
-- `sync --dry-run` ends with "N would change" instead of "N changed".
+- `sync --dry-run` ends with "N would change" instead of "N changed" ([a54a1a5](https://github.com/pborenstein/mimeo/commit/a54a1a5)).
+- `delegate --dry-run` lists only the records the target provider lacks, as the real run copies; it listed every record ([ab8085d](https://github.com/pborenstein/mimeo/commit/ab8085d)).
 - `doctor DOMAIN` no longer says a Cloudflare-served domain "needs [cloudflare] api_token in config" when the token is configured, and fails when it is not.
 
 ## [2.0.0] - 2026-11-17
@@ -128,5 +132,6 @@ before: one organization, Porkbun DNS.
   of 2026-11-17). They are covered by tests against in-memory providers.
 - `delegate` warns only about the three services listed above.
 
-[Unreleased]: https://github.com/pborenstein/mimeo/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/pborenstein/mimeo/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/pborenstein/mimeo/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/pborenstein/mimeo/releases/tag/v2.0.0

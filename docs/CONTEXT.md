@@ -8,8 +8,8 @@ last_entry: 96
 
 ## Current Focus
 
-mimeo 2.0.0 was released from `main` on 2026-11-17 (tag `v2.0.0`, the
-repository's first tag). It is in live use and every site reads `ok`.
+mimeo 2.1.0 is the current release (tag `v2.1.0`, 2026-11-17; 2.0.0 was
+released earlier the same day). It is in live use and every site reads `ok`.
 The small open tasks are closed (Entry 96); mimeo.lol has a new site.
 
 ## Active Tasks

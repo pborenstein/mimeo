@@ -962,3 +962,20 @@ Known cases: Cloudflare MX records at `mx.cloudflare.net` (Email Routing); any p
 
 **Consequences**: The list is only what the providers' code knows about. Two of its three entries rest on unverified vendor behavior: Email Routing's dependence on Cloudflare serving the zone is from how the service is set up, and Porkbun's forwarding behavior was not checked at all (as of 2026-11-17). A service not on the list moves without a question.
 
+---
+
+### DEC-052: Porkbun Mail Is Not a Service `delegate` Warns About (2026-11-18)
+
+**Status**: Active (Phase 8). Narrows DEC-051.
+
+**Context**: DEC-051 listed three services a move could stop and marked two of its vendor facts unverified. Checked 2026-11-18:
+
+- Cloudflare's [Email Routing docs](https://developers.cloudflare.com/email-routing/): "It is available to all Cloudflare customers using Cloudflare as an authoritative nameserver." The Email Routing warning stands.
+- Porkbun's guide [How to use Porkbun email when your DNS is hosted elsewhere](https://kb.porkbun.com/article/47-how-to-use-porkbun-email-when-your-dns-is-hosted-elsewhere) says forwarding works with DNS elsewhere when the MX records point at `fwd1.porkbun.com` and `fwd2.porkbun.com`.
+
+**Decision**: `PorkbunDNSProvider` reports nothing on leaving. `delegate` copies the MX records, so Porkbun forwarding keeps working after a move to Cloudflare.
+
+**Alternatives considered**: Keep the warning worded "may" (rejected: it now contradicts the vendor's own documentation, and a question nobody needs to answer trains people to answer yes).
+
+**Consequences**: Moving a Porkbun zone that uses Porkbun mail forwarding asks nothing. Porkbun's email hosting (as opposed to forwarding) was not looked at separately.
+

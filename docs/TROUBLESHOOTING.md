@@ -35,9 +35,9 @@ The detail lines (`sync would:`, `problem:`, `to fix:`) appear when hostnames ar
 |:------|:--------|:-----------|
 | `porkbun`, `cloudflare` | The nameservers set at the registrar belong to that provider, and mimeo reads and writes the records there | Nothing |
 | trailing `*` | At least one of the site's records is proxied through Cloudflare | Nothing; a proxied record is not a problem |
-| `external` | The nameservers belong to a provider mimeo is not configured for, so it cannot read the records | To let mimeo manage a Cloudflare zone, add the `[cloudflare]` section to the config (see `config.toml.example`). For any other provider, manage the records there by hand |
+| `external` | The nameservers belong to a provider mimeo is not configured for, or the domain is registered outside this Porkbun account, so mimeo cannot read the records | To let mimeo manage a Cloudflare zone, add the `[cloudflare]` section to the config (see `config.toml.example`). For any other provider, manage the records there by hand |
 | `none` | The registrar reports no nameservers | `status` prints the `mimeo delegate ... --empty` command |
-| `-` | The hostname is not in the Porkbun account, or the row could not be read (the error is printed at the end of the row) | See [`no domain`](#site) below, and [Porkbun](#porkbun) for read errors |
+| `-` | The hostname is not in the Porkbun account and nothing answers for it, or the row could not be read (the error is printed at the end of the row) | See [`no domain`](#site) below, and [Porkbun](#porkbun) for read errors |
 
 ### RECORDS
 
@@ -66,7 +66,7 @@ The records a site needs are listed in the README under [Which records mimeo tou
 | `no domain` | The hostname has a repository but is not in the Porkbun account, and public DNS has no nameservers for it. The registration has most likely lapsed | `status` prints four choices: `mimeo unlink`, `mimeo delete`, GitHub's transfer page, or registering the domain again |
 | `no site` | A registered domain with no repository serving it. Not a problem | `mimeo create` or `mimeo link` if it should have one |
 
-A site whose hostname is not in the Porkbun account but does answer in DNS (registered in another account or elsewhere) shows dashes for `EXPIRES`, `DNS` and `RECORDS` and is judged on its certificate alone. mimeo cannot read or fix its records.
+A site whose hostname is not in the Porkbun account but does answer in DNS (registered in another account or elsewhere) shows `elsewhere` under `EXPIRES` and `external` under `DNS` and `RECORDS`, with a `note:` line naming its nameservers. It is judged on its certificate alone. mimeo cannot read or fix its records.
 
 ## Certificates and HTTPS
 
@@ -160,7 +160,7 @@ Each message says why. The table adds what to do.
 | `delegate` | `was not moved. Moving it to ... would stop:` | The question was answered no, or there was no terminal to ask on | Same |
 | `delete` | HTTP 403 on deleting the repository | The `gh` token lacks the `delete_repo` scope | `gh auth refresh -h github.com -s delete_repo` |
 
-`delegate` warns about three services only: Cloudflare Email Routing, Cloudflare proxied records, and Porkbun mail (worded "may stop"). Anything else that depends on the old provider moves without a question. That Email Routing stops when the zone leaves Cloudflare, and how Porkbun's mail forwarding behaves, are not checked against the vendors' documentation (as of 2026-11-17).
+`delegate` warns about two services only: Cloudflare Email Routing and Cloudflare proxied records. Anything else that depends on the old provider moves without a question. Cloudflare's docs say Email Routing needs Cloudflare as the authoritative nameserver. Porkbun's mail forwarding is not warned about, because Porkbun's guide says it keeps working with DNS elsewhere when the MX records still point at Porkbun, and `delegate` copies them (both checked 2026-11-18).
 
 ## mimeo cannot find a site
 
@@ -168,7 +168,7 @@ mimeo keeps the pairs of hostname and repository it has found in `~/.cache/mimeo
 
 | What you see | Why | What to do |
 |:-------------|:----|:-----------|
-| `no site` for a hostname that has a repository | The repository was linked outside mimeo, or its organization was added to `github.organizations` after the last scan. The cache does not record which organizations it was built from | `mimeo scan` |
+| `no site` for a hostname that has a repository | The repository was linked outside mimeo after the last scan. (A change to `github.organizations` makes the next lookup that misses rescan by itself) | `mimeo scan` |
 | `scan` warns that two repositories claim one hostname | Both have it as their custom domain; the cache keeps the first | Remove the custom domain from the one that should not have it (repository Settings > Pages) and run `mimeo scan` |
 | A private repository is not found | `scan` sees private repositories only in the authenticated account and in organizations it belongs to | Add the account to the organization, or make the repository public |
 

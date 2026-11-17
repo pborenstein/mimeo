@@ -11,6 +11,21 @@ Versions before 2.0.0 were not tagged. Their history is in
 
 ## [Unreleased]
 
+### Added
+
+- `scripts/e2e_smoke.sh DOMAIN`: moves a junk domain's zone to the other DNS provider and back, checking that `status` reads `ok` at each step. Not run by pytest.
+
+### Changed
+
+- `delegate` no longer warns that Porkbun mail forwarding may stop. Porkbun's guide says forwarding works with DNS hosted elsewhere when the MX records point at Porkbun, and `delegate` copies them. The Cloudflare Email Routing warning now cites Cloudflare's documentation.
+- The site cache records the organizations it was built from. When `github.organizations` changes, the next lookup that misses rescans.
+- `status` shows a hostname registered outside this Porkbun account as `elsewhere` under `EXPIRES` and `external` under `DNS` and `RECORDS`, with a `note:` naming its nameservers, instead of dashes.
+
+### Fixed
+
+- `sync --dry-run` ends with "N would change" instead of "N changed".
+- `doctor DOMAIN` no longer says a Cloudflare-served domain "needs [cloudflare] api_token in config" when the token is configured, and fails when it is not.
+
 ## [2.0.0] - 2026-11-17
 
 mimeo 2.0 connects a hostname to the site that serves it and keeps the

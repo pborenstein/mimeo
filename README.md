@@ -82,8 +82,8 @@ A bare `mimeo status` refuses to run; a fleet sweep needs `--all`. Findings exit
 
 | Column | Values |
 |:-------|:-------|
-| `EXPIRES` | Registration expiry; `-` for a subdomain or a hostname whose domain is not at the registrar |
-| `DNS` | `porkbun`, `cloudflare`, `external` (a provider mimeo cannot read), `none` (no nameservers); a trailing `*` when the site's records are proxied |
+| `EXPIRES` | Registration expiry; `elsewhere` for a hostname registered outside this Porkbun account that DNS answers for; `-` for a subdomain, or a hostname not at the registrar that nothing answers for |
+| `DNS` | `porkbun`, `cloudflare`, `external` (a provider or account mimeo cannot read), `none` (no nameservers); a trailing `*` when the site's records are proxied |
 | `RECORDS` | `ok`, `missing`, `extra`, `external` (not compared), `unknown` |
 | `SITE` | `ok`, `fixable`, `pending`, `no cert`, `cert error`, `expiring`, `no pages`, `no domain`, `no site` |
 | `REPO` | The repository whose custom domain is the hostname |
@@ -100,6 +100,7 @@ When hostnames are named, or with `--problems`, detail lines follow each row. Th
 | `problem:` | Something `sync` cannot change, stated in a sentence |
 | `to fix:` | Numbered steps for that problem, done in order |
 | `do one of:` | Alternatives for that problem; pick one |
+| `note:` | Something worth knowing that is not a problem, such as a hostname registered outside this account |
 
 ```
   example.com      2027-08-31  cloudflare*  ok   cert error  mimeo-sites/example.com
@@ -199,7 +200,8 @@ Some records point at a service the current provider runs only for zones it serv
 |:--------|:--------|:-----------|
 | Cloudflare | MX pointing at `mx.cloudflare.net` | Cloudflare Email Routing: incoming mail |
 | Cloudflare | Any proxied record | Cloudflare's proxy for those names, with whatever is set up on it |
-| Porkbun | MX pointing at `porkbun.com` | Porkbun's mail forwarding or hosting may stop (unverified) |
+
+Cloudflare's docs say Email Routing "is available to all Cloudflare customers using Cloudflare as an authoritative nameserver" ([Email Routing](https://developers.cloudflare.com/email-routing/), checked 2026-11-18). Porkbun's mail forwarding is not on the list: Porkbun's guide says it works with DNS hosted elsewhere as long as the MX records point at `fwd1.porkbun.com` and `fwd2.porkbun.com` ([kb.porkbun.com/article/47](https://kb.porkbun.com/article/47-how-to-use-porkbun-email-when-your-dns-is-hosted-elsewhere), checked 2026-11-18), and `delegate` copies them.
 
 #### Refusals
 
@@ -254,7 +256,7 @@ When nothing is linked, it falls back to the repository named after the hostname
 
 `mimeo scan` reads the custom domain of every Pages repository in every organization listed under `github.organizations` and rewrites the cache. It warns when two repositories claim one hostname.
 
-It runs by itself the first time a lookup misses. Run it by hand after linking a site outside mimeo, or after adding an organization to the config.
+It runs by itself when a lookup misses and the cache was never filled, or was filled from a different `github.organizations` list. The cache records the list it was built from. Run it by hand after linking a site outside mimeo.
 
 ### doctor
 
@@ -297,7 +299,7 @@ A 1.x config file loads unchanged. With no new keys mimeo behaves as before: one
 ## Known limitations
 
 - One registrar (Porkbun), two DNS providers (Porkbun, Cloudflare), one host (GitHub Pages). The interfaces leave room for more.
-- `delegate` warns only about the three services in [its table](#services-a-move-would-stop). That Cloudflare Email Routing stops when the zone leaves Cloudflare is not checked against Cloudflare's documentation (as of 2026-11-17).
+- `delegate` warns only about the two services in [its table](#services-a-move-would-stop). Anything else that depends on the old provider moves without a question.
 - Requests to Porkbun start 0.25 seconds apart, so `status --all` over about 100 domains takes about a minute. Whether Porkbun publishes a request limit is unverified; the interval was chosen on 2026-11-16 after unspaced sweeps lost a domain to a 503.
 - `scan` sees private repositories only in the authenticated account and in organizations it belongs to.
 - DNS propagation is not polled; run `mimeo status` afterwards.

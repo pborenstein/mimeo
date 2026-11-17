@@ -709,8 +709,8 @@ front-door verbs than it started with. See DEC-021.
   - [x] `doctor` verifies account-owned Cloudflare tokens (`678b3b7`)
   - [x] A proxied name is not asked for more A/AAAA records (DEC-047)
   - [x] Run `mimeo scan`: 73 sites in three organizations (Entry 93)
-  - [ ] Make the cache record the organizations it was built from, and
-        rescan when the config's list differs
+  - [x] The cache records the organizations it was built from; a miss
+        rescans when the config's list differs (Entry 96)
   - [x] `mimeo status --all` read against expectations (Entry 93)
   - [x] First live writes: `sync` on 61 Porkbun-served sites;
         `delegate 002370.xyz --dns cloudflare` (Entry 93)
@@ -722,9 +722,9 @@ front-door verbs than it started with. See DEC-021.
         for failed and expiring certificates (DEC-050, Entry 94)
   - [x] `delegate` asks before a move that would stop a service
         (DEC-051, Entry 94)
-  - [ ] Verify against vendor docs: Cloudflare Email Routing stops when
-        the zone leaves Cloudflare; whether Porkbun mail forwarding
-        needs Porkbun nameservers
+  - [x] Vendor facts behind `delegate`'s warnings checked 2026-11-18:
+        Email Routing needs Cloudflare nameservers; Porkbun forwarding
+        does not (DEC-052)
   - [x] `delegate 002370.xyz --dns porkbun` (the move back) ran live
         2026-11-17: nothing needed copying (Porkbun's records were left
         in place by the first move), nameservers set, `status` shows
@@ -732,10 +732,9 @@ front-door verbs than it started with. See DEC-021.
   - [x] `sync` writing to a Cloudflare zone ran live 2026-11-17 on
         002370.xyz: removed a stray `A @ 192.0.2.1`, added back a deleted
         `A @ 185.199.108.153` (written DNS-only)
-  - [ ] `sync --dry-run` summary says "N changed"; nothing changed
-  - [ ] `status` shows only dashes for a site whose domain is not in
-        the Porkbun account but does answer in DNS (spacemang.com,
-        spacemang.org); say so in the row
+  - [x] `sync --dry-run` summary says "N would change" (Entry 96)
+  - [x] A site registered outside the Porkbun account that answers in
+        DNS shows `elsewhere` / `external` and a note (Entry 96)
   - [ ] Auto-renew (read 2026-11-17 from `status --format json`): on
         for mellowtimesphere.com, mellowtimesphere.org and orobia.net;
         off for ayeye.dev and ayeye.rodeo (expire 2026-11-27) and for
@@ -748,7 +747,8 @@ front-door verbs than it started with. See DEC-021.
         Verify at Implementation" (token permissions for reading are
         verified, Entry 92; zone creation and record copy by `delegate`
         ran live, Entry 93; the rest are not checked off there yet)
-  - [ ] Extend the smoke script to cover `delegate` to Cloudflare and back
+  - [x] `scripts/e2e_smoke.sh` written; it moves a junk domain to the
+        other provider and back (Entry 96, passed on 002370.xyz)
   - [x] `docs/TROUBLESHOOTING.md` rewritten for 2.0 (2026-11-17)
   - [x] Release 2.0.0 from `main`, tagged `v2.0.0` (2026-11-17), with
         `CHANGELOG.md`. It is the first tag in the repository; 1.4.0

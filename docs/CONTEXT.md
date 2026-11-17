@@ -1,9 +1,9 @@
 ---
 phase: 8
 phase_name: Consolidation
-updated: 2026-11-17
+updated: 2026-11-18
 last_commit: 274ae0b
-last_entry: 95
+last_entry: 96
 ---
 
 ## Current Focus
@@ -20,12 +20,9 @@ README, TROUBLESHOOTING and the design's As Built match 2.0 (Entry 95).
 - [ ] **tequitl.dev is being left to expire** (2026-12-06, decided
       2026-11-17). Its site is `pborenstein/twohorses`; when `status`
       shows it as `no domain`, pick unlink, delete or move.
-- [ ] **Unverified vendor facts** behind `delegate`'s warnings: Email
-      Routing and Porkbun mail forwarding (DEC-051).
-- [ ] **Small fixes**: `sync --dry-run` says "N changed"; `status`
-      shows only dashes for spacemang.com and spacemang.org.
-- [ ] **Cache**: record the organizations it was built from.
-- [ ] **mimeo.lol** returns GitHub's 404 (repo has no custom domain).
+- [ ] **mimeo.lol** returns GitHub's 404: no repository has it as its
+      custom domain since `pborenstein/mimeo.lol` became
+      `mimeo-templates/mimeo`. Needs a decision on what it serves.
 
 ## Blockers: none
 

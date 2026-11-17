@@ -139,8 +139,10 @@ Stable facts that sessions need. Current work state lives in
   `--force` is the only in-place replacement.
 - **Public repo**: anything committed is published. Porkbun account
   exports (`scripts/porkbun*.json`) are gitignored for that reason.
-- **E2E**: live usage is the end-to-end hedge; `scripts/e2e_smoke.sh`
-  runs against a junk domain.
+- **E2E**: live usage is the end-to-end hedge.
+  `scripts/e2e_smoke.sh DOMAIN` moves a junk domain (002370.xyz) to the
+  other DNS provider and back and checks `status` at each step; it is
+  not run by pytest.
 - **Releases**: bump `pyproject.toml`, `mimeo/__version__`, and run
   `uv lock` together.
 - **Tests**: tests that build 404/422 `HostError`s must pass

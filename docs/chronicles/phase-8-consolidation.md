@@ -1415,3 +1415,22 @@ created nothing (it stopped before the repo existed).
 
 **Files**: `README.md`, `CHANGELOG.md`, `docs/TROUBLESHOOTING.md`, `docs/MIMEO2_DESIGN.md`, `pyproject.toml`, `mimeo/__init__.py`, `uv.lock`.
 
+## Entry 96: the open small tasks (2026-11-18)
+
+**What**: Closed five of the six small open tasks from CONTEXT.md. 428 tests pass.
+
+**How**:
+
+- `sync --dry-run` summary says "N would change".
+- A site whose hostname is outside the Porkbun account but answers in DNS (spacemang.com, spacemang.org) shows `elsewhere` under `EXPIRES`, `external` under `DNS` and `RECORDS`, and a `note:` line with its nameservers. Its certificate steps no longer say the registration may have lapsed. `Plan.notes` and the `notes` output field are new; notes are not problems.
+- The site cache stores `organizations`. `Fleet.cache_current` compares it with the host's list; a lookup miss or a fleet-wide run rescans when they differ. A cache written before this has no list and rescans once (it did, on the first `status --all`).
+- Vendor facts checked (DEC-052): Cloudflare's docs confirm Email Routing needs Cloudflare as the authoritative nameserver; Porkbun's guide says forwarding works with DNS elsewhere, so the Porkbun warning was removed.
+- `scripts/e2e_smoke.sh DOMAIN` written and run on 002370.xyz: Cloudflare to Porkbun to Cloudflare, `ok` at each step. `CLAUDE.md` had described the script before it existed.
+- Found while running it: `doctor DOMAIN` said a Cloudflare-served domain "needs [cloudflare] api_token in config" even with a token. It now passes with a token and fails without one.
+
+**Open**: mimeo.lol, which needs a decision about what it should serve.
+
+**Decisions**: DEC-052.
+
+**Files**: `mimeo/cache.py`, `mimeo/connection.py`, `mimeo/plan.py`, `mimeo/cli/_fleet.py`, `mimeo/cli/status.py`, `mimeo/cli/sync.py`, `mimeo/cli/doctor.py`, `mimeo/providers/base.py`, `mimeo/providers/dns/cloudflare.py`, `mimeo/providers/registrar/porkbun.py`, `scripts/e2e_smoke.sh`, tests, `README.md`, `docs/TROUBLESHOOTING.md`, `CHANGELOG.md`, `CLAUDE.md`.
+

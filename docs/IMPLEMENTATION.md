@@ -718,6 +718,13 @@ front-door verbs than it started with. See DEC-021.
         missing certificate; lapsed domains get choices for the
         repository (DEC-048, `c79ed04`)
   - [x] Requests to Porkbun are spaced (DEC-049)
+  - [x] `sync` gets a certificate issued behind Cloudflare's proxy, and
+        for failed and expiring certificates (DEC-050, Entry 94)
+  - [x] `delegate` asks before a move that would stop a service
+        (DEC-051, Entry 94)
+  - [ ] Verify against vendor docs: Cloudflare Email Routing stops when
+        the zone leaves Cloudflare; whether Porkbun mail forwarding
+        needs Porkbun nameservers
   - [ ] `delegate 002370.xyz --dns porkbun` (the move back), and `sync`
         writing to a Cloudflare zone, have not been run live
   - [ ] `sync --dry-run` summary says "N changed"; nothing changed
@@ -734,13 +741,11 @@ front-door verbs than it started with. See DEC-021.
   - [ ] `docs/TROUBLESHOOTING.md` still describes 1.x commands
   - [ ] Decide the release: 1.4.0 from `62eeff7`, 2.0.0 from the branch
         tip (version is 2.0.0b1 until then)
-- [ ] xhosi.com: GitHub certificate renewal is failing (`bad_authz`),
-      expires 2026-12-12; records are proxied through Cloudflare. By
-      hand: set the four A records and `www` to DNS-only, wait for
-      `mimeo status xhosi.com` to show `ok`, set them back to proxied.
-      blueberryhill.fyi will need the same near 2026-12-23.
-      `mimeo status xhosi.com` now prints the steps (DEC-048); doing
-      them is the first test of those steps
+- [x] xhosi.com: certificate renewed 2026-11-17 by the by-hand steps
+      (Entry 94). `sync` now does those steps (DEC-050)
+- [ ] blueberryhill.fyi: renewal attempt expected near 2026-12-23,
+      behind the proxy. If `status` shows `cert error`, `mimeo sync
+      blueberryhill.fyi` is the first run of DEC-050 on a real failure
 - [ ] mimeo.lol returns GitHub's 404: `pborenstein/mimeo.lol` is now
       `mimeo-templates/mimeo`, which has no custom domain (found
       2026-11-15)

@@ -1368,3 +1368,28 @@ created nothing (it stopped before the repo existed).
 **Decisions**: DEC-048, DEC-049.
 
 **Files**: `mimeo/plan.py`, `mimeo/connection.py`, `mimeo/cli/_fleet.py`, `mimeo/cli/status.py`, `mimeo/cli/sync.py`, `mimeo/providers/registrar/porkbun.py`, `tests/test_plan.py`, `tests/test_commands.py`, `tests/conftest.py`, `README.md`.
+
+## Entry 94: sync renews behind the proxy; delegate asks before stopping a service (2026-11-17)
+
+**What**: `sync` now gets a certificate issued for a proxied site by itself, and for failed and expiring certificates on unproxied sites. `delegate` names the services a move would stop and asks first. 420 tests pass.
+
+**Why**: The user did the seven printed steps for xhosi.com and they worked, then asked why mimeo does not do them. Separately, the user dry-ran `delegate xhosi.com --dns porkbun` and saw that it would have copied Cloudflare Email Routing's MX records to Porkbun with no warning.
+
+**How**:
+
+- `plan.py`: one function decides what to do about a missing, failed or expiring certificate: a change `sync` applies when the zone is writable and the records are right, the two-run steps when records are wrong, by-hand steps when the zone cannot be written. `apply` takes a `sleep` argument for the wait.
+- `DNSProvider.set_proxied` (Cloudflare: `PATCH` on the record) and `DNSProvider.stops_on_leaving`.
+- `delegate` gains `--yes`; `operations.delegate` takes a `confirm` callback and raises `WouldStopService` without one. `create` catches it and leaves the zone in place.
+
+**Verified live (2026-11-17)**:
+
+- xhosi.com: the by-hand steps from Entry 93 got the certificate issued (done by the user). `status` shows `ok`.
+- `delegate xhosi.com --dns porkbun --dry-run` now ends with two `would stop:` lines (Email Routing; the proxy on `A @`, `AAAA @`, `CNAME www`).
+- 002370.xyz: all nine records switched to proxied and back through `set_proxied`; the whole `sync` sequence run directly on it took 22 seconds. The domain was returned to DNS-only.
+
+**Found**: GitHub keeps an approved certificate when the custom domain is removed and set again, even with the records proxied at the time. So a failed renewal cannot be produced on demand, and the sequence has not been run against one.
+
+**Decisions**: DEC-050, DEC-051.
+
+**Files**: `mimeo/plan.py`, `mimeo/operations.py`, `mimeo/providers/base.py`, `mimeo/providers/dns/cloudflare.py`, `mimeo/providers/registrar/porkbun.py`, `mimeo/cli/connect.py`, `mimeo/cli/create.py`, `tests/fakes.py`, `tests/test_plan.py`, `tests/test_commands.py`, `README.md`.
+

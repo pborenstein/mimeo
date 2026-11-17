@@ -924,3 +924,41 @@ Checked 2026-11-15:
 **Alternatives considered**: Fewer workers (rejected: the workers also serve GitHub and Cloudflare calls, which showed no failures). Longer retries alone (rejected: the other workers keep sending while one waits).
 
 **Consequences**: `status --all` takes about 60 seconds for 109 hostnames. Three runs after the change had no failures; two runs before it were also clean, so this is not proof. The interval is a guess to revisit if 503s return.
+
+---
+
+### DEC-050: `sync` Switches the Proxy Off to Get a Certificate, Then Back On (2026-11-17)
+
+**Status**: Active (Phase 8). User call. Supersedes the part of DEC-043 that says mimeo does nothing about certificate renewal on proxied domains, and the alternative DEC-048 set aside.
+
+**Context**: DEC-043 left renewal behind Cloudflare's proxy to be decided "from practice once domains are running this way". The practice: xhosi.com's renewal failed (`bad_authz`); on 2026-11-17 the user did the seven steps DEC-048 made `status` print (records to DNS-only, custom domain removed and set again, wait, records back to proxied) and the certificate was issued. The user then asked why mimeo does not do that itself.
+
+**Decision**: For a site with no certificate, a failed certificate, or an approved one within 14 days of expiry, whose records are right and in a zone mimeo can write:
+
+- records not proxied: `sync` removes the custom domain and sets it again (as in DEC-048, now also for failed and expiring certificates);
+- records proxied: `sync` switches the proxied records at the site's names to DNS-only, sets the custom domain again, looks at the certificate every 15 seconds for up to 15 minutes, sets the domain again if a request fails or three minutes pass, then switches the same records back to proxied and enforces HTTPS.
+
+If a call fails during the sequence, the records are switched back before the error is raised. If the certificate does not arrive in 15 minutes, the records stay DNS-only, because switching them back would block the certificate again; the error names the records and says how to switch them back.
+
+Everything else in DEC-043 stands: `link` writes DNS-only records, a proxied record is not a problem, and mimeo changes a proxy setting at no other time.
+
+**Alternatives considered**: Keep printing the steps (rejected by the user: the tool knows the steps and has the access). Restore the proxy on timeout (rejected: it guarantees the certificate cannot arrive, and mimeo keeps no record that would let a later run finish the job).
+
+**Consequences**: While the sequence runs, visitors reach GitHub directly and Cloudflare's rules for those names do not apply; with a valid certificate already in place the sequence took 22 seconds on 002370.xyz (2026-11-17). A timeout leaves a site unproxied until someone switches it back. `sync` has not yet repaired a failed renewal itself; blueberryhill.fyi near 2026-12-23 is the likely first case. mimeo keeps no memory that a site "should be" proxied; the sequence restores exactly the records that were proxied when it started.
+
+---
+
+### DEC-051: `delegate` Asks Before a Move That Would Stop a Service (2026-11-17)
+
+**Status**: Active (Phase 8). User call.
+
+**Context**: `mimeo delegate xhosi.com --dns porkbun --dry-run` listed sixteen records to copy and nothing else. Three of them are MX records pointing at Cloudflare Email Routing, which delivers mail only for zones Cloudflare serves. The copy would have been faithful and incoming mail would have stopped.
+
+**Decision**: Each DNS provider can say what stops when a zone leaves it (`DNSProvider.stops_on_leaving`). `delegate` asks the current provider before changing anything. With something on the list, the command prints it and asks; `--yes` skips the question; `--dry-run` lists each item as `would stop:`. Called from code with no way to ask, `delegate` refuses (`WouldStopService`). `create` catches that, leaves the zone where it is, creates the site there, and prints the `delegate` command.
+
+Known cases: Cloudflare MX records at `mx.cloudflare.net` (Email Routing); any proxied Cloudflare record; Porkbun MX records at `porkbun.com` (worded "may stop").
+
+**Alternatives considered**: Refuse outright (rejected: the user may have moved mail first and want the move). Warn and proceed (rejected: the damage is silent and shows up as missing mail).
+
+**Consequences**: The list is only what the providers' code knows about. Two of its three entries rest on unverified vendor behavior: Email Routing's dependence on Cloudflare serving the zone is from how the service is set up, and Porkbun's forwarding behavior was not checked at all (as of 2026-11-17). A service not on the list moves without a question.
+

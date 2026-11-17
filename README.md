@@ -32,7 +32,7 @@ Every command runs the same three steps.
 
 | Command | What it does |
 |:--------|:-------------|
-| [`status`](#status) | Shows what was read, the changes `sync` would make, and the problems it cannot fix |
+| [`status`](#status) | Shows what was read, the changes `sync` would make, and each problem it cannot fix with the steps that fix it |
 | [`sync`](#sync) | Applies the changes |
 | [`link`](#link-and-unlink) | Sets a site's custom domain to a hostname, then syncs it |
 | [`unlink`](#link-and-unlink) | Removes the site's records and its custom domain |
@@ -92,10 +92,27 @@ Precedence: CLI flags > `MIMEO_*` environment variables > config file.
 | `EXPIRES` | Registration expiry; `-` for a subdomain or a hostname whose domain is not at the registrar |
 | `DNS` | The provider serving the zone: `porkbun`, `cloudflare`, `external` (another provider, which mimeo cannot read), `none` (the registrar reports no nameservers). A trailing `*` means the site's records are proxied. |
 | `RECORDS` | `ok`, `missing`, `extra`, `external` (not compared), `unknown` |
-| `SITE` | `ok`, `fixable` (certificate ready, HTTPS not enforced), `pending`, `no cert`, `cert error`, `expiring` (14 days or less, so renewal is not happening), `no pages`, `no site` |
+| `SITE` | `ok`, `fixable` (certificate ready, HTTPS not enforced), `pending`, `no cert`, `cert error`, `expiring` (14 days or less, so renewal is not happening), `no pages`, `no domain` (the hostname is not at the registrar and has no DNS), `no site` |
 | `REPO` | The repository whose custom domain is the hostname |
 
-When hostnames are named, each row is followed by the changes `sync` would make and the problems it cannot fix. A registered domain with no site, a zone at an external provider, and proxied records are not problems. A bare `mimeo status` refuses to run; a fleet sweep needs `--all`. Findings exit 0; API errors exit nonzero with partial results.
+When hostnames are named, or with `--problems`, each row is followed by the changes `sync` would make and by each problem it cannot fix. A problem is stated in a sentence and followed by what to do about it, with the hostname, the commands and the page to open filled in:
+
+```
+  xhosi.com  2027-08-31  cloudflare*  ok        cert error  mimeo-sites/xhosi.com
+      problem: The HTTPS certificate could not be renewed. It expires 2026-12-12; after that date browsers refuse to open https://xhosi.com.
+      to fix:
+        1. In the Cloudflare dashboard, open xhosi.com > DNS > Records
+        2. Edit each of these and switch Proxy status to DNS only: A @, CNAME www. The proxy is what blocks the certificate.
+        3. Open https://github.com/mimeo-sites/xhosi.com/settings/pages
+        4. Under Custom domain, click Remove
+        5. Type xhosi.com back into Custom domain and click Save
+        6. Wait 15 minutes, then run: mimeo status xhosi.com. Repeat until SITE says ok or fixable; it can take an hour.
+        7. Switch the same records back to Proxied
+```
+
+`to fix:` lists steps to do in order. `do one of:` lists alternatives. A site shown as `no domain` gets alternatives, because the registration has most likely lapsed and the decision is about the repository: `mimeo unlink` to keep it, `mimeo delete` to remove it, GitHub's transfer page to move it, or registering the domain again. mimeo reaches `no domain` only when public DNS says the name has no nameservers; when that lookup cannot be made, it concludes nothing. In JSON and CSV output the steps are the `fixes` field, and `fixes_are_choices` says which kind they are.
+
+A registered domain with no site, a zone at an external provider, and proxied records are not problems. A bare `mimeo status` refuses to run; a fleet sweep needs `--all`. Findings exit 0; API errors exit nonzero with partial results.
 
 ### sync
 
@@ -105,7 +122,11 @@ When hostnames are named, each row is followed by the changes `sync` would make 
 | Apply to every site | `mimeo sync --all` |
 | Apply to specific hostnames | `mimeo sync example.com` |
 
-Adds missing address records, removes extra ones at the site's own names, and enforces HTTPS when the certificate is ready. It does not change nameservers (`delegate`), does not link anything (`link`), does not change a proxy setting, and does not write to a zone at a provider that is not configured.
+Adds missing address records, removes extra ones at the site's own names, requests the HTTPS certificate when the site has none, and enforces HTTPS when the certificate is ready.
+
+GitHub requests a certificate at the moment the custom domain is saved, so `sync` requests one by removing the custom domain and setting it again. It does that only when the records are already right and none is proxied. A site with no certificate and wrong records therefore takes two runs a few minutes apart (records, then the request), and a further run enforces HTTPS once the certificate is approved. Verified 2026-11-16 on five sites; GitHub approved the first certificate within 20 seconds. If the domain cannot be set again, the error gives the `mimeo link` command that puts it back.
+
+Problems `sync` cannot fix are printed with the same steps `status` prints. It does not change nameservers (`delegate`), does not link anything (`link`), does not change a proxy setting, and does not write to a zone at a provider that is not configured.
 
 ### link and unlink
 
@@ -228,7 +249,8 @@ mimeo/
 ## Known limitations
 
 - One registrar (Porkbun), two DNS providers (Porkbun, Cloudflare), one host (GitHub Pages). The interfaces leave room for more.
-- The Cloudflare provider and `delegate` are tested against in-memory providers and mocked HTTP only; they have not been run against a live Cloudflare account (as of 2026-11-15).
-- mimeo does nothing about GitHub certificate renewal on proxied Cloudflare records. `status` shows a failed renewal as `cert error` (DEC-043).
+- Against a live Cloudflare account, mimeo has read zones and run one `delegate` from Porkbun to Cloudflare (as of 2026-11-16). `sync` writing to a Cloudflare zone, and `delegate` back to Porkbun, have not been run live.
+- mimeo does not act on GitHub certificate renewal for proxied Cloudflare records (DEC-043). `status` shows a failed renewal as `cert error` and prints the steps to do by hand; those steps have not yet been carried out on a live site (as of 2026-11-16).
+- Requests to Porkbun are spaced 0.25 seconds apart, so `status --all` over about 100 domains takes about a minute. Whether Porkbun publishes a request limit is unverified; the 0.25 seconds is mimeo's choice. The spacing was added on 2026-11-16 after sweeps with five unspaced workers lost a domain to a 503.
 - `scan` sees private repositories only in the authenticated account and in organizations it belongs to.
 - DNS propagation is not polled; run `mimeo status` afterwards.

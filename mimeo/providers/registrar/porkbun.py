@@ -1,5 +1,7 @@
 """Porkbun registrar and DNS provider implementations."""
 
+import threading
+import time
 from typing import Any, Dict, List
 
 import dns.resolver
@@ -39,6 +41,48 @@ def lookup_nameservers(domain: str) -> list[str]:
         return []
 
 
+def public_nameservers(domain: str) -> list[str] | None:
+    """Ask public DNS for a domain's nameservers, telling "none" from "could not ask".
+
+    Returns:
+        The nameservers; an empty list when DNS says the name does not
+        exist or has no nameservers; None when the question could not
+        be answered (timeout, no network), so nothing can be concluded.
+    """
+    resolver = dns.resolver.Resolver()
+    resolver.timeout = 5
+    resolver.lifetime = 5
+    try:
+        answers = resolver.resolve(domain, "NS")
+        return sorted(str(r).rstrip(".").lower() for r in answers)
+    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
+        return []
+    except Exception:
+        return None
+
+
+# Seen 2026-11-16: with five workers sending requests as fast as they
+# could, three fleet sweeps out of five lost one domain to a 503 that
+# outlasted three retries. Whether Porkbun publishes a request limit is
+# unverified; the interval is this code's choice. So every
+# request from this process, whichever worker or client object sends it,
+# starts at least this long after the last.
+MIN_INTERVAL = 0.25
+_pace_lock = threading.Lock()
+_next_start = 0.0
+
+
+def _pace() -> None:
+    """Wait for this request's turn."""
+    global _next_start
+    with _pace_lock:
+        now = time.monotonic()
+        start = max(now, _next_start)
+        _next_start = start + MIN_INTERVAL
+    if start > now:
+        time.sleep(start - now)
+
+
 class _PorkbunClient:
     """Shared Porkbun API client plumbing."""
 
@@ -60,7 +104,12 @@ class _PorkbunClient:
     def _make_request(self, endpoint: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         full_payload = {**self._auth_payload(), **payload}
         try:
-            response = retry_with_jitter(lambda: self.client.post(endpoint, json=full_payload))
+            def _send() -> Dict[str, Any]:
+                _pace()
+                return self.client.post(endpoint, json=full_payload)
+
+            # Five retries wait about 1, 2, 4, 8 and 16 seconds.
+            response = retry_with_jitter(_send, retries=5)
             if response.get("status") != "SUCCESS":
                 error_msg = response.get("message", "Unknown error")
                 raise RegistrarError(f"Porkbun API error: {error_msg}")

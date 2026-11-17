@@ -7,6 +7,7 @@ collects all four into one `Connection`. Every command starts here.
 """
 
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Dict
 
@@ -34,6 +35,10 @@ class Connection:
     records: list[DNSRecord] | None = None
     site: Site | None = None
     state: SiteState | None = None
+    # For a site whose hostname is not at the registrar: the nameservers
+    # public DNS gives for it. Empty when nothing answers, which is what
+    # a lapsed registration looks like. None when it was not looked up.
+    public_nameservers: list[str] | None = None
 
 
 class Fleet:
@@ -46,6 +51,7 @@ class Fleet:
         host: Host,
         cache: SiteCache,
         repos: RepoProvider | None = None,
+        lookup: Callable[[str], list[str] | None] | None = None,
     ) -> None:
         """Bundle the providers.
 
@@ -56,8 +62,11 @@ class Fleet:
             cache: Hostname-to-site cache
             repos: Creates and deletes repositories (`create` and
                 `delete` only)
+            lookup: Asks public DNS for a domain's nameservers. Used
+                for a site whose hostname is not at the registrar.
         """
         self.repos = repos
+        self.lookup = lookup
         self.registrar = registrar
         self.dns_providers = dns_providers
         self.host = host
@@ -190,7 +199,25 @@ class Fleet:
                 conn.records = self.zone_records(zone, conn.dns)
 
         conn.site, conn.state = self.site_for(hostname, search=search)
+        if zone is None and conn.site is not None and self.lookup is not None:
+            conn.public_nameservers = self._public_nameservers(hostname)
         return conn
+
+    def _public_nameservers(self, hostname: str) -> list[str] | None:
+        """Nameservers public DNS gives for the hostname or a parent of it.
+
+        Empty when DNS has none for any of them; None when a lookup
+        could not be made, so nothing is concluded from it.
+        """
+        labels = hostname.split(".")
+        assert self.lookup is not None
+        for i in range(len(labels) - 1):
+            found = self.lookup(".".join(labels[i:]))
+            if found is None:
+                return None
+            if found:
+                return found
+        return []
 
     def hostnames(self) -> list[str]:
         """Every hostname a fleet-wide run covers: registered domains and cached sites."""

@@ -41,6 +41,12 @@ class World:
         self.cache.set(hostname, site)
 
 
+@pytest.fixture(autouse=True)
+def _no_porkbun_pacing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tests do not wait between Porkbun requests."""
+    monkeypatch.setattr("mimeo.providers.registrar.porkbun.MIN_INTERVAL", 0.0)
+
+
 @pytest.fixture
 def world(tmp_path: Path) -> World:
     return World(tmp_path / "sites.json")

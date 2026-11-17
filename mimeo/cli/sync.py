@@ -8,7 +8,7 @@ import click
 
 from ..exceptions import EXIT_CONFIG
 from ..plan import apply, compare
-from ._fleet import open_fleet, targets_for
+from ._fleet import echo_problems, open_fleet, targets_for
 from ._processing import (
     _categorize_error,
     exit_on_errors,
@@ -44,8 +44,7 @@ def _text(rows: List[Dict[str, Any]]) -> None:
             click.secho("ok", fg="green")
         if row.get("problems") and not row.get("error"):
             unresolved += 1
-            for problem in row["problems"]:
-                click.secho(f"      problem: {problem}", fg="yellow")
+            echo_problems(row, "yellow")
 
     click.echo()
     already_ok = len(rows) - changed - skipped - errors
@@ -98,7 +97,8 @@ def sync(
 
     For each hostname with a site: adds the address records the host
     needs, removes address records at the site's own names that it does
-    not need, and enforces HTTPS when the certificate is ready. The
+    not need, requests the HTTPS certificate when there is none, and
+    enforces HTTPS when the certificate is ready. The
     records are written at whichever configured DNS provider the
     nameservers belong to.
 
@@ -144,6 +144,7 @@ def sync(
                     "hostname": hostname,
                     "actions": [],
                     "problems": [],
+                    "fixes": [],
                     "skipped": None,
                     "error": None,
                 }
@@ -153,6 +154,11 @@ def sync(
                     return row
                 plan = compare(conn, fleet.host)
                 row["problems"] = list(plan.problems)
+                # The steps were worked out before this run changed anything,
+                # so a step that says to run this very command is already done.
+                done = f"Run: mimeo sync {hostname}"
+                row["fixes"] = [f for f in plan.fixes if dry_run or f != done]
+                row["fixes_are_choices"] = plan.fixes_are_choices
                 if plan.records == "external":
                     row["skipped"] = "DNS is at a provider that is not configured"
                 if dry_run:
@@ -170,6 +176,7 @@ def sync(
                     "hostname": hostname,
                     "actions": [],
                     "problems": [],
+                    "fixes": [],
                     "skipped": None,
                     "error": str(exc),
                     "error_category": _categorize_error(exc)[1],
@@ -183,12 +190,13 @@ def sync(
             flat = dict(row)
             flat["actions"] = "|".join(row["actions"])
             flat["problems"] = "|".join(row["problems"])
+            flat["fixes"] = "|".join(row["fixes"])
             return [flat]
 
         render_results(
             results,
             output_format,
-            csv_fields=["hostname", "actions", "problems", "skipped", "error"],
+            csv_fields=["hostname", "actions", "problems", "fixes", "skipped", "error"],
             csv_rows=_csv_rows,
             text=_text,
         )

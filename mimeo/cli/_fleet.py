@@ -14,7 +14,11 @@ from ..plan import Plan
 from ..providers.base import DNSProvider
 from ..providers.dns.cloudflare import CloudflareDNS
 from ..providers.host.github import GitHubHost
-from ..providers.registrar.porkbun import PorkbunDNSProvider, PorkbunRegistrar
+from ..providers.registrar.porkbun import (
+    PorkbunDNSProvider,
+    PorkbunRegistrar,
+    public_nameservers,
+)
 
 
 @contextmanager
@@ -38,7 +42,9 @@ def open_fleet(cfg: Config) -> Iterator[Fleet]:
                 organizations=cfg.organizations,
             )
         )
-        yield Fleet(registrar, providers, host, SiteCache(), repos=host.repos)
+        yield Fleet(
+            registrar, providers, host, SiteCache(), repos=host.repos, lookup=public_nameservers
+        )
 
 
 def targets_for(
@@ -130,6 +136,8 @@ def result_row(conn: Connection, plan: Plan, with_records: bool = False) -> Dict
         "cert_expires": state.cert_expires if state else None,
         "changes": [c.summary for c in plan.changes],
         "problems": list(plan.problems),
+        "fixes": list(plan.fixes),
+        "fixes_are_choices": plan.fixes_are_choices,
         "has_problem": plan.has_problem,
         "fixable": plan.fixable,
         "error": None,
@@ -137,6 +145,21 @@ def result_row(conn: Connection, plan: Plan, with_records: bool = False) -> Dict
     if with_records:
         row["zone_records"] = [_record_dict(r) for r in conn.records or []]
     return row
+
+
+def echo_problems(row: Dict[str, Any], color: str) -> None:
+    """Print what is wrong with a hostname and the steps that fix it."""
+    for problem in row.get("problems") or []:
+        click.secho(f"      problem: {problem}", fg=color)
+    fixes = row.get("fixes") or []
+    if fixes and row.get("fixes_are_choices"):
+        click.echo("      do one of:")
+        for choice in fixes:
+            click.echo(f"        - {choice}")
+    elif fixes:
+        click.echo("      to fix:")
+        for number, step in enumerate(fixes, 1):
+            click.echo(f"        {number}. {step}")
 
 
 def error_row(hostname: str, exc: BaseException, category: str) -> Dict[str, Any]:
@@ -160,6 +183,7 @@ def error_row(hostname: str, exc: BaseException, category: str) -> Dict[str, Any
         "cert_expires": None,
         "changes": [],
         "problems": [],
+        "fixes": [],
         "has_problem": True,
         "fixable": False,
         "error": str(exc),

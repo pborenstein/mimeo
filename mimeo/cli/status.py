@@ -8,7 +8,7 @@ import click
 
 from ..exceptions import EXIT_CONFIG
 from ..plan import compare
-from ._fleet import error_row, open_fleet, result_row, targets_for
+from ._fleet import echo_problems, error_row, open_fleet, result_row, targets_for
 from ._processing import (
     _categorize_error,
     exit_on_errors,
@@ -33,6 +33,7 @@ _CSV_FIELDS = [
     "cert_expires",
     "changes",
     "problems",
+    "fixes",
     "error",
 ]
 
@@ -51,6 +52,7 @@ _SITE_COLORS = {
     "no cert": "red",
     "cert error": "red",
     "no pages": "red",
+    "no domain": "red",
 }
 
 
@@ -101,8 +103,7 @@ def _text(rows: List[Dict[str, Any]], detail: bool) -> None:
         if detail:
             for change in row["changes"]:
                 click.secho(f"      sync would: {change}", fg="yellow")
-            for problem in row["problems"]:
-                click.secho(f"      problem: {problem}", fg="red")
+            echo_problems(row, "red")
             for rec in row.get("zone_records") or []:
                 flag = " (proxied)" if rec.get("proxied") else ""
                 click.secho(
@@ -114,6 +115,8 @@ def _text(rows: List[Dict[str, Any]], detail: bool) -> None:
     if fixable:
         summary += f" ({fixable} fixable with: mimeo sync)"
     click.secho(summary, fg="green" if problems == 0 else "yellow")
+    if not detail and any(row["problems"] for row in rows):
+        click.echo("For what is wrong and the steps to fix each: mimeo status --all --problems")
     if proxied:
         click.secho("* records are proxied through the DNS provider", dim=True)
     click.echo()
@@ -229,6 +232,7 @@ def status(
             flat = dict(row)
             flat["changes"] = "|".join(row["changes"])
             flat["problems"] = "|".join(row["problems"])
+            flat["fixes"] = "|".join(row["fixes"])
             return [flat]
 
         detail = bool(hostnames) or problems or with_records

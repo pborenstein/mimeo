@@ -90,7 +90,8 @@ class TestStatus:
         assert row["records"] == "ok"
         assert row["site"] == "github:other/example.com"
         assert row["site_status"] == "cert error"
-        assert row["problems"] == ["certificate state is bad_authz, expires 2026-12-12"]
+        assert row["problems"][0].startswith("The HTTPS certificate could not be renewed.")
+        assert row["fixes"][-1] == "Switch the same records back to Proxied"
         assert row["fixable"] is False
 
     def test_all_scans_once_then_covers_registered_and_cached(self, run: Any, world: World) -> None:
@@ -170,7 +171,9 @@ class TestSync:
         world.healthy_site("example.com")
         world.host.add("sites/example.com", "example.com", cert_state="bad_authz")
         result = run(sync, "example.com")
-        assert "problem: certificate state is bad_authz" in result.output
+        assert "problem: The HTTPS certificate could not be renewed." in result.output
+        assert "to fix:" in result.output
+        assert "1. Open https://github.com/sites/example.com/settings/pages" in result.output
         assert "1 with problems sync cannot fix" in result.output
 
     def test_all_syncs_every_site(self, run: Any, world: World) -> None:

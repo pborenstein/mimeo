@@ -1337,3 +1337,34 @@ created nothing (it stopped before the repo existed).
 
 **Files**: `mimeo/cli/doctor.py`, `mimeo/plan.py`, `tests/test_cli.py`, `tests/test_plan.py`, `docs/MIMEO2_DESIGN.md`.
 
+## Entry 93: first live writes; problems say how to fix them (2026-11-16 to 2026-11-17)
+
+**What**: Ran `scan`, `status --all`, `sync` and `delegate` live for the first time on 2.0. What the output looked like in use led to three changes: every reported problem now carries the steps that fix it, `sync` requests a certificate for a site that has none, and requests to Porkbun are spaced. 414 tests pass. Code is `c79ed04`.
+
+**Why**: Entry 92 left every write path unrun. The user's reading of `problem: certificate state is bad_authz, expires 2026-12-12`: it does no one any good, mimeo is a tool for one person, and it should either offer the fix or give the actual steps, without pointing elsewhere.
+
+**Live results (2026-11-16)**:
+
+- `scan`: 73 sites across `mimeo-sites`, `tepiton` and `pborenstein`.
+- `sync`: pborenstein.co first (four AAAA records), then 59 more sites with the same four records, gravitique.com (AAAA plus HTTPS enforcement), and xhosi.net (also replaced `ALIAS www -> pixie.porkbun.com`, Porkbun's parking page, with the `www` CNAME). No errors.
+- `delegate 002370.xyz --dns cloudflare`: created the zone, copied nine records, set the nameservers at Porkbun. First use of the token's Zone Edit permission. `status` then showed `cloudflare`, records `ok`. The change was not yet visible from a public resolver when checked minutes later.
+- Certificates: box350.org, box350.com, plymouth.fyi, tzintli.com and xhosi.net had no certificate. `sync` removed and re-set each custom domain; GitHub approved box350.org's within 20 seconds; a second `sync` enforced HTTPS. All five load over `https://`.
+- operation.rodeo and pborenstein.wtf were not in the Porkbun account and had no nameservers in public DNS. The user deleted both repositories with `mimeo delete` (2026-11-17).
+
+**How**: DEC-048 covers the problem text, the steps, the certificate request and the `no domain` finding. DEC-049 covers the Porkbun spacing.
+
+**Found**:
+
+- The live config has `defaults.dns = "cloudflare"`; `delegate` with no `--dns` chose Cloudflare. Entry 92 and the previous CONTEXT.md said it was unset.
+- spacemang.com and spacemang.org are registered at Porkbun and on Porkbun nameservers but are not in this Porkbun account. `status` shows dashes for registration and DNS and judges the site as usual.
+- twohorses.org exists and is `ok`; CONTEXT.md had it as uncreated.
+- tequitl.dev is served by `pborenstein/twohorses`.
+- Right after a Porkbun record write, Porkbun's own nameserver returned nothing for the new name; seconds later it was correct. This is why `sync` does not write records and request a certificate in one run.
+- `sync --dry-run` ends with "N changed" although nothing changed.
+- Registrations expiring soon, auto-renew not checked: mellowtimesphere.com, mellowtimesphere.org and orobia.net (2026-11-24); ayeye.dev and ayeye.rodeo (2026-11-27); tequitl.dev and tequitl.agency (2026-12-06).
+
+**Not verified**: the by-hand steps printed for a proxied site (xhosi.com) have not been carried out. They add "remove and re-set the custom domain" to the older note, which only waits after switching to DNS-only.
+
+**Decisions**: DEC-048, DEC-049.
+
+**Files**: `mimeo/plan.py`, `mimeo/connection.py`, `mimeo/cli/_fleet.py`, `mimeo/cli/status.py`, `mimeo/cli/sync.py`, `mimeo/providers/registrar/porkbun.py`, `tests/test_plan.py`, `tests/test_commands.py`, `tests/conftest.py`, `README.md`.

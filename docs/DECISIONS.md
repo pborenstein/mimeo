@@ -893,3 +893,34 @@ Checked 2026-11-15:
 **Consequences**: A proxied apex with a single required A record passes as `ok`. If proxying is turned off on such a name, the next `status` shows the missing records and `sync` adds them.
 
 ---
+
+### DEC-048: A Reported Problem Says What to Do, and `sync` Does It When It Can (2026-11-16)
+
+**Status**: Active (Phase 8). User call, during the first live run of 2.0 (Entry 93).
+
+**Context**: `status` printed `problem: certificate state is bad_authz, expires 2026-12-12`. The text is GitHub's state name. It does not say what is wrong for a visitor, and the steps that fix it were in `docs/IMPLEMENTATION.md`. mimeo has one user, who said a message must either offer the fix or give the steps, and must not send the reader elsewhere.
+
+**Decision**:
+
+- Every problem is a sentence about what is wrong, followed by what to do (`Plan.fixes`). The steps are built from what was read, so they name the hostname, the commands, the repository's settings page, and the records to change. Vendor state names stay in the JSON fields (`cert_state`) and out of the text.
+- Steps are numbered when they are done in order and bulleted under `do one of:` when they are alternatives (`Plan.fixes_are_choices`).
+- A site with no certificate, records that are right, and no proxied record gets a change, not a problem: `sync` removes the custom domain and sets it again, which is when GitHub requests a certificate. Verified 2026-11-16 on five sites. `sync` does not do this in the same run that writes records, because a record just written is not yet answered for (seen on Porkbun, Entry 93).
+- A site whose hostname is not at the registrar is checked against public DNS. When DNS has no nameservers for it, the site is `no domain` and the choices are about the repository: `mimeo unlink`, `mimeo delete`, GitHub's transfer page, or registering the domain again. When the lookup cannot be made, nothing is concluded.
+
+**Alternatives considered**: Have `sync` also do the proxied case (switch to DNS-only, wait for the certificate, switch back). Not done: it changes proxy settings, which DEC-043 rules out, and DEC-043 stands. For that case mimeo prints the steps. Prompting interactively inside `status` (rejected: `status` reads and `sync` writes; the offer is the `sync would:` line and the printed command).
+
+**Consequences**: Removing and re-setting the custom domain takes the site off its hostname for the seconds between two API calls. If the second call fails the site has no custom domain, and the error gives the `mimeo link` command that restores it. The steps for the proxied case are unverified until they are carried out on xhosi.com. Narrows DEC-043's "mimeo does nothing about GitHub certificate renewal on proxied domains": it still changes nothing, and now says what to change.
+
+---
+
+### DEC-049: Requests to Porkbun Are Spaced 0.25 Seconds Apart (2026-11-16)
+
+**Status**: Active (Phase 8).
+
+**Context**: On 2026-11-16, three of five `status --all` runs over 109 hostnames lost one domain each to `HTTP 503 Service Temporarily Unavailable` from Porkbun's `dns/retrieve`. Five workers were sending requests with no spacing, and each request was retried three times over about 7 seconds. Whether Porkbun publishes a request limit is unverified.
+
+**Decision**: Every Porkbun request from the process, from any worker and either client object, starts at least 0.25 seconds after the previous one. Retries go from three to five (waits of about 1, 2, 4, 8 and 16 seconds).
+
+**Alternatives considered**: Fewer workers (rejected: the workers also serve GitHub and Cloudflare calls, which showed no failures). Longer retries alone (rejected: the other workers keep sending while one waits).
+
+**Consequences**: `status --all` takes about 60 seconds for 109 hostnames. Three runs after the change had no failures; two runs before it were also clean, so this is not proof. The interval is a guess to revisit if 503s return.

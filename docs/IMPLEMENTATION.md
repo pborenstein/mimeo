@@ -708,18 +708,28 @@ front-door verbs than it started with. See DEC-021.
         zones (Entry 92; first live use of the Cloudflare provider)
   - [x] `doctor` verifies account-owned Cloudflare tokens (`678b3b7`)
   - [x] A proxied name is not asked for more A/AAAA records (DEC-047)
-  - [ ] Run `mimeo scan`: the live cache was filled while the config
-        listed only `mimeo-sites` (Entry 92)
+  - [x] Run `mimeo scan`: 73 sites in three organizations (Entry 93)
   - [ ] Make the cache record the organizations it was built from, and
         rescan when the config's list differs
-  - [ ] `mimeo status --all`; compare with what 1.3.0 reported
-  - [ ] First live writes: `mimeo sync --dry-run` then `mimeo sync` on
-        one Porkbun-served site (adds AAAA), then `delegate --dry-run`
-        and `delegate` on a junk domain (first use of Zone Edit)
+  - [x] `mimeo status --all` read against expectations (Entry 93)
+  - [x] First live writes: `sync` on 61 Porkbun-served sites;
+        `delegate 002370.xyz --dns cloudflare` (Entry 93)
+  - [x] Problems carry the steps that fix them; `sync` requests a
+        missing certificate; lapsed domains get choices for the
+        repository (DEC-048, `c79ed04`)
+  - [x] Requests to Porkbun are spaced (DEC-049)
+  - [ ] `delegate 002370.xyz --dns porkbun` (the move back), and `sync`
+        writing to a Cloudflare zone, have not been run live
+  - [ ] `sync --dry-run` summary says "N changed"; nothing changed
+  - [ ] `status` shows only dashes for a site whose domain is not in
+        the Porkbun account but does answer in DNS (spacemang.com,
+        spacemang.org); say so in the row
+  - [ ] Registrations expiring 2026-11-24 to 2026-12-06 (list in
+        Entry 93): check auto-renew
   - [ ] Verify the vendor facts listed in `docs/MIMEO2_DESIGN.md` "To
         Verify at Implementation" (token permissions for reading are
-        verified, Entry 92; zone creation, record import, DNSSEC lookup
-        and AAAA-versus-certificate are not)
+        verified, Entry 92; zone creation and record copy by `delegate`
+        ran live, Entry 93; the rest are not checked off there yet)
   - [ ] Extend the smoke script to cover `delegate` to Cloudflare and back
   - [ ] `docs/TROUBLESHOOTING.md` still describes 1.x commands
   - [ ] Decide the release: 1.4.0 from `62eeff7`, 2.0.0 from the branch
@@ -728,7 +738,9 @@ front-door verbs than it started with. See DEC-021.
       expires 2026-12-12; records are proxied through Cloudflare. By
       hand: set the four A records and `www` to DNS-only, wait for
       `mimeo status xhosi.com` to show `ok`, set them back to proxied.
-      blueberryhill.fyi will need the same near 2026-12-23
+      blueberryhill.fyi will need the same near 2026-12-23.
+      `mimeo status xhosi.com` now prints the steps (DEC-048); doing
+      them is the first test of those steps
 - [ ] mimeo.lol returns GitHub's 404: `pborenstein/mimeo.lol` is now
       `mimeo-templates/mimeo`, which has no custom domain (found
       2026-11-15)

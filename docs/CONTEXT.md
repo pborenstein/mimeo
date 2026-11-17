@@ -2,14 +2,15 @@
 phase: 8
 phase_name: Consolidation
 updated: 2026-11-17
-last_commit: acf24f8
-last_entry: 94
+last_commit: 0e48ab8
+last_entry: 95
 ---
 
 ## Current Focus
 
 mimeo 2.0.0 was released from `main` on 2026-11-17 (tag `v2.0.0`, the
 repository's first tag). It is in live use and every site reads `ok`.
+README, TROUBLESHOOTING and the design's As Built match 2.0 (Entry 95).
 
 ## Active Tasks
 

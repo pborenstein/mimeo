@@ -1393,3 +1393,23 @@ created nothing (it stopped before the repo existed).
 
 **Files**: `mimeo/plan.py`, `mimeo/operations.py`, `mimeo/providers/base.py`, `mimeo/providers/dns/cloudflare.py`, `mimeo/providers/registrar/porkbun.py`, `mimeo/cli/connect.py`, `mimeo/cli/create.py`, `tests/fakes.py`, `tests/test_plan.py`, `tests/test_commands.py`, `README.md`.
 
+## Entry 95: 2.0.0 released; docs brought up to 2.0 (2026-11-17)
+
+**What**: Released mimeo 2.0.0 and brought the user-facing docs up to it. No code changes besides the version.
+
+**Why**: After Entry 94 every site read `ok` and the branch had run live for two days. The user asked to merge, then release.
+
+**How**:
+
+- `mimeo-2.0-design` fast-forwarded into `main` and pushed. Local `main` was 5 commits ahead of `origin/main`; those went up with it.
+- `delegate 002370.xyz --dns porkbun` ran live: nothing to copy, nameservers set, `status` `ok`.
+- `docs/TROUBLESHOOTING.md` rewritten for 2.0: every `status` value, certificates, every refusal message, configuration, GitHub, Porkbun, Cloudflare, exit codes.
+- `docs/MIMEO2_DESIGN.md` As Built: the changes since first live use (DEC-048 to DEC-051) and the state of "To Verify at Implementation".
+- Release with the releaserator: version 2.0.0 in `pyproject.toml`, `mimeo/__version__` and `uv.lock`; `CHANGELOG.md` written by hand (no earlier tags, so per-commit generation would have covered 240 commits); annotated tag `v2.0.0` on `d8c7dee`; GitHub release created. `v2.0.0` is the repository's first tag; 1.4.0 (`62eeff7`) is untagged.
+- GitHub repository description replaced; the old one described 1.x.
+- README restyled to the scannable-docs rules, then reorganized after the user's own edits: one table of the four things, concept sections under "How it works", one Commands section.
+
+**Decided**: tequitl.dev (served by `pborenstein/twohorses`) is left to expire on 2026-12-06.
+
+**Files**: `README.md`, `CHANGELOG.md`, `docs/TROUBLESHOOTING.md`, `docs/MIMEO2_DESIGN.md`, `pyproject.toml`, `mimeo/__init__.py`, `uv.lock`.
+

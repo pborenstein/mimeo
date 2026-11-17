@@ -8,9 +8,8 @@ last_entry: 94
 
 ## Current Focus
 
-mimeo 2.0 (2.0.0b1) is in live use and was merged to `main` and
-pushed on 2026-11-17. It is not tagged or released. Every site reads
-`ok`. `docs/TROUBLESHOOTING.md` is rewritten for 2.0.
+mimeo 2.0.0 was released from `main` on 2026-11-17 (tag `v2.0.0`, the
+repository's first tag). It is in live use and every site reads `ok`.
 
 ## Active Tasks
 
@@ -28,8 +27,6 @@ pushed on 2026-11-17. It is not tagged or released. Every site reads
       shows only dashes for spacemang.com and spacemang.org.
 - [ ] **Cache**: record the organizations it was built from.
 - [ ] **mimeo.lol** returns GitHub's 404 (repo has no custom domain).
-- [ ] **Release** (1.4.0 is `62eeff7`); `docs/MIMEO2_DESIGN.md`
-      "As Built" predates Entry 93.
 
 ## Blockers: none
 
@@ -44,5 +41,5 @@ pushed on 2026-11-17. It is not tagged or released. Every site reads
 
 ## Next Session
 
-Bring `docs/MIMEO2_DESIGN.md` "As Built" up to DEC-048 to DEC-051,
-then decide the 2.0.0 release.
+Nothing is in progress. Next live test: move 002370.xyz to Cloudflare,
+break a record by hand, and run `mimeo sync 002370.xyz`.

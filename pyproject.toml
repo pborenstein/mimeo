@@ -1,6 +1,6 @@
 [project]
 name = "mimeo"
-version = "2.0.0b1"
+version = "2.0.0"
 description = "Provision and manage custom-domain sites on GitHub Pages"
 readme = "README.md"
 requires-python = ">=3.11"

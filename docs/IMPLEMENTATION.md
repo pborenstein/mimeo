@@ -748,8 +748,9 @@ front-door verbs than it started with. See DEC-021.
         ran live, Entry 93; the rest are not checked off there yet)
   - [ ] Extend the smoke script to cover `delegate` to Cloudflare and back
   - [x] `docs/TROUBLESHOOTING.md` rewritten for 2.0 (2026-11-17)
-  - [ ] Decide the release: 1.4.0 from `62eeff7`, 2.0.0 from the branch
-        tip (version is 2.0.0b1 until then)
+  - [x] Release 2.0.0 from `main`, tagged `v2.0.0` (2026-11-17), with
+        `CHANGELOG.md`. It is the first tag in the repository; 1.4.0
+        (`62eeff7`) was not tagged
 - [x] xhosi.com: certificate renewed 2026-11-17 by the by-hand steps
       (Entry 94). `sync` now does those steps (DEC-050)
 - [ ] blueberryhill.fyi: renewal attempt expected near 2026-12-23,

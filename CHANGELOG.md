@@ -1,0 +1,117 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+Versions before 2.0.0 were not tagged. Their history is in
+[docs/chronicles](docs/chronicles/) and in the git log; 1.4.0 is commit
+[62eeff7](https://github.com/pborenstein/mimeo/commit/62eeff7).
+
+## [Unreleased]
+
+## [2.0.0] - 2026-11-17
+
+mimeo 2.0 connects a hostname to the site that serves it and keeps the
+connection correct. Every command reads the same four things (the
+registration, the nameservers, the DNS records at whichever provider the
+nameservers name, and the host's custom-domain setting), compares them
+with what the site needs, and applies or prints the difference. The
+README's [How it works](README.md#how-it-works) describes it, and
+[Upgrading from 1.x](README.md#upgrading-from-1x) lists what moved.
+
+### Breaking changes
+
+- A site is the repository whose GitHub Pages custom domain is the
+  hostname, in any organization listed under `github.organizations`.
+  In 1.x it was the repository named after the domain in one account
+  ([7685699](https://github.com/pborenstein/mimeo/commit/7685699)).
+- The DNS provider is whichever one the registrar's nameservers name.
+  In 1.x Porkbun's zone was always treated as the DNS.
+- `sync --reset-nameservers` is replaced by
+  `mimeo delegate ZONE --dns porkbun`.
+- `delete --keep-repo` is replaced by `mimeo unlink HOSTNAME`.
+- `status --source`, `--with-dns`, `--health` and `--show-template` are
+  removed. `status` has one view, and `--records` shows the zone.
+- `create` changes only the site's address records. In 1.x it rewrote
+  the zone's managed records.
+- A registered domain with no repository is shown as `no site` and is no
+  longer counted as a problem.
+
+A 1.x config file loads unchanged, and with no new keys mimeo behaves as
+before: one organization, Porkbun DNS.
+
+### Added
+
+- Cloudflare as a DNS provider, chosen per zone by its nameservers.
+  Needs a `[cloudflare]` section in the config
+  ([648f1eb](https://github.com/pborenstein/mimeo/commit/648f1eb)).
+- `mimeo delegate`: moves a zone to another DNS provider. Copies every
+  record except NS and SOA, reads the copies back, then sets the
+  nameservers at the registrar
+  ([d67b97a](https://github.com/pborenstein/mimeo/commit/d67b97a)).
+- `mimeo link` and `mimeo unlink`: connect a hostname to a repository
+  that already exists, or take it off, without creating or deleting
+  anything
+  ([d67b97a](https://github.com/pborenstein/mimeo/commit/d67b97a)).
+- `mimeo scan`: rebuilds the cache of which repository serves which
+  hostname across every listed organization
+  ([7685699](https://github.com/pborenstein/mimeo/commit/7685699)).
+- Subdomain sites (`service.example.com`), served by one CNAME.
+- Four AAAA records at the apex of every site. The first `sync` after
+  upgrading adds them.
+- `github.organizations` and `defaults.dns` in the config, with config
+  schema 2.
+- Every problem `status` and `sync` report is a sentence followed by the
+  steps that fix it, with the hostname, commands and page to open filled
+  in. In JSON and CSV output the steps are the `fixes` field
+  ([c79ed04](https://github.com/pborenstein/mimeo/commit/c79ed04)).
+- `sync` gets a certificate issued when a site has none, when a renewal
+  failed, or when the certificate is within 14 days of expiry, by
+  removing the custom domain and setting it again
+  ([c79ed04](https://github.com/pborenstein/mimeo/commit/c79ed04),
+  [f853a58](https://github.com/pborenstein/mimeo/commit/f853a58)).
+- When the site's records are proxied through Cloudflare, `sync`
+  switches them to DNS-only for that, waits for the certificate, and
+  switches them back
+  ([f853a58](https://github.com/pborenstein/mimeo/commit/f853a58)).
+- `status` shows `no domain` for a site whose hostname is not at the
+  registrar and has no nameservers in public DNS, and offers the choices
+  for its repository
+  ([c79ed04](https://github.com/pborenstein/mimeo/commit/c79ed04)).
+- `delegate` lists the services a move would stop (Cloudflare Email
+  Routing, Cloudflare's proxy, Porkbun mail) and asks before changing
+  anything. `--yes` skips the question. `create` leaves such a zone
+  where it is
+  ([f853a58](https://github.com/pborenstein/mimeo/commit/f853a58)).
+- `doctor` checks the Porkbun keys and the Cloudflare token, including
+  tokens owned by an account
+  ([678b3b7](https://github.com/pborenstein/mimeo/commit/678b3b7)).
+
+### Changed
+
+- Requests to Porkbun start at least 0.25 seconds apart and are retried
+  five times. `status --all` over about 100 domains takes about a minute
+  ([c79ed04](https://github.com/pborenstein/mimeo/commit/c79ed04)).
+- Templates are looked up in the `mimeo-templates` organization by
+  default
+  ([62eeff7](https://github.com/pborenstein/mimeo/commit/62eeff7)).
+- `docs/TROUBLESHOOTING.md` is rewritten for 2.0.
+
+### Fixed
+
+- A name proxied through Cloudflare is no longer asked for more A or
+  AAAA records once it has some of the required ones
+  ([22f48c3](https://github.com/pborenstein/mimeo/commit/22f48c3)).
+
+### Known limitations
+
+- `sync` removing a record on Cloudflare, `sync` adding a record at a
+  name that is already proxied, and the proxy sequence against a renewal
+  that has actually failed have not been run against live services (as
+  of 2026-11-17). They are covered by tests against in-memory providers.
+- `delegate` warns only about the three services listed above.
+
+[Unreleased]: https://github.com/pborenstein/mimeo/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/pborenstein/mimeo/releases/tag/v2.0.0

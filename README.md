@@ -2,13 +2,10 @@
 
 Connects a domain to the site that serves it, and keeps the connection correct. For a site to load at `example.com`, four things have to agree. Mimeo reads all four, shows what disagrees, and fixes what it can.
 
-- the registration
-- the nameservers
-- the DNS records at whichever provider the nameservers name
-- the host's custom-domain setting
-
-
-Today that means Porkbun as the registrar, Porkbun or Cloudflare as the DNS provider, and GitHub Pages as the host.
+- registration ([Porkbun](https://porkbun.com))
+- nameservers (Porkbun or [Cloudflare](https://cloudflare.com))
+- DNS records the provider the nameservers name (Porkbun or Cloudflare)
+- the host's custom-domain setting (GitHub)
 
 ## Quick Start
 
@@ -30,9 +27,17 @@ Full setup details (prerequisites, `gh` token scope, global vs. dev install, env
 
 Every command runs the same three steps.
 
-1. **Read.** For a hostname, collect the zone it belongs to, the zone's nameservers (from the registrar), which configured DNS provider those nameservers belong to, the records at that provider, and the site whose custom domain is the hostname, with its certificate and HTTPS state.
-2. **Compare.** Ask the host which records the site needs and compare them, and the host's settings, with what was read. The result is a list of changes.
-3. **Apply** the changes, or print them.
+1. Read
+   -  For a hostname, collect the zone it belongs to
+   -  the zone's nameservers (from the registrar)
+   -  which configured DNS provider those nameservers belong to
+   -  the records at that provider
+   -  and the site whose custom domain is the hostname, with its certificate and HTTPS state
+2. Compare
+   - Ask the host which records the site needs
+   - compare them  and the host's settings with what was read.
+   - The result is a list of changes.
+3. Print (`status`) or apply (`sync`) the changes
 
 `status` prints the list. `sync` applies it. The other commands do one thing before or after those steps.
 

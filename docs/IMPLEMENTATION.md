@@ -725,8 +725,11 @@ front-door verbs than it started with. See DEC-021.
   - [ ] Verify against vendor docs: Cloudflare Email Routing stops when
         the zone leaves Cloudflare; whether Porkbun mail forwarding
         needs Porkbun nameservers
-  - [ ] `delegate 002370.xyz --dns porkbun` (the move back), and `sync`
-        writing to a Cloudflare zone, have not been run live
+  - [x] `delegate 002370.xyz --dns porkbun` (the move back) ran live
+        2026-11-17: nothing needed copying (Porkbun's records were left
+        in place by the first move), nameservers set, `status` shows
+        `porkbun`, records `ok`, site `ok`
+  - [ ] `sync` writing to a Cloudflare zone has not been run live
   - [ ] `sync --dry-run` summary says "N changed"; nothing changed
   - [ ] `status` shows only dashes for a site whose domain is not in
         the Porkbun account but does answer in DNS (spacemang.com,

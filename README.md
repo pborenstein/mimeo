@@ -261,7 +261,7 @@ mimeo/
 ## Known limitations
 
 - One registrar (Porkbun), two DNS providers (Porkbun, Cloudflare), one host (GitHub Pages). The interfaces leave room for more.
-- Against a live Cloudflare account, mimeo has read zones and run one `delegate` from Porkbun to Cloudflare (as of 2026-11-16). `sync` writing to a Cloudflare zone, and `delegate` back to Porkbun, have not been run live.
+- Against a live Cloudflare account, mimeo has read zones and run one `delegate` from Porkbun to Cloudflare (as of 2026-11-16). It has run one `delegate` back to Porkbun (2026-11-17). `sync` writing records to a Cloudflare zone has not been run live.
 - `sync` renewing a certificate behind Cloudflare's proxy has run live only on a site whose certificate was still valid (2026-11-17): the proxy was switched off and on and the custom domain set again, in 22 seconds. The same steps done by hand fixed xhosi.com's failed renewal the same day. `sync` has not yet met a failed renewal itself.
 - `delegate` warns only about the three services listed under [delegate](#delegate). That Cloudflare Email Routing stops when the zone leaves Cloudflare is from how the service is set up, not checked against Cloudflare's documentation (as of 2026-11-17).
 - Requests to Porkbun are spaced 0.25 seconds apart, so `status --all` over about 100 domains takes about a minute. Whether Porkbun publishes a request limit is unverified; the 0.25 seconds is mimeo's choice. The spacing was added on 2026-11-16 after sweeps with five unspaced workers lost a domain to a 503.

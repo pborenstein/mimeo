@@ -225,6 +225,8 @@ The token needs three permissions on the zones mimeo manages: Zone: Read and DNS
 | `Cloudflare has no zone example.com` | The registrar's nameservers name Cloudflare, but the token cannot see the zone: it is in another Cloudflare account, or the token is limited to other zones |
 | `Cloudflare API error:` followed by Cloudflare's text | Cloudflare refused the call; its text says why. A permission error means the token lacks one of the three permissions |
 
+A domain can also be moved from Porkbun DNS to Cloudflare with Porkbun's own tool, once the Cloudflare account is connected to Porkbun ([guide](https://porkbun.com/llms/guides/move-domains-to-cloudflare), read 2026-11-22). mimeo treats the result the same as a `delegate`: it follows the nameservers. Differences from `delegate`: Porkbun does not read the records back before changing the nameservers, so check its preview first for a domain with mail; and a domain can stay in `activating` for up to 72 hours, during which the nameservers name Cloudflare but the zone is not answering yet. If mimeo then says `Cloudflare has no zone`, the token does not cover the new zone (see the table above). Why mimeo does not use Porkbun's API for this: DEC-053.
+
 After `delegate` moves a zone away from Cloudflare, the zone and its records stay in the Cloudflare account. mimeo has no command that deletes a zone; remove it in the dashboard if it is not wanted.
 
 ## Exit codes and partial failures

@@ -1436,3 +1436,13 @@ created nothing (it stopped before the repo existed).
 
 **Files**: `mimeo/cache.py`, `mimeo/connection.py`, `mimeo/plan.py`, `mimeo/cli/_fleet.py`, `mimeo/cli/status.py`, `mimeo/cli/sync.py`, `mimeo/cli/doctor.py`, `mimeo/providers/base.py`, `mimeo/providers/dns/cloudflare.py`, `mimeo/providers/registrar/porkbun.py`, `scripts/e2e_smoke.sh`, tests, `README.md`, `docs/TROUBLESHOOTING.md`, `CHANGELOG.md`, `CLAUDE.md`.
 
+## Entry 97: Porkbun's move to Cloudflare (2026-11-22)
+
+**What**: The user connected their Cloudflare account to Porkbun and asked whether Porkbun's [move to Cloudflare](https://porkbun.com/llms/guides/move-domains-to-cloudflare) helps or hinders mimeo. No code change.
+
+**How**: Read Porkbun's guide and compared it with `delegate` (DEC-042). mimeo follows the nameservers (DEC-041), so a domain Porkbun moves reads as Cloudflare, the same as after `delegate`. Porkbun's tool moves domains in bulk; `delegate` reads the records back before changing the nameservers, which Porkbun's guide does not describe. A Porkbun move can sit in `activating` for up to 72 hours. Written down so the question is not asked again.
+
+**Decisions**: DEC-053.
+
+**Files**: `docs/DECISIONS.md`, `docs/TROUBLESHOOTING.md`.
+

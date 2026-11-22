@@ -1,9 +1,9 @@
 ---
 phase: 8
 phase_name: Consolidation
-updated: 2026-11-17
-last_commit: a2de337
-last_entry: 96
+updated: 2026-11-22
+last_commit: 0f0cf50
+last_entry: 97
 ---
 
 ## Current Focus
@@ -31,6 +31,8 @@ The small open tasks are closed (Entry 96); mimeo.lol has a new site.
 - Porkbun requests are spaced 0.25s; `status --all` takes a minute.
 - Live config: three organizations, `defaults.dns = "cloudflare"`.
 - 002370.xyz is the junk domain, on Cloudflare again since 2026-11-17.
+- Porkbun can move a domain to Cloudflare itself (account connected
+      2026-11-22); mimeo needs no change for it (DEC-053).
 
 ## Next Session
 

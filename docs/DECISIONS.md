@@ -979,3 +979,23 @@ Known cases: Cloudflare MX records at `mx.cloudflare.net` (Email Routing); any p
 
 **Consequences**: Moving a Porkbun zone that uses Porkbun mail forwarding asks nothing. Porkbun's email hosting (as opposed to forwarding) was not looked at separately.
 
+
+---
+
+### DEC-053: Porkbun's Move to Cloudflare Is an Alternative to `delegate`; mimeo Does Not Use Its API (2026-11-22)
+
+**Status**: Active (Phase 8). User question, answered without a code change.
+
+**Context**: The user connected their Cloudflare account to Porkbun and asked whether Porkbun's move feature helps or hinders mimeo. Porkbun's guide [Move domains to Cloudflare](https://porkbun.com/llms/guides/move-domains-to-cloudflare) (read 2026-11-22) says Porkbun creates the zone in the connected Cloudflare account, copies the records it holds, and changes the nameservers at the registry. It is API-driven after a one-time browser consent, takes up to 500 domains per call, refuses domains with DNSSEC on, and creates records DNS-only. A domain can sit in `activating` (nameservers changed, Cloudflare zone not yet active) for up to 72 hours; the guide cites one that took 59. After the move Porkbun's `/dns/*` endpoints still accept writes, but they change only Porkbun's copy, not what resolves. Porkbun also offers record management on the Cloudflare zone through its own API (`/cloudflare/createRecord`, `setProxy` and others).
+
+**Decision**: Either path can move a domain from Porkbun DNS to Cloudflare, and mimeo needs no change for one moved by Porkbun:
+
+- mimeo picks the DNS provider from the nameservers (DEC-041), so a moved domain reads as Cloudflare once they change, the same as after `delegate`.
+- Porkbun's records after the move are ignored, as any Porkbun records are when Porkbun's nameservers are not serving (DEC-037).
+- mimeo sees the new zone only if its Cloudflare token covers it. A token scoped to "All Domains" (as TROUBLESHOOTING.md says to make it) does.
+
+Use `delegate` when the read-back check matters: it compares the written records before changing the nameservers (DEC-042), and Porkbun's guide describes no such check and does not list which record types it copies. Use Porkbun's tool to move several domains at once, after looking at `/cloudflare/preview/{domain}`.
+
+**Alternatives considered**: Have mimeo manage Cloudflare records through Porkbun's API and drop its own Cloudflare token (rejected: Cloudflare support would then work only for domains registered at Porkbun, against the registrar/DNS split in DEC-041). Have `delegate` call Porkbun's move API for the Porkbun-to-Cloudflare case (rejected: it would lose the read-back check and add a 72-hour asynchronous state for no gain on single domains).
+
+**Consequences**: DEC-042's unverified question (whether Cloudflare imports records on its own when a zone is created through the API) is still open for `delegate`, and does not arise for a Porkbun move. During `activating`, `status` can show Cloudflare as the DNS provider while Cloudflare is not yet answering for the zone.

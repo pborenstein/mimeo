@@ -147,7 +147,9 @@ def result_row(conn: Connection, plan: Plan, with_records: bool = False) -> Dict
         "registered": conn.zone is not None,
         "expires": str(registration.get("expireDate", ""))[:10] if not conn.label else "",
         "auto_renew": (
-            registration.get("autoRenew") in ("1", 1, True) if registration and not conn.label else None
+            registration["autoRenew"] in ("1", 1, True)
+            if "autoRenew" in registration and not conn.label
+            else None
         ),
         "nameservers": conn.nameservers or conn.public_nameservers or [],
         "dns": dns,

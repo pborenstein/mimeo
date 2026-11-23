@@ -449,3 +449,24 @@ class TestCreateDelete:
         assert world.repos.deleted == ["sites/example.com"]
         assert len(world.pb.zones["example.com"]) == 1
         assert "no site was linked" in result.output
+
+
+def test_status_marks_only_registrations_that_will_not_renew(world: World, run: Any) -> None:
+    world.register("renews.test")
+    world.register("lapses.test")
+    world.registrar.renewal_off.add("lapses.test")
+
+    result = run(status, "renews.test", "lapses.test")
+
+    lines = {line.split()[0]: line.split() for line in result.output.splitlines() if ".test" in line}
+    assert lines["lapses.test"][2] == "off"
+    assert "off" not in lines["renews.test"]
+
+
+def test_status_does_not_report_a_subdomain_as_not_renewing(world: World, run: Any) -> None:
+    world.register("lapses.test")
+    world.registrar.renewal_off.add("lapses.test")
+
+    result = run(status, "blog.lapses.test")
+
+    assert " off " not in result.output

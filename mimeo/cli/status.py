@@ -88,7 +88,7 @@ def _text(rows: List[Dict[str, Any]], detail: bool) -> None:
 
     click.echo()
     header = (
-        f"  {'HOSTNAME':<{host_w}}  {'EXPIRES':<10}  {'DNS':<{dns_w}}  "
+        f"  {'HOSTNAME':<{host_w}}  {'EXPIRES':<10}  {'RENEW':<5}  {'DNS':<{dns_w}}  "
         f"{'RECORDS':<8}  {'SITE':<{site_w}}  REPO"
     )
     click.secho(header, bold=True)
@@ -104,6 +104,9 @@ def _text(rows: List[Dict[str, Any]], detail: bool) -> None:
 
         expires = row["expires"] or ("elsewhere" if _registered_elsewhere(row) else "-")
         click.echo(f"  {row['hostname']:<{host_w}}  {expires:<10}  ", nl=False)
+        renewal_off = row.get("auto_renew") is False
+        click.secho(f"{'off' if renewal_off else '':<5}", fg="yellow" if renewal_off else None, nl=False)
+        click.echo("  ", nl=False)
         dns_color = {"external": "cyan", "none": "red"}.get(row["dns"] or "", None)
         click.secho(f"{_dns_label(row):<{dns_w}}", fg=dns_color, nl=False)
         click.echo("  ", nl=False)
@@ -195,6 +198,8 @@ def status(
     Columns:
         EXPIRES  registration expiry ("-" for a subdomain or a hostname
                  whose domain is not at the registrar)
+        RENEW    "off" when the registration will not renew automatically;
+                 blank when it will, or when it does not apply
         DNS      the provider serving the zone: porkbun, cloudflare,
                  netlify, external (another provider; mimeo cannot read its
                  records), none (the registrar reports no nameservers).

@@ -87,7 +87,8 @@ A bare `mimeo status` refuses to run; a fleet sweep needs `--all`. Findings exit
 | Column | Values |
 |:-------|:-------|
 | `EXPIRES` | Registration expiry; `elsewhere` for a hostname registered outside this Porkbun account that DNS answers for; `-` for a subdomain, or a hostname not at the registrar that nothing answers for |
-| `DNS` | `porkbun`, `cloudflare`, `external` (a provider or account mimeo cannot read), `none` (no nameservers); a trailing `*` when the site's records are proxied |
+| `RENEW` | `off` when the registration will not renew automatically; blank when it will, or when it does not apply |
+| `DNS` | `porkbun`, `cloudflare`, `netlify`, `external` (a provider or account mimeo cannot read), `none` (no nameservers); a trailing `*` when the site's records are proxied |
 | `RECORDS` | `ok`, `missing`, `extra`, `external` (not compared), `unknown` |
 | `SITE` | `ok`, `fixable`, `pending`, `no cert`, `cert error`, `expiring`, `no pages`, `no domain`, `no site` |
 | `REPO` | The repository whose custom domain is the hostname |

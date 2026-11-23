@@ -23,8 +23,8 @@ mimeo status example.com      # what connects the hostname to its site, and what
 ## Reading a status row
 
 ```
-  HOSTNAME    EXPIRES     DNS          RECORDS   SITE        REPO
-  xhosi.com   2027-08-31  cloudflare*  ok        cert error  mimeo-sites/xhosi.com
+  HOSTNAME    EXPIRES     RENEW  DNS          RECORDS   SITE        REPO
+  xhosi.com   2027-08-31         cloudflare*  ok        cert error  mimeo-sites/xhosi.com
 ```
 
 The detail lines (`sync would:`, `problem:`, `to fix:`) appear when hostnames are named or with `--problems`. After `mimeo status --all`, run `mimeo status --all --problems` to see them for every hostname that needs attention.

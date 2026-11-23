@@ -2,15 +2,16 @@
 phase: 8
 phase_name: Consolidation
 updated: 2026-11-22
-last_commit: 0f0cf50
-last_entry: 97
+last_commit: f17589e
+last_entry: 98
 ---
 
 ## Current Focus
 
 mimeo 2.1.0 is the current release (tag `v2.1.0`, 2026-11-17; 2.0.0 was
 released earlier the same day). It is in live use and every site reads `ok`.
-The small open tasks are closed (Entry 96); mimeo.lol has a new site.
+On 2026-11-22 a batch of domains moved to Cloudflare; 24 of 109 hostnames
+are on Cloudflare and all read `ok` (Entry 98).
 
 ## Active Tasks
 

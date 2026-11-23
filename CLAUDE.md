@@ -124,7 +124,7 @@ Stable facts that sessions need. Current work state lives in
   domain is the hostname, in any organization listed under
   `github.organizations` (DEC-040).
 - **DNS**: Porkbun is the registrar. DNS is moving to Cloudflare
-  (blueberryhill.fyi, xhosi.com already delegated); Porkbun zone
+  (24 of 109 hostnames as of 2026-11-22, Entry 98); Porkbun zone
   records are live only on Porkbun nameservers (DEC-037).
 - **On disk**: template working copies and the tepiton meta-repo are
   at `~/projects/tepiton/`; site working copies are at

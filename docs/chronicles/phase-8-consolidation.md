@@ -1446,3 +1446,16 @@ created nothing (it stopped before the repo existed).
 
 **Files**: `docs/DECISIONS.md`, `docs/TROUBLESHOOTING.md`.
 
+## Entry 98: a batch of domains moved to Cloudflare (2026-11-22)
+
+**What**: The user moved a batch of domains' nameservers to Cloudflare outside mimeo. Afterwards `mimeo status --all` read 109 hostnames, 0 with issues, and 24 served by Cloudflare. Before this the docs named four on Cloudflare (002370.xyz, blueberryhill.fyi, xhosi.com, mimeo.lol).
+
+**On Cloudflare after the move** (`*` = proxied):
+
+- With a site, all `ok`: 002370.xyz\*, blueberryhill.fyi\*, ekranoplan.org, mellowtimesphere.com, mellowtimesphere.org, mezuzah.lol\*, mimeo.lol\*, orobia.dev, orobia.lol, orobia.net, particuluxe.com, pborenstein.co, tantamount.dev, tantamount.lol, tantamount.rodeo, xhosi.com\*, xhosi.dev, xhosi.net\*, xocoyotl.dev\*.
+- No site: mimeo.fyi, mrzeitgeist.net, mrzeitgeist.org, tantamount.party, xhosi.org.
+
+**How**: No mimeo change. mimeo picked up each domain from its nameservers (DEC-041), as DEC-053 expected. No domain showed a missing zone, so the Cloudflare token covers the new zones.
+
+**Files**: `docs/CONTEXT.md`, `CLAUDE.md`.
+

@@ -999,3 +999,85 @@ Use `delegate` when the read-back check matters: it compares the written records
 **Alternatives considered**: Have mimeo manage Cloudflare records through Porkbun's API and drop its own Cloudflare token (rejected: Cloudflare support would then work only for domains registered at Porkbun, against the registrar/DNS split in DEC-041). Have `delegate` call Porkbun's move API for the Porkbun-to-Cloudflare case (rejected: it would lose the read-back check and add a 72-hour asynchronous state for no gain on single domains).
 
 **Consequences**: DEC-042's unverified question (whether Cloudflare imports records on its own when a zone is created through the API) is still open for `delegate`, and does not arise for a Porkbun move. During `activating`, `status` can show Cloudflare as the DNS provider while Cloudflare is not yet answering for the zone.
+
+---
+
+### DEC-054: Hosts Take Files Two Ways; mimeo Uploads but Does Not Build (2026-11-22)
+
+**Status**: Proposed (Phase 9 plan, [HOSTS.md](HOSTS.md)). User asked for a general plan for hosts besides GitHub Pages, with sources from repositories to directories and archives, aimed at putting pages on the web efficiently.
+
+**Context**: mimeo serves one kind of site: a GitHub repo from a template, built by Actions, served by GitHub Pages. Other hosts either build from a linked repo or accept uploaded files through an API. Every template that needs a build already builds in its own Actions workflow.
+
+**Decision**:
+
+- A host gets files in one of two ways: it builds from a repository, or mimeo uploads a set of built files. `Host` gains `accepts_files`, `create_site`, `delete_site`, `publish` and `records_owned_by_host`.
+- mimeo does not run builds. A directory or archive is published as it is. A repo that needs a build is built in its Actions workflow, whose last step runs `mimeo publish` when the repo is set to another host.
+- Uploads send every file's hash and upload only the files the host says it lacks. mimeo keeps no record of earlier uploads.
+- A directory on GitHub Pages is pushed to a `gh-pages` branch with `git` (served with `build_type: legacy`), because the Pages deployments API needs a GitHub Actions OIDC token.
+- Amends DEC-040: a site is the object at a host whose custom-domain setting names the hostname (a repo, a Worker, a Netlify site). `Fleet` holds a list of hosts and routes by the `Site.host` prefix.
+- Amends DEC-045: mimeo owns the address records at a site's names unless the host writes them itself (Cloudflare Workers custom domains).
+- `defaults.host` returns, as DEC-030 anticipated.
+
+**Alternatives considered**: mimeo runs each template's build locally (rejected: mimeo would depend on every template's toolchain, and the builds already run in Actions). Host-specific deploy actions in each template's workflow (rejected: the upload logic would be repeated per template and per host). A local record of uploaded hashes (rejected: the host's answer is current; a local record goes stale).
+
+**Consequences**: Templates change in the tepiton meta-repo (a `MIMEO_HOST` branch in `pages.yml`). Workflows that publish elsewhere need mimeo installable in Actions and a host token in repo secrets, which `create` sets. Moving an existing site between hosts is a later step with a short outage between removing old records and the new domain becoming active.
+
+---
+
+### DEC-055: Cloudflare Workers Is the Second Host, Netlify the Third, Without Moving DNS (2026-11-22)
+
+**Status**: Proposed (Phase 9 plan, [HOSTS.md](HOSTS.md)). Supersedes DEC-033 and [NETLIFY.md](NETLIFY.md).
+
+**Context**: Ten hosts were evaluated against vendor docs read 2026-11-22 (table in HOSTS.md): GitHub Pages, Cloudflare Workers static assets, Cloudflare Pages, Netlify, Vercel, Firebase Hosting, Surge, Neocities, Codeberg Pages, Render. 24 of 109 hostnames are on Cloudflare (Entry 98) and `defaults.dns` is `cloudflare`.
+
+**Decision**:
+
+- Second host: Cloudflare Workers static assets. Its upload is documented as REST with hash-based skipping; custom domains get Cloudflare's DNS records and certificate, so DEC-050's proxy sequence is never needed; one call lists every hostname and its Worker; static requests are free and unlimited. It requires the zone on the same Cloudflare account.
+- Not Cloudflare Pages: its direct upload is documented only through Wrangler, and Cloudflare tells new projects to use Workers.
+- Third host: Netlify, for domains not on Cloudflare. DNS stays at Porkbun or Cloudflare and mimeo writes the records Netlify documents for outside DNS (apex A `75.2.60.5`, subdomain CNAME to `<site>.netlify.app`). This supersedes DEC-033 (move the nameservers to Netlify), which was made before 2.0 separated DNS providers from hosts.
+- Not planned: Vercel (Hobby is non-commercial only), Firebase (360 MB/day transfer on Spark, service-account auth, `v1beta1` API), Surge (re-sends the whole site each deploy). Out: Neocities (custom domains are paid), Codeberg Pages (no API, closed to new users, terms bar mostly AI-written projects), Render (repo-only, two custom domains on Hobby).
+
+**Alternatives considered**: Netlify first (rejected: 300 credits a month at 15 per production deploy, and every site pauses when they run out). Cloudflare Pages for its Git integration (rejected: Actions already builds; the upload path matters more).
+
+**Consequences**: The Cloudflare token gains Workers Scripts: Edit. Several Workers facts are unverified and listed in HOSTS.md "To Verify" (assets-only Workers, the custom-domain create endpoint, the record Cloudflare writes, `www` behavior, the hash).
+
+---
+
+### DEC-056: Netlify Comes First, Starting With the Sites It Already Serves (2026-11-23)
+
+**Status**: Proposed (Phase 9 plan, [HOSTS.md](HOSTS.md)). Amends the order and the Netlify reasoning in DEC-055.
+
+**Context**: DEC-055 ranked Netlify third because of the free plan's credit limit. The account is on a legacy plan (user, 2026-11-23), so that limit does not apply. It already serves six sites at seven hostnames, each building from a GitHub repo. Six domains use Netlify DNS and twohorses.net uses Porkbun DNS. mimeo shows all seven as `no site`. `pborenstein/twohorses` also feeds tequitl.dev on GitHub Pages.
+
+**Decision**:
+
+- Netlify is the first host added, before Cloudflare Workers. Its first step reads the existing sites and changes nothing.
+- `create` refuses a hostname a Netlify site holds.
+- `delete` keeps a repo that another site, at any host, builds from. This guard can ship ahead of the rest.
+- A site can have several hostnames, and every host reports its source repo.
+- Existing Netlify domains stay on their current DNS. A `NetlifyDNS` provider covers those on Netlify DNS. New Netlify sites follow `defaults.dns`.
+- New Netlify sites build from a linked GitHub repo, as the existing ones do.
+
+**Alternatives considered**: Keep Workers first (rejected: the live sites would stay invisible and exposed to `create` and `delete`). Move the Netlify domains to Cloudflare DNS for uniformity (rejected: it risks working sites and gains nothing).
+
+**Consequences**: Cloudflare Workers remains the planned host for uploaded files on Cloudflare zones, now at step 5. DEC-033's nameserver move is no longer required, but domains already in that state are supported.
+
+---
+
+### DEC-057: mimeo Reads Netlify Through the CLI With a Read-Only Class (2026-11-23)
+
+**Status**: Active (2.2.0). User call: Netlify awareness, read-only at this point.
+
+**Context**: DEC-056 puts Netlify first and starts by reading its sites. The `Host` base class requires methods that change a site (`set_custom_domain`, `enforce_https`), and `Fleet` holds one host.
+
+**Decision**:
+
+- `NetlifyReader` (`mimeo/providers/host/netlify.py`) is not a subclass of `Host`. `Fleet` holds it in a separate attribute, `fleet.netlify`. It makes three kinds of call: list sites, list DNS zones, show a site's certificate.
+- It calls the `netlify` CLI, which holds the login, so mimeo has no new config or token. With the CLI absent, or `MIMEO_SKIP_NETLIFY` set, mimeo does not look at Netlify.
+- A domain counts as on Netlify DNS only when the account has its zone and the registrar's nameservers equal that zone's nameservers. The account holds zones for xhosi.com and documentation.rodeo whose domains now use other nameservers.
+- `create` and `link` refuse a hostname a Netlify site serves. `delete` refuses such a hostname and keeps a repository a Netlify site builds from.
+- When the account cannot be read, `status` warns and continues. `create`, `link` and `delete` stop, because they cannot tell what they would damage.
+
+**Alternatives considered**: A `NetlifyHost` subclass whose write methods raise (rejected: it needs `Fleet` to hold several hosts first, and a read-only request should not start with that change). Calling Netlify's REST API with a token in the config (rejected: a new secret for reads the logged-in CLI can already make).
+
+**Consequences**: Netlify is a special case in `plan.py`, `connection.py`, `delete.py` and `status.py` until `NetlifyHost` replaces `NetlifyReader`. The problem paths (expiring certificate, missing record) have run only against test data, because every live site is healthy.

@@ -19,8 +19,62 @@ Living document tracking progress on the domain landing page provisioning tool.
 | Phase 6: Hardening | Complete | Operational robustness and documentation |
 | Phase 7: CLI Redesign | Complete | Rethink command structure from first principles |
 | Phase 8: Consolidation | Current | Collapse verb sprawl into status/sync, unify CLI plumbing |
+| Phase 9: Hosts Beyond GitHub Pages | Planned | Netlify's existing sites, then directories and archives as sources and Cloudflare Workers as a host ([HOSTS.md](HOSTS.md)) |
 
 ---
+
+## Next Phase
+
+### Phase 9: Hosts Beyond GitHub Pages (planned 2026-11-22)
+
+Plan: [HOSTS.md](HOSTS.md). Decisions: DEC-054, DEC-055, DEC-056. Each step
+ships on its own.
+
+**Netlify as a host**
+
+- [x] Read Netlify sites, DNS zones and certificates (2.2.0, Entry 101,
+      DEC-057). The class `NetlifyReader` calls the `netlify` CLI and
+      makes no writes. The status command reports the sites and the sync
+      command skips them
+- [x] Protect Netlify sites (2.2.0). The create and link commands refuse
+      a hostname a Netlify site serves. The delete command keeps a
+      repository a Netlify site builds from
+- [ ] Check three Netlify facts against the live account, using read
+      calls: how `/dns_zones/{id}/dns_records` shows a site's records,
+      which certificate states exist besides `issued`, and which
+      `build_settings` values linking a repository needs
+- [ ] Let `Fleet` hold a list of hosts instead of one, choosing by
+      `Site.host`; add `defaults.host` and a HOST column to status;
+      test with two fake hosts
+- [ ] Add `NetlifyHost`, a subclass of `Host`, to replace `NetlifyReader`
+      and the Netlify special cases in `plan.py`, `connection.py`,
+      `delete.py` and `status.py`
+- [ ] Support several hostnames on one site: replace
+      `set_custom_domain` with add and remove methods, and have
+      `SiteState` report a list (twohorses has two hostnames)
+- [ ] Add `NetlifyDNS`, a `DNSProvider`, for the six domains on Netlify
+      DNS
+- [ ] Sync for Netlify sites: fix records on outside DNS, request a
+      certificate, turn on forced HTTPS
+- [ ] Link and unlink for Netlify sites: add or remove a hostname
+- [ ] Add `netlify.toml` to the templates (tepiton meta-repo)
+- [ ] `create --host netlify`: create the Netlify site, link the GitHub
+      repository so Netlify builds on push, set the hostname
+- [ ] Delete for Netlify sites: remove the Netlify site, and put the
+      Porkbun nameservers back when the domain was on Netlify DNS
+- [ ] Optional cleanup at Netlify: delete the unused DNS zones for
+      xhosi.com and documentation.rodeo
+
+**After Netlify**
+
+- [ ] Publish directories and archives to GitHub Pages and Netlify
+      (`bundle.py`, a publish command, `create --from`)
+- [ ] Check the Cloudflare Workers facts in HOSTS.md "To Verify" on
+      002370.xyz
+- [ ] Add a Cloudflare Workers host (`providers/host/cloudflare.py`)
+- [ ] Put template sites on Cloudflare (workflow change in the templates;
+      the create command sets variables and secrets)
+- [ ] Move a site from one host to another
 
 ## Current Phase
 

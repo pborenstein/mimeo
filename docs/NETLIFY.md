@@ -1,5 +1,10 @@
 # Netlify as a Second Host
 
+**Superseded 2026-11-22 by [HOSTS.md](HOSTS.md) (DEC-055).** Netlify
+is now planned as the third host, with DNS kept at Porkbun or
+Cloudflare instead of moved to Netlify. The text below is kept for
+history.
+
 Status: **Proposed design** — not yet decided or scheduled. Open questions
 are listed at the end; once settled they should be promoted to
 `DECISIONS.md`. This is the second host that DEC-030 anticipated ("revisit

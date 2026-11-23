@@ -1459,3 +1459,51 @@ created nothing (it stopped before the repo existed).
 
 **Files**: `docs/CONTEXT.md`, `CLAUDE.md`.
 
+## Entry 99: plan for hosts beyond GitHub Pages (2026-11-22)
+
+**What**: The user asked how Cloudflare Pages works, then for a general plan for second hosts (Cloudflare, Netlify, others), with sources ranging from repos to directories and archives, aimed at putting pages on the web efficiently. Wrote `docs/HOSTS.md`. No code change.
+
+**How**: Read the API docs and free-plan terms for ten hosts (GitHub Pages, Cloudflare Workers static assets, Cloudflare Pages, Netlify, Vercel, Firebase, Surge, Neocities, Codeberg Pages, Render). Checked how templates build today: Eleventy in each repo's Actions workflow (`pages.yml`), deploying through `upload-pages-artifact`. Findings that shaped the plan:
+
+- Four upload APIs (Workers, Netlify, Vercel, Firebase) take a list of hashes and ask only for missing files.
+- GitHub's Pages deployments API needs an Actions OIDC token, so a directory goes to GitHub Pages by branch push.
+- Cloudflare documents Workers uploads as REST and Pages uploads only through Wrangler, and tells new projects to use Workers.
+- Netlify's free plan is 300 credits a month at 15 per production deploy, and all sites pause when they run out.
+- Netlify documents outside-DNS records, so DEC-033's nameserver move is no longer needed.
+
+**Decisions**: DEC-054 (two ways in, mimeo does not build, hash-checked uploads, site identity amended), DEC-055 (Workers second, Netlify third with DNS in place; supersedes DEC-033).
+
+**Files**: `docs/HOSTS.md` (new), `docs/DECISIONS.md`, `docs/IMPLEMENTATION.md` (Phase 9, planned), `docs/NETLIFY.md` (superseded note).
+
+## Entry 100: the existing Netlify sites change the host plan (2026-11-23)
+
+**What**: The user pointed out that there are already Netlify sites, on a legacy plan with generous limits, building from GitHub repos. Entry 99's plan had treated Netlify as new and limited by the free plan's credits. Revised `docs/HOSTS.md`. No code change.
+
+**How**: Read the sites through `netlify api listSites` and compared them with `mimeo status` and public DNS. Six sites, seven hostnames. Six domains are on Netlify DNS; twohorses.net is on Porkbun with A `75.2.60.5`. mimeo shows all seven as `no site`.
+
+**Found**:
+
+- `pborenstein/twohorses` builds twohorses.lol on Netlify and tequitl.dev on GitHub Pages. tequitl.dev is being left to expire, and CONTEXT.md listed `delete` as one of the choices afterwards. `delete` removes the repo, which is the source of twohorses.lol. CONTEXT.md now says to unlink.
+- `create` reads `no site` as free, so it can take a hostname a Netlify site is using.
+
+**Decisions**: DEC-056.
+
+**Files**: `docs/HOSTS.md`, `docs/DECISIONS.md`, `docs/IMPLEMENTATION.md`, `docs/CONTEXT.md`.
+
+## Entry 101: mimeo reads Netlify; release 2.2.0 (2026-11-23)
+
+**What**: mimeo now reports the six Netlify sites and does not damage them. It makes no writes to Netlify. 438 tests pass.
+
+**How**:
+
+- The class `NetlifyReader` reads sites, DNS zones and certificates through the `netlify` CLI.
+- The status command shows each site's DNS, certificate state and repository. The doctor command checks the account can be read. The sync command skips Netlify sites.
+- The create and link commands refuse a hostname a Netlify site serves. The delete command refuses such a hostname, and keeps a repository a Netlify site builds from. It still asks before unlinking when the repository is kept; the first version of the guard skipped that question, and a test now covers it.
+- Run against the live account: all seven Netlify hostnames read `ok`, and `mimeo delete tequitl.dev` lists `pborenstein/twohorses` as kept. That run was declined at the prompt, so nothing changed.
+- The Netlify task list in `docs/IMPLEMENTATION.md` was rewritten as the steps to make Netlify a full host.
+
+**Released**: 2.2.0 (tag `v2.2.0`).
+
+**Decisions**: DEC-057.
+
+**Files**: `mimeo/providers/host/netlify.py` (new), `mimeo/connection.py`, `mimeo/plan.py`, `mimeo/operations.py`, `mimeo/cli/_fleet.py`, `mimeo/cli/create.py`, `mimeo/cli/delete.py`, `mimeo/cli/doctor.py`, `mimeo/cli/status.py`, `mimeo/cli/sync.py`, `tests/test_netlify.py`, `tests/conftest.py`, `docs/TROUBLESHOOTING.md`.

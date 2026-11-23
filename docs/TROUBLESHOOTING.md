@@ -229,6 +229,18 @@ A domain can also be moved from Porkbun DNS to Cloudflare with Porkbun's own too
 
 After `delegate` moves a zone away from Cloudflare, the zone and its records stay in the Cloudflare account. mimeo has no command that deletes a zone; remove it in the dashboard if it is not wanted.
 
+## Netlify
+
+mimeo reads Netlify sites through the `netlify` command-line tool and never changes them. Without that tool installed, mimeo does not look at Netlify.
+
+| Message | What to do |
+|:--------|:-----------|
+| `warning: Netlify sites are not shown` | mimeo could not read the account. Run `netlify login`, then run the command again |
+| `Could not read the Netlify account` | `create`, `link` and `delete` stop here, because they cannot tell whether they would damage a Netlify site. Run `netlify login`. If you do not use Netlify, set `MIMEO_SKIP_NETLIFY=1` |
+| `example.com is served by the Netlify site NAME` | mimeo refused to take the hostname. To use it elsewhere, first remove it from the site's domains at the Netlify link in the message |
+| `kept repository OWNER/NAME: it also builds the Netlify site NAME` | `delete` removed the GitHub Pages link and the DNS records and kept the repository. Nothing more is needed |
+| `skipped: served by Netlify` | `sync` does not change Netlify sites. Any problem and its fix are in `mimeo status HOSTNAME` |
+
 ## Exit codes and partial failures
 
 | Code | Meaning |

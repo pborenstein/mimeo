@@ -41,6 +41,10 @@ The repository whose GitHub Pages custom domain is the hostname, in any organiza
 
 mimeo caches the pairs it finds in `~/.cache/mimeo/sites.json`. The custom-domain setting stays the authority, and a cached pair is confirmed against it before use. See [`scan`](#scan).
 
+### Netlify sites
+
+If the `netlify` command-line tool is installed and logged in, mimeo reads that account's sites and never changes them. `status` shows each one with `(netlify)` after its repository, and `sync` skips it. `create` and `link` refuse a hostname a Netlify site serves. `delete` refuses such a hostname, and keeps a repository a Netlify site builds from.
+
 ### Which records mimeo touches
 
 mimeo owns the address records (A, AAAA, CNAME, ALIAS) at a site's own names, and nothing else in the zone. `<owner>` is the owner of the repository serving the site.

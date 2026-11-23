@@ -14,6 +14,7 @@ from ..plan import Plan
 from ..providers.base import DNSProvider
 from ..providers.dns.cloudflare import CloudflareDNS
 from ..providers.host.github import GitHubHost
+from ..providers.host.netlify import open_reader
 from ..providers.registrar.porkbun import (
     PorkbunDNSProvider,
     PorkbunRegistrar,
@@ -43,7 +44,13 @@ def open_fleet(cfg: Config) -> Iterator[Fleet]:
             )
         )
         yield Fleet(
-            registrar, providers, host, SiteCache(), repos=host.repos, lookup=public_nameservers
+            registrar,
+            providers,
+            host,
+            SiteCache(),
+            repos=host.repos,
+            lookup=public_nameservers,
+            netlify=open_reader(),
         )
 
 
@@ -61,6 +68,15 @@ def targets_for(
     Returns:
         (hostnames, whether to look for uncached sites)
     """
+    if fleet.netlify is not None:
+        fleet.netlify.load()
+        if fleet.netlify.error:
+            click.secho(
+                f"warning: Netlify sites are not shown: {fleet.netlify.error}"
+                " (to fix: netlify login)",
+                fg="yellow",
+                err=True,
+            )
     if hostnames:
         return [h.lower() for h in hostnames], True
 
@@ -116,12 +132,15 @@ def result_row(conn: Connection, plan: Plan, with_records: bool = False) -> Dict
     dns: str | None
     if conn.dns is not None:
         dns = conn.dns.name
+    elif conn.netlify_dns:
+        dns = "netlify"
     elif conn.zone is None:
         # Registered outside this account: say whether DNS answers for it.
         dns = "external" if conn.public_nameservers else None
     else:
         dns = "external" if conn.nameservers else "none"
     state = conn.state
+    cert = conn.netlify_certificate
     row: Dict[str, Any] = {
         "hostname": conn.hostname,
         "zone": conn.zone,
@@ -136,11 +155,19 @@ def result_row(conn: Connection, plan: Plan, with_records: bool = False) -> Dict
         "records": plan.records,
         "missing": [r.describe() for r in plan.missing],
         "extra": [r.describe() for r in plan.extra],
-        "site": str(conn.site) if conn.site else None,
+        "site": (
+            str(conn.site) if conn.site else (f"netlify:{conn.netlify.name}" if conn.netlify else None)
+        ),
+        "host": conn.site.host if conn.site else ("netlify" if conn.netlify else None),
+        "source_repo": (
+            conn.netlify.repo if conn.netlify and not conn.site else (conn.site.ref if conn.site else None)
+        ),
         "site_status": plan.site,
-        "https_enforced": state.https_enforced if state else None,
-        "cert_state": state.cert_state if state else None,
-        "cert_expires": state.cert_expires if state else None,
+        "https_enforced": (
+            state.https_enforced if state else (conn.netlify.force_ssl if conn.netlify else None)
+        ),
+        "cert_state": state.cert_state if state else (cert.state if cert else None),
+        "cert_expires": state.cert_expires if state else (cert.expires if cert else None),
         "changes": [c.summary for c in plan.changes],
         "problems": list(plan.problems),
         "fixes": list(plan.fixes),

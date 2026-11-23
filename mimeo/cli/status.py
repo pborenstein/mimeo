@@ -27,6 +27,8 @@ _CSV_FIELDS = [
     "proxied",
     "records",
     "site",
+    "host",
+    "source_repo",
     "site_status",
     "https_enforced",
     "cert_state",
@@ -43,6 +45,7 @@ _RECORDS_COLORS = {
     "missing": "red",
     "extra": "yellow",
     "external": "cyan",
+    "netlify": "cyan",
     "unknown": "red",
 }
 _SITE_COLORS = {
@@ -65,6 +68,13 @@ def _dns_label(row: Dict[str, Any]) -> str:
 def _registered_elsewhere(row: Dict[str, Any]) -> bool:
     """True for a hostname outside the registrar account that DNS answers for."""
     return row.get("registered") is False and bool(row.get("nameservers"))
+
+
+def _repo_label(row: Dict[str, Any]) -> str:
+    """The REPO column: the repository, marked when Netlify builds it."""
+    if row.get("host") == "netlify":
+        return f"{row.get('source_repo') or row['site']} (netlify)"
+    return (row["site"] or "-").removeprefix("github:")
 
 
 def _text(rows: List[Dict[str, Any]], detail: bool) -> None:
@@ -102,7 +112,7 @@ def _text(rows: List[Dict[str, Any]], detail: bool) -> None:
         click.echo("  ", nl=False)
         site = row["site_status"] or ("no site" if not row.get("error") else "-")
         click.secho(f"{site:<{site_w}}", fg=_SITE_COLORS.get(site), nl=False)
-        click.echo(f"  {(row['site'] or '-').removeprefix('github:')}", nl=False)
+        click.echo(f"  {_repo_label(row)}", nl=False)
         if row.get("error"):
             click.secho(f"  [{row['error']}]", fg="red", nl=False)
         click.echo()
@@ -186,15 +196,18 @@ def status(
         EXPIRES  registration expiry ("-" for a subdomain or a hostname
                  whose domain is not at the registrar)
         DNS      the provider serving the zone: porkbun, cloudflare,
-                 external (another provider; mimeo cannot read its
+                 netlify, external (another provider; mimeo cannot read its
                  records), none (the registrar reports no nameservers).
                  A trailing * means the site's records are proxied.
         RECORDS  the site's address records against what the host needs:
-                 ok, missing, extra, external, unknown
+                 ok, missing, extra, external, netlify (Netlify manages
+                 them), unknown
         SITE     ok, fixable (certificate ready, HTTPS not enforced),
                  pending, no cert, cert error, expiring, no pages,
                  no site
-        REPO     the repository whose custom domain is the hostname
+        REPO     the repository whose custom domain is the hostname, or
+                 the repository a Netlify site builds from, marked
+                 (netlify). mimeo reads Netlify sites and never changes them.
 
     \b
     Examples:

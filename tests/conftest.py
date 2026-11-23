@@ -47,6 +47,12 @@ def _no_porkbun_pacing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("mimeo.providers.registrar.porkbun.MIN_INTERVAL", 0.0)
 
 
+@pytest.fixture(autouse=True)
+def _no_real_netlify(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tests never reach the Netlify CLI on the machine running them."""
+    monkeypatch.setenv("MIMEO_SKIP_NETLIFY", "1")
+
+
 @pytest.fixture
 def world(tmp_path: Path) -> World:
     return World(tmp_path / "sites.json")

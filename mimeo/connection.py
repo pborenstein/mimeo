@@ -14,6 +14,7 @@ from typing import Any, Dict
 from mimeo.cache import SiteCache
 from mimeo.models import DNSRecord, Site, SiteState
 from mimeo.providers.base import DNSProvider, Host, Registrar, RepoProvider
+from mimeo.providers.host.netlify import NetlifyCertificate, NetlifyReader, NetlifySite
 
 
 @dataclass
@@ -39,6 +40,14 @@ class Connection:
     # public DNS gives for it. Empty when nothing answers, which is what
     # a lapsed registration looks like. None when it was not looked up.
     public_nameservers: list[str] | None = None
+    # The Netlify site serving the hostname. mimeo reads it and never
+    # changes it, so it is kept apart from `site`.
+    netlify: NetlifySite | None = None
+    netlify_certificate: NetlifyCertificate | None = None
+    # True when the registrar's nameservers point at this zone at Netlify.
+    netlify_dns: bool = False
+    # Other Netlify sites built from the repository behind `site`.
+    repo_also_builds: list[NetlifySite] = field(default_factory=list)
 
 
 class Fleet:
@@ -52,6 +61,7 @@ class Fleet:
         cache: SiteCache,
         repos: RepoProvider | None = None,
         lookup: Callable[[str], list[str] | None] | None = None,
+        netlify: NetlifyReader | None = None,
     ) -> None:
         """Bundle the providers.
 
@@ -64,9 +74,11 @@ class Fleet:
                 `delete` only)
             lookup: Asks public DNS for a domain's nameservers. Used
                 for a site whose hostname is not at the registrar.
+            netlify: Read-only view of a Netlify account, if there is one
         """
         self.repos = repos
         self.lookup = lookup
+        self.netlify = netlify
         self.registrar = registrar
         self.dns_providers = dns_providers
         self.host = host
@@ -208,7 +220,19 @@ class Fleet:
                 conn.records = self.zone_records(zone, conn.dns)
 
         conn.site, conn.state = self.site_for(hostname, search=search)
-        if zone is None and conn.site is not None and self.lookup is not None:
+        if self.netlify is not None:
+            conn.netlify = self.netlify.site_for(hostname)
+            if conn.netlify is not None:
+                conn.netlify_certificate = self.netlify.certificate(conn.netlify)
+            if zone is not None:
+                conn.netlify_dns = self.netlify.serves_zone(zone, conn.nameservers)
+            if conn.site is not None and conn.site.host == "github":
+                conn.repo_also_builds = self.netlify.sites_building(conn.site.ref)
+        if (
+            zone is None
+            and (conn.site is not None or conn.netlify is not None)
+            and self.lookup is not None
+        ):
             conn.public_nameservers = self._public_nameservers(hostname)
         return conn
 
@@ -230,4 +254,11 @@ class Fleet:
 
     def hostnames(self) -> list[str]:
         """Every hostname a fleet-wide run covers: registered domains and cached sites."""
-        return sorted(set(self.registered) | set(self.cache.hostnames()))
+        names = set(self.registered) | set(self.cache.hostnames())
+        if self.netlify is not None:
+            for site in self.netlify.sites:
+                for hostname in site.hostnames:
+                    # A www name is the same row as its registered apex.
+                    bare = hostname.removeprefix("www.")
+                    names.add(bare if bare in self.registered else hostname)
+        return sorted(names)

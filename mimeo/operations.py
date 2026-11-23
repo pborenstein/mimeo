@@ -44,6 +44,24 @@ class Outcome:
     stops: list[str] = field(default_factory=list)
 
 
+def refuse_netlify_hostname(fleet: Fleet, hostname: str) -> None:
+    """Stop before taking a hostname that a Netlify site is serving.
+
+    Raises:
+        HostError: If the Netlify account could not be read
+        OperationError: If a Netlify site serves the hostname
+    """
+    if fleet.netlify is None:
+        return
+    fleet.netlify.require()
+    held = fleet.netlify.site_for(hostname)
+    if held is not None:
+        raise OperationError(
+            f"{hostname} is served by the Netlify site {held.name}, so mimeo left it alone."
+            f" To use it here, first remove it from the domains at {held.admin_url}"
+        )
+
+
 def link(
     fleet: Fleet,
     hostname: str,
@@ -76,6 +94,7 @@ def link(
     hostname = hostname.lower()
     if site.host != fleet.host.name:
         raise OperationError(f"No host named {site.host!r} is available (only {fleet.host.name})")
+    refuse_netlify_hostname(fleet, hostname)
 
     current, _ = fleet.site_for(hostname)
     if current is not None and current != site:

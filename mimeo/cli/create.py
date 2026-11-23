@@ -8,7 +8,13 @@ import click
 from ..config import DNS_PROVIDER_NAMES, Config
 from ..connection import Fleet
 from ..models import Site
-from ..operations import OperationError, WouldStopService, delegate, link
+from ..operations import (
+    OperationError,
+    WouldStopService,
+    delegate,
+    link,
+    refuse_netlify_hostname,
+)
 from ._fleet import open_fleet
 from ._processing import (
     _categorize_error,
@@ -61,6 +67,7 @@ def create_one(
         raise OperationError(
             f"{hostname} is not covered by a domain registered in this account -- refusing to create"
         )
+    refuse_netlify_hostname(fleet, hostname)
     current, _ = fleet.site_for(hostname)
     if current is not None and current != site:
         raise OperationError(

@@ -79,6 +79,17 @@ def _check_gh_workflow_scope() -> tuple[bool, str, str]:
         return False, "gh not installed", "Install gh from https://cli.github.com"
 
 
+def _check_netlify() -> tuple[bool, str, str]:
+    """Check that the Netlify account can be read."""
+    from ..providers.host.netlify import SKIP_ENV, NetlifyReader
+
+    reader = NetlifyReader()
+    reader.load()
+    if reader.error:
+        return False, "cannot read the account", f"Run: netlify login (or set {SKIP_ENV}=1)"
+    return True, f"{len(reader.sites)} site(s), read-only", ""
+
+
 def _check_pages_ips() -> tuple[bool, str, str]:
     """Check that GitHub still lists every hardcoded Pages IP.
 
@@ -253,6 +264,11 @@ def doctor(config: Path | None, domains: tuple[str, ...]) -> None:
         checks.append(("Porkbun keys", lambda: _check_porkbun_credentials(loaded)))
         if cfg.cloudflare_api_token:
             checks.append(("Cloudflare token", lambda: _check_cloudflare_credentials(loaded)))
+
+    from ..providers.host.netlify import open_reader
+
+    if open_reader() is not None:
+        checks.append(("Netlify", _check_netlify))
 
     cloudflare_configured = bool(cfg and cfg.cloudflare_api_token)
     for domain in domains:

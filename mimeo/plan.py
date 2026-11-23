@@ -16,6 +16,7 @@ from mimeo.connection import Connection
 from mimeo.exceptions import HostError
 from mimeo.models import ADDRESS_TYPES, DNSRecord
 from mimeo.providers.base import Host
+from mimeo.providers.host.netlify import NETLIFY_APEX_IP, NETLIFY_TARGETS
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +111,35 @@ def compare(conn: Connection, host: Host, today: date | None = None) -> Plan:
             plan.fixes.append(f"Run: mimeo sync {conn.hostname}")
 
     if conn.site is None or conn.state is None:
+        if conn.netlify is not None:
+            _compare_netlify(conn, plan, today)
         return plan
+
+    if conn.netlify is not None:
+        plan.problems.append(
+            f"{conn.hostname} is claimed by {conn.site} and by the Netlify site"
+            f" {conn.netlify.name}. Only one of them can serve it."
+        )
+        plan.fixes_are_choices = True
+        plan.fixes.extend(
+            [
+                f"Keep Netlify: mimeo unlink {conn.hostname}"
+                + (
+                    ""
+                    if conn.netlify_dns
+                    else f", then add the record Netlify needs ({NETLIFY_APEX_IP} at the apex,"
+                    f" or a CNAME to {conn.netlify.name}.netlify.app)"
+                ),
+                f"Keep {conn.site}: remove {conn.hostname} from the domains at"
+                f" {conn.netlify.admin_url}",
+            ]
+        )
+    if conn.repo_also_builds:
+        names = ", ".join(s.name for s in conn.repo_also_builds)
+        plan.notes.append(
+            f"The repository {conn.site.ref} also builds the Netlify site {names}."
+            " `mimeo delete` keeps the repository."
+        )
 
     if conn.zone is None and conn.public_nameservers == []:
         _domain_is_gone(conn, plan)
@@ -128,6 +157,65 @@ def compare(conn: Connection, host: Host, today: date | None = None) -> Plan:
     _compare_records(conn, host, plan)
     _compare_site(conn, plan, today)
     return plan
+
+
+def _compare_netlify(conn: Connection, plan: Plan, today: date) -> None:
+    """Report on a hostname a Netlify site serves. Nothing here becomes a Change."""
+    site = conn.netlify
+    assert site is not None
+    if plan.records != "unknown":
+        if conn.netlify_dns:
+            plan.records = "netlify"
+        elif conn.dns is None or conn.records is None:
+            plan.records = "external"
+        else:
+            names = {conn.label, f"www.{conn.label}" if conn.label else "www"}
+            live = [r for r in conn.records if r.name in names and r.type in ADDRESS_TYPES]
+            if any(_points_at_netlify(r.content) for r in live):
+                plan.records = "ok"
+            else:
+                plan.records = "missing"
+                record = (
+                    f"A @ {NETLIFY_APEX_IP}"
+                    if not conn.label
+                    else f"CNAME {conn.label} {site.name}.netlify.app"
+                )
+                plan.problems.append(
+                    f"{conn.hostname} is on the Netlify site {site.name}, but no record at"
+                    f" {conn.dns.name} points at Netlify."
+                )
+                plan.fixes.append(f"Add this record at {conn.dns.name}: {record}")
+
+    cert = conn.netlify_certificate
+    days = _days_until(cert.expires, today) if cert else None
+    if cert is None:
+        plan.site = "no cert"
+        plan.problems.append(f"The Netlify site {site.name} has no HTTPS certificate.")
+    elif cert.state != "issued":
+        plan.site = "cert error"
+        plan.problems.append(
+            f"The certificate for the Netlify site {site.name} is in state {cert.state!r}."
+        )
+    elif days is not None and days <= CERT_EXPIRY_WARNING_DAYS:
+        plan.site = "expiring"
+        plan.problems.append(
+            f"The certificate for the Netlify site {site.name} expires {_expiry(cert.expires, today)}."
+        )
+    else:
+        plan.site = "ok"
+    if plan.site != "ok":
+        plan.fixes.append(
+            f"Open {site.admin_url}, go to its domain settings, and renew the certificate"
+            " under HTTPS. mimeo does not change Netlify sites."
+        )
+
+
+def _points_at_netlify(content: str) -> bool:
+    """True when a record's value is Netlify's apex address or one of its hostnames."""
+    value = content.rstrip(".").lower()
+    return value == NETLIFY_APEX_IP or any(
+        value == target or value.endswith(f".{target}") for target in NETLIFY_TARGETS
+    )
 
 
 def _domain_is_gone(conn: Connection, plan: Plan) -> None:
@@ -148,7 +236,7 @@ def _domain_is_gone(conn: Connection, plan: Plan) -> None:
     plan.fixes.extend(
         [
             f"Keep the repository and take the domain off it: mimeo unlink {name}",
-            f"Delete the repository: mimeo delete {name}",
+            *([] if conn.repo_also_builds else [f"Delete the repository: mimeo delete {name}"]),
             f"Move the repository to another account: open {_repo_settings(conn)},"
             " scroll to Danger Zone, click Transfer ownership",
             f"Get the domain back: register {name} again, then run: mimeo sync {name}",

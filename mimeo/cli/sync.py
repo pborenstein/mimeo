@@ -151,7 +151,11 @@ def sync(
                 }
                 conn = fleet.read(hostname, search=search)
                 if conn.site is None:
-                    row["skipped"] = "no site (use: mimeo link or mimeo create)"
+                    row["skipped"] = (
+                        "served by Netlify (mimeo does not change Netlify sites)"
+                        if conn.netlify is not None
+                        else "no site (use: mimeo link or mimeo create)"
+                    )
                     return row
                 plan = compare(conn, fleet.host)
                 row["problems"] = list(plan.problems)

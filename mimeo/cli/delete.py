@@ -7,7 +7,7 @@ import click
 
 from ..connection import Fleet
 from ..models import Site
-from ..operations import unlink
+from ..operations import OperationError, unlink
 from ._fleet import open_fleet
 from ._processing import (
     _categorize_error,
@@ -40,6 +40,13 @@ def delete_one(fleet: Fleet, hostname: str, site: Site | None, fallback_ref: str
         "repo": site.ref if site else fallback_ref,
         "repo_deleted": False,
     }
+    if site is None and fleet.netlify is not None:
+        held = fleet.netlify.site_for(hostname)
+        if held is not None:
+            raise OperationError(
+                f"{hostname} is served by the Netlify site {held.name}, so mimeo left it"
+                f" alone. To remove that site, delete it at {held.admin_url}"
+            )
     if site is not None:
         outcome, _ = unlink(fleet, hostname, dry_run=dry_run)
         result["actions"] += outcome.actions
@@ -49,7 +56,11 @@ def delete_one(fleet: Fleet, hostname: str, site: Site | None, fallback_ref: str
 
     assert fleet.repos is not None
     ref = result["repo"]
-    if dry_run:
+    builders = fleet.netlify.sites_building(ref) if fleet.netlify is not None else []
+    if builders:
+        names = ", ".join(s.name for s in builders)
+        result["notes"].append(f"kept repository {ref}: it also builds the Netlify site {names}")
+    elif dry_run:
         result["actions"].append(f"would delete repository {ref}")
     elif fleet.repos.delete_repository_if_exists(ref):
         result["repo_deleted"] = True
@@ -57,6 +68,15 @@ def delete_one(fleet: Fleet, hostname: str, site: Site | None, fallback_ref: str
     else:
         result["notes"].append(f"repository {ref} does not exist")
     return result
+
+
+def _repo_would_be_deleted(fleet: Fleet, site: Site | None, ref: str, hostname: str) -> bool:
+    """False when a Netlify site holds the hostname or builds from the repository."""
+    if fleet.netlify is None:
+        return True
+    if site is None and fleet.netlify.site_for(hostname) is not None:
+        return False
+    return not fleet.netlify.sites_building(ref)
 
 
 @click.command()
@@ -109,6 +129,8 @@ def delete(
 
     try:
         with open_fleet(cfg) as fleet:
+            if fleet.netlify is not None:
+                fleet.netlify.require()
             # A repository is about to be deleted by name, so make sure no
             # differently named repository serves the hostname first.
             sites: Dict[str, Site | None] = {
@@ -116,22 +138,34 @@ def delete(
             }
             refs = {h: (s.ref if s else f"{cfg.github_username}/{h}") for h, s in sites.items()}
 
-            if not dry_run and not yes:
-                click.secho(
-                    "WARNING: This will permanently delete these repositories:",
-                    fg="red",
-                    bold=True,
-                )
-                for hostname in names:
-                    linked = "" if sites[hostname] else "  (not linked; named after the hostname)"
-                    click.echo(f"  - {refs[hostname]}  for {hostname}{linked}")
-                click.echo()
-                click.secho(
-                    "All content, issues, and history will be lost, and each site's "
-                    "DNS records will be removed.",
-                    fg="red",
-                )
-                click.echo()
+            doomed = [h for h in names if _repo_would_be_deleted(fleet, sites[h], refs[h], h)]
+            kept = [h for h in names if sites[h] is not None and h not in doomed]
+            if not dry_run and not yes and (doomed or kept):
+                if doomed:
+                    click.secho(
+                        "WARNING: This will permanently delete these repositories:",
+                        fg="red",
+                        bold=True,
+                    )
+                    for hostname in doomed:
+                        linked = "" if sites[hostname] else "  (not linked; named after the hostname)"
+                        click.echo(f"  - {refs[hostname]}  for {hostname}{linked}")
+                    click.echo()
+                    click.secho(
+                        "All content, issues, and history will be lost, and each site's "
+                        "DNS records will be removed.",
+                        fg="red",
+                    )
+                    click.echo()
+                if kept:
+                    click.secho(
+                        "These sites will be unlinked and their DNS records removed. Their "
+                        "repositories are kept because Netlify builds from them:",
+                        fg="yellow",
+                    )
+                    for hostname in kept:
+                        click.echo(f"  - {refs[hostname]}  for {hostname}")
+                    click.echo()
                 if not click.confirm("Continue?"):
                     click.echo("Aborted.")
                     return

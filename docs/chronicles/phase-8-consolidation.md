@@ -1507,3 +1507,15 @@ created nothing (it stopped before the repo existed).
 **Decisions**: DEC-057.
 
 **Files**: `mimeo/providers/host/netlify.py` (new), `mimeo/connection.py`, `mimeo/plan.py`, `mimeo/operations.py`, `mimeo/cli/_fleet.py`, `mimeo/cli/create.py`, `mimeo/cli/delete.py`, `mimeo/cli/doctor.py`, `mimeo/cli/status.py`, `mimeo/cli/sync.py`, `tests/test_netlify.py`, `tests/conftest.py`, `docs/TROUBLESHOOTING.md`.
+
+## Entry 102: create waits for the template; status shows auto-renew (2026-11-23)
+
+**What**: Fixed a failed `mimeo create mimeo.fyi` and added a `RENEW` column to `status`. 444 tests pass. Not released; both changes are under Unreleased in `CHANGELOG.md`.
+
+**How**:
+
+- GitHub created the mimeo.fyi repository at 06:55:54 and its first commit is stamped 06:57:46. `create` retried reading `index.html` for about 8 seconds and failed, leaving the template's title and manifest in the repository. `create` now waits up to 5 minutes for the first commit and reports progress on stderr.
+- mimeo.fyi was recreated with `--force`. The deploy succeeded and the page has the right title. The certificate was requested and had not been issued at the end of the session. The zone's records became proxied after the sync that requested it; mimeo did not make that change.
+- `RENEW` says `off` for a registration that will not renew. Eleven domains read `off` on 2026-11-23: ayeye.dev, ayeye.rodeo, bluegazebo.dev, ekranoplan.dev, laminar.rodeo, tantamount.art, tantamount.gallery, tantamount.studio, tequitl.agency, tequitl.dev, thisisjusttosay.lol.
+
+**Files**: `mimeo/providers/repo/github.py`, `mimeo/providers/base.py`, `mimeo/cli/create.py`, `mimeo/cli/_fleet.py`, `mimeo/cli/status.py`, tests, `README.md`, `docs/TROUBLESHOOTING.md`, `CHANGELOG.md`.

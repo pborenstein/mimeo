@@ -11,6 +11,14 @@ Versions before 2.0.0 were not tagged. Their history is in
 
 ## [Unreleased]
 
+### Added
+
+- `status` has a `RENEW` column. It says `off` for a registration that will not renew automatically and is blank otherwise.
+
+### Fixed
+
+- `create` waits up to 5 minutes for GitHub to copy a template into the new repository and reports progress while it waits. It used to give up after about 8 seconds and leave a repository that had not been customized.
+
 ## [2.2.0] - 2026-11-23
 
 mimeo now reads Netlify sites. It makes no changes to them.

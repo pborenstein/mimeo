@@ -2,15 +2,16 @@
 phase: 8
 phase_name: Consolidation
 updated: 2026-11-23
-last_commit: 4240717
-last_entry: 101
+last_commit: d71d3f7
+last_entry: 102
 ---
 
 ## Current Focus
 
 mimeo 2.2.0 is the current release (tag `v2.2.0`, 2026-11-23). It reads
 the six Netlify sites and makes no writes to Netlify (DEC-057). Next is
-making Netlify a full host (`docs/IMPLEMENTATION.md`, Phase 9).
+making Netlify a full host (`docs/IMPLEMENTATION.md`, Phase 9). The
+create fix and the status RENEW column are pushed but not released.
 
 ## Active Tasks
 
@@ -21,6 +22,8 @@ making Netlify a full host (`docs/IMPLEMENTATION.md`, Phase 9).
       2026-11-17). Its site is `pborenstein/twohorses`; when `status`
       shows it as `no domain`, unlink it. Its repo also builds
       twohorses.lol on Netlify; `delete` now keeps the repo (DEC-057).
+- [ ] **mimeo.fyi** certificate pending, records proxied: set them to
+      DNS only until it is issued, then `mimeo sync mimeo.fyi`.
 
 ## Blockers: none
 
@@ -38,6 +41,7 @@ making Netlify a full host (`docs/IMPLEMENTATION.md`, Phase 9).
 
 ## Next Session
 
-Start the Netlify task list in `docs/IMPLEMENTATION.md`, Phase 9: check
-the three Netlify facts, then let `Fleet` hold a list of hosts.
-Separately: blueberryhill.fyi renewal near 2026-12-23.
+Finish the mimeo.fyi certificate. Then start the Netlify task list in
+`docs/IMPLEMENTATION.md`, Phase 9: check the three Netlify facts, then
+let `Fleet` hold a list of hosts. Separately: blueberryhill.fyi renewal
+near 2026-12-23.

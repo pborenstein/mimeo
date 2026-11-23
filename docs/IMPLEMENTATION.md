@@ -30,6 +30,15 @@ Living document tracking progress on the domain landing page provisioning tool.
 Plan: [HOSTS.md](HOSTS.md). Decisions: DEC-054, DEC-055, DEC-056. Each step
 ships on its own.
 
+**Open from Entry 102**
+
+- [ ] mimeo.fyi: the HTTPS certificate was still at
+      `authorization_created` on 2026-11-23, with its Cloudflare records
+      proxied. Set them to DNS only until it is issued, then run
+      `mimeo sync mimeo.fyi`
+- [ ] Rerunning plain `mimeo create` on a repository left half-made by a
+      failed create publishes it uncustomized. Only `--force` redoes it
+
 **Netlify as a host**
 
 - [x] Read Netlify sites, DNS zones and certificates (2.2.0, Entry 101,

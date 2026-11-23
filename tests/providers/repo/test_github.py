@@ -2,6 +2,7 @@
 
 import base64
 import json
+from collections.abc import Iterator
 from unittest.mock import Mock, patch
 
 import pytest
@@ -29,8 +30,10 @@ class TestGitHubRepoProvider:
 
     @pytest.fixture
     def repos(self, mock_gh_auth: Mock) -> GitHubRepoProvider:
-        """Create a GitHubRepoProvider for testing."""
-        return GitHubRepoProvider(GhCli(token="ghp_test_token"))
+        """Create a GitHubRepoProvider for testing, with the template already copied."""
+        provider = GitHubRepoProvider(GhCli(token="ghp_test_token"))
+        with patch.object(provider, "_wait_for_template_files"):
+            yield provider
 
     def test_create_from_template_new_repo(self, repos: GitHubRepoProvider) -> None:
         """Test creating a new repository from a template."""
@@ -77,6 +80,7 @@ class TestGitHubRepoProvider:
                         {"is_template": True},  # template repo is_template check
                         {"full_name": "testorg/example.com"},  # template generate
                         {"full_name": "testorg/example.com"},  # _wait_for_repo poll
+                        [{"sha": "abc"}],  # the template's files have arrived
                     ]
 
                     full_name, created, existed = repos.create_from_template(
@@ -682,3 +686,60 @@ class TestGitHubRepoProvider:
 
             assert exc_info.value.status_code == 307
             assert "github.template_org" in str(exc_info.value)
+
+
+class TestWaitForTemplateFiles:
+    """GitHub creates the repository first and copies the template's files later."""
+
+    @pytest.fixture
+    def repos(self) -> GitHubRepoProvider:
+        with patch("subprocess.run") as run:
+            run.return_value = Mock(returncode=0, stdout="", stderr="")
+            return GitHubRepoProvider(GhCli(token="ghp_test_token"))
+
+    @pytest.fixture
+    def clock(self) -> Iterator[list[float]]:
+        """A clock that advances only when the code sleeps."""
+        now = [0.0]
+
+        def sleep(seconds: float) -> None:
+            now[0] += seconds
+
+        with patch("mimeo.providers.repo.github.time.monotonic", lambda: now[0]):
+            with patch("mimeo.providers.repo.github.time.sleep", sleep):
+                yield now
+
+    def test_files_already_there_reports_nothing(
+        self, repos: GitHubRepoProvider, clock: list[float]
+    ) -> None:
+        messages: list[str] = []
+        with patch.object(repos.gh, "api", return_value=[{"sha": "abc"}]):
+            repos._wait_for_template_files("o/r", messages.append)
+        assert messages == []
+
+    def test_waits_through_empty_repo_and_reports_progress(
+        self, repos: GitHubRepoProvider, clock: list[float]
+    ) -> None:
+        empty = HostError("Git Repository is empty. (HTTP 409)", status_code=409)
+        messages: list[str] = []
+        with patch.object(repos.gh, "api", side_effect=[empty] * 11 + [[{"sha": "abc"}]]):
+            repos._wait_for_template_files("o/r", messages.append)
+        assert messages[0].startswith("Waiting for GitHub")
+        assert sum(m.startswith("Still waiting") for m in messages) == 2
+        assert messages[-1] == "GitHub finished copying the template (33s)"
+
+    def test_gives_up_with_the_fix(self, repos: GitHubRepoProvider, clock: list[float]) -> None:
+        empty = HostError("Git Repository is empty. (HTTP 409)", status_code=409)
+        with patch.object(repos.gh, "api", side_effect=empty):
+            with pytest.raises(HostError, match="--force"):
+                repos._wait_for_template_files("o/r")
+        assert clock[0] == 300
+
+    def test_other_errors_are_not_waited_on(
+        self, repos: GitHubRepoProvider, clock: list[float]
+    ) -> None:
+        denied = HostError("Forbidden (HTTP 403)", status_code=403)
+        with patch.object(repos.gh, "api", side_effect=denied):
+            with pytest.raises(HostError, match="Forbidden"):
+                repos._wait_for_template_files("o/r")
+        assert clock[0] == 0

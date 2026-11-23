@@ -9,6 +9,7 @@ Four roles, each a separate interface (DEC-041, DEC-044):
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from typing import Any
 
 from mimeo.models import DNSRecord, Site, SiteState
@@ -143,8 +144,17 @@ class RepoProvider(ABC):
         template_repo: str,
         private: bool = False,
         force: bool = False,
+        progress: Callable[[str], None] | None = None,
     ) -> tuple[str, bool, bool]:
         """Create a repository from a template.
+
+        Args:
+            repo_name: Name for the new repository
+            owner: Owner of the new repository
+            template_repo: Template repository name
+            private: Whether the repository is private
+            force: Replace the repository if it exists
+            progress: Called with a message during a long wait
 
         Returns:
             (full name, created, existed before)

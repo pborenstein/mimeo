@@ -2,6 +2,7 @@
 
 import base64
 import time
+from collections.abc import Callable
 from typing import Any, Dict
 
 from mimeo.exceptions import HostError
@@ -18,6 +19,12 @@ from mimeo.providers.host.template_manifest import (
 
 TEMPLATE_ORG = "mimeo-templates"
 DEFAULT_TEMPLATE = "mimeo"
+
+# GitHub creates a repository at once and copies the template's files
+# into it afterward. The copy took 1m52s on 2026-11-23.
+TEMPLATE_COPY_TIMEOUT = 300
+TEMPLATE_COPY_POLL = 3
+TEMPLATE_COPY_REPORT_EVERY = 15
 
 
 class GitHubRepoProvider(RepoProvider):
@@ -107,6 +114,7 @@ class GitHubRepoProvider(RepoProvider):
         template_repo: str = DEFAULT_TEMPLATE,
         private: bool = False,
         force: bool = False,
+        progress: Callable[[str], None] | None = None,
     ) -> tuple[str, bool, bool]:
         """Create a repository from a GitHub template repo.
 
@@ -119,6 +127,8 @@ class GitHubRepoProvider(RepoProvider):
             template_repo: Template repository name in the template org
             private: Whether to create a private repository
             force: If True, delete existing repo and recreate from template
+            progress: Called with a message while waiting for GitHub to
+                copy the template's files
 
         Returns:
             Tuple of (full_name, repo_created, repo_existed) where repo_created is
@@ -188,6 +198,7 @@ class GitHubRepoProvider(RepoProvider):
             self.delete_repository(f"{owner}/{displaced_name}")
 
         self._wait_for_repo(str(full_name))
+        self._wait_for_template_files(str(full_name), progress)
         if repo_existed:
             self._delete_stale_pages_artifacts(str(full_name))
         self._set_repository_topics(str(full_name), ["mimeo", "landing-page", "github-pages"])
@@ -471,6 +482,58 @@ class GitHubRepoProvider(RepoProvider):
             except HostError:
                 time.sleep(2)
         raise HostError(f"Repository {repo_full_name} not accessible after {timeout}s")
+
+    def _wait_for_template_files(
+        self,
+        repo_full_name: str,
+        progress: Callable[[str], None] | None = None,
+        timeout: int = TEMPLATE_COPY_TIMEOUT,
+    ) -> None:
+        """Wait until GitHub has copied the template's files into the repository.
+
+        The repository has no commits until the copy finishes. GitHub
+        answers 409 for an empty repository, and can answer 404 just
+        after creating one.
+
+        Args:
+            repo_full_name: Full repository name (owner/repo)
+            progress: Called with a message when waiting starts, every
+                15 seconds after that, and when the files arrive
+            timeout: Maximum seconds to wait
+
+        Raises:
+            HostError: If the files do not arrive in time, or the check
+                fails for another reason
+        """
+        report = progress or (lambda _message: None)
+        started = time.monotonic()
+        next_report = 0.0
+        waited = False
+        while True:
+            try:
+                if self.gh.api(f"repos/{repo_full_name}/commits?per_page=1"):
+                    if waited:
+                        took = int(time.monotonic() - started)
+                        report(f"GitHub finished copying the template ({took}s)")
+                    return
+            except HostError as e:
+                if e.status_code not in (404, 409):
+                    raise
+            elapsed = time.monotonic() - started
+            if elapsed >= timeout:
+                raise HostError(
+                    f"GitHub has not copied the template into {repo_full_name} after "
+                    f"{timeout // 60} minutes. Run the same mimeo create command again "
+                    "with --force to replace the repository."
+                )
+            if not waited:
+                report(f"Waiting for GitHub to copy the template into {repo_full_name}...")
+                waited = True
+                next_report = elapsed + TEMPLATE_COPY_REPORT_EVERY
+            elif elapsed >= next_report:
+                report(f"Still waiting for GitHub ({int(elapsed)}s of {timeout}s)...")
+                next_report += TEMPLATE_COPY_REPORT_EVERY
+            time.sleep(TEMPLATE_COPY_POLL)
 
     def set_homepage(self, repo_full_name: str, domain: str) -> None:
         """Set the repository's Website field to the site URL.

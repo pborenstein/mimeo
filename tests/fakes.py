@@ -21,9 +21,17 @@ class FakeRegistrar(Registrar):
     def __init__(self, domains: dict[str, list[str]] | None = None) -> None:
         self.ns: dict[str, list[str]] = dict(domains or {})
         self.dnssec: set[str] = set()
+        self.renewal_off: set[str] = set()
 
     def list_domains(self) -> list[dict[str, Any]]:
-        return [{"domain": d, "expireDate": "2027-06-01 00:00:00", "autoRenew": "1"} for d in self.ns]
+        return [
+            {
+                "domain": d,
+                "expireDate": "2027-06-01 00:00:00",
+                "autoRenew": "0" if d in self.renewal_off else "1",
+            }
+            for d in self.ns
+        ]
 
     def get_nameservers(self, domain: str) -> list[str]:
         return sorted(self.ns[domain])
@@ -197,6 +205,7 @@ class FakeRepos(RepoProvider):
         template_repo: str,
         private: bool = False,
         force: bool = False,
+        progress: Callable[[str], None] | None = None,
     ) -> tuple[str, bool, bool]:
         ref = f"{owner}/{repo_name}"
         existed = ref in self.host.sites

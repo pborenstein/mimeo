@@ -27,6 +27,14 @@ from ._processing import (
 )
 
 
+def _progress(hostname: str, message: str) -> None:
+    """Report a long wait on stderr, so stdout stays the command's result."""
+    if get_log_format() == "json":
+        _emit("info", message, domain=hostname)
+    else:
+        click.secho(f"{hostname}: {message}", dim=True, err=True)
+
+
 def create_one(
     fleet: Fleet,
     cfg: Config,
@@ -112,7 +120,11 @@ def create_one(
         result["actions"].append(f"would {verb} {site.ref} from template '{template}'")
     else:
         _, created, existed = fleet.repos.create_from_template(
-            repo_name=repo_name, owner=owner, template_repo=template, force=force
+            repo_name=repo_name,
+            owner=owner,
+            template_repo=template,
+            force=force,
+            progress=lambda message: _progress(hostname, message),
         )
         result["created"] = created
         result["repo_existed"] = existed

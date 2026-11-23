@@ -11,6 +11,27 @@ Versions before 2.0.0 were not tagged. Their history is in
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-11-23
+
+mimeo now reads Netlify sites. It makes no changes to them.
+
+### Added
+
+- If the `netlify` command-line tool is installed and logged in, `status` reports that account's sites: DNS, certificate state, and the repository each builds from, marked `(netlify)`. A domain on Netlify DNS shows `netlify` under `DNS`. JSON and CSV output gain `host` and `source_repo` fields ([4240717](https://github.com/pborenstein/mimeo/commit/4240717)).
+- `doctor` checks that the Netlify account can be read.
+- `MIMEO_SKIP_NETLIFY=1` turns the Netlify checks off.
+
+### Changed
+
+- `create` and `link` refuse a hostname a Netlify site serves.
+- `delete` refuses a hostname a Netlify site serves. For a GitHub Pages site whose repository also builds a Netlify site, it removes the link and DNS records and keeps the repository.
+- `sync` skips a Netlify site and says why.
+- If the Netlify account cannot be read, `status` warns and continues, and `create`, `link` and `delete` stop.
+
+### Known limitations
+
+- The Netlify problem reports (expiring certificate, missing record) have run only against test data, because every live site is healthy (as of 2026-11-23).
+
 ## [2.1.0] - 2026-11-17
 
 ### Added
@@ -132,6 +153,7 @@ before: one organization, Porkbun DNS.
   of 2026-11-17). They are covered by tests against in-memory providers.
 - `delegate` warns only about the three services listed above.
 
-[Unreleased]: https://github.com/pborenstein/mimeo/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/pborenstein/mimeo/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/pborenstein/mimeo/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/pborenstein/mimeo/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/pborenstein/mimeo/releases/tag/v2.0.0

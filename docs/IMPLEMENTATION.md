@@ -32,12 +32,24 @@ ships on its own.
 
 **Open from Entry 102**
 
-- [ ] mimeo.fyi: the HTTPS certificate was still at
-      `authorization_created` on 2026-11-23, with its Cloudflare records
-      proxied. Set them to DNS only until it is issued, then run
-      `mimeo sync mimeo.fyi`
 - [ ] Rerunning plain `mimeo create` on a repository left half-made by a
       failed create publishes it uncustomized. Only `--force` redoes it
+
+**HTTPS certificates ([CERTIFICATES.md](CERTIFICATES.md), DEC-058)**
+
+- [x] Add Zone Settings: Edit to mimeo's Cloudflare token (2026-11-23)
+- [x] Set the 16 proxied zones to a fixed Full mode with Always Use HTTPS
+- [x] Read and set those settings in the Cloudflare DNS provider;
+      `doctor` checks that they can be read
+- [x] Stop judging GitHub's certificate on a fully proxied site
+- [x] Have `sync` set the settings; remove the proxy-off sequence
+- [x] Update the docs
+
+**Proxy ([DEC-059](DECISIONS.md))**
+
+- [x] `mimeo proxy`; run on the six GitHub sites already on Cloudflare
+- [ ] Move the 51 GitHub sites on Porkbun DNS to Cloudflare (leave out
+      tequitl.dev, which is expiring), then run `mimeo proxy --all`
 
 **Netlify as a host**
 

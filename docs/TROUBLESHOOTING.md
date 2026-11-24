@@ -70,6 +70,8 @@ A site whose hostname is not in the Porkbun account but does answer in DNS (regi
 
 ## Certificates and HTTPS
 
+Which certificate matters depends on who answers visitors. A site proxied at all its names gets Cloudflare's certificate, and mimeo ignores GitHub's ([CERTIFICATES.md](CERTIFICATES.md)). Everything below about GitHub's certificate applies to a site that is not fully proxied.
+
 GitHub requests a certificate for a custom domain at the moment the domain is saved in the repository's Pages settings, and issues it only if it can reach the site directly at records that point to GitHub. Renewal works the same way. Two things follow.
 
 | Condition | Why it stops the certificate |
@@ -77,7 +79,15 @@ GitHub requests a certificate for a custom domain at the moment the domain is sa
 | The records were wrong when the domain was saved | GitHub does not request the certificate again on its own |
 | The records are proxied through Cloudflare | A proxied record resolves to Cloudflare's addresses, not GitHub's |
 
-`mimeo sync HOSTNAME` handles both. With the records right, it removes the custom domain and sets it again. When the records are proxied, it first switches them to DNS-only, waits for the certificate, and switches them back.
+With the records right and none proxied, `mimeo sync HOSTNAME` removes the custom domain and sets it again, which requests a certificate. mimeo never switches a proxy. If a site is proxied at only some of its names, `status` prints the steps; proxying all of its names also solves it, because Cloudflare then provides the certificate.
+
+### `fixable` on a proxied site
+
+The zone's Cloudflare settings are not SSL/TLS mode Full with Automatic off and Always Use HTTPS on. Run `mimeo sync HOSTNAME`.
+
+### `unknown` on a proxied site
+
+mimeo could not read the zone's Cloudflare settings. In Cloudflare, open My Profile > API Tokens, edit the token mimeo uses, and add the permission Zone > Zone Settings > Edit. Then run `mimeo sync HOSTNAME`.
 
 ### `sync` says to run it again
 
@@ -89,15 +99,6 @@ to fix:
 ```
 
 The records were wrong. One run fixes the records and a later run requests the certificate, because a record just written is not answered for immediately (seen on Porkbun, 2026-11-16: its own nameserver returned nothing for a new name for a few seconds). After the certificate is approved, one more `mimeo sync` enforces HTTPS. So a new site with wrong records can take three runs.
-
-### "The certificate for example.com was not issued within 15 minutes"
-
-`sync` switched the proxied records to DNS-only and the certificate did not arrive. The records were left DNS-only on purpose: switching them back would block the certificate again. The site keeps working; visitors reach GitHub directly.
-
-1. Run `mimeo status example.com` every few minutes until `SITE` says `ok` or `fixable`.
-2. If it says `cert error` or `no cert` instead, run `mimeo sync example.com`. The records are no longer proxied, so this is the plain request and returns at once.
-3. When it says `ok` or `fixable`, open the Cloudflare dashboard, then the zone, then DNS > Records, and switch the records the error named back to Proxied.
-4. If it said `fixable`, run `mimeo sync example.com` to enforce HTTPS.
 
 ### "The custom domain example.com was removed from ... and could not be set again"
 
@@ -216,14 +217,14 @@ A row that fails to read is shown with dashes and the error at the end of the li
 
 ## Cloudflare
 
-The token needs three permissions on the zones mimeo manages: Zone: Read and DNS: Edit to read and write records, and Zone: Edit to let `delegate` create a zone. In Cloudflare's token editor the zone permissions appear only after the scope is changed from "Entire Account" to "All Domains" (seen 2026-11-16).
+The token needs four permissions on the zones mimeo manages: Zone: Read and DNS: Edit to read and write records, Zone: Edit to let `delegate` create a zone, and Zone Settings: Edit to set HTTPS on proxied zones. In Cloudflare's token editor the zone permissions appear only after the scope is changed from "Entire Account" to "All Domains" (seen 2026-11-16).
 
 | Message | What to do |
 |:--------|:-----------|
-| `Cloudflare token` fails in `doctor` | The token is wrong, revoked or expired. Make a new one with the three permissions and put it in `[cloudflare] api_token`. For a token owned by the account (not a user), also set `account_id`: `doctor` verifies such a token through the account |
+| `Cloudflare token` fails in `doctor` | The token is wrong, revoked or expired. Make a new one with the four permissions and put it in `[cloudflare] api_token`. For a token owned by the account (not a user), also set `account_id`: `doctor` verifies such a token through the account |
 | `Creating a Cloudflare zone needs cloudflare.account_id in the config` | Add `account_id` under `[cloudflare]`. It is in the Cloudflare dashboard's URL and on the account's overview page |
 | `Cloudflare has no zone example.com` | The registrar's nameservers name Cloudflare, but the token cannot see the zone: it is in another Cloudflare account, or the token is limited to other zones |
-| `Cloudflare API error:` followed by Cloudflare's text | Cloudflare refused the call; its text says why. A permission error means the token lacks one of the three permissions |
+| `Cloudflare API error:` followed by Cloudflare's text | Cloudflare refused the call; its text says why. A permission error means the token lacks one of the four permissions |
 
 A domain can also be moved from Porkbun DNS to Cloudflare with Porkbun's own tool, once the Cloudflare account is connected to Porkbun ([guide](https://porkbun.com/llms/guides/move-domains-to-cloudflare), read 2026-11-22). mimeo treats the result the same as a `delegate`: it follows the nameservers. Differences from `delegate`: Porkbun does not read the records back before changing the nameservers, so check its preview first for a domain with mail; and a domain can stay in `activating` for up to 72 hours, during which the nameservers name Cloudflare but the zone is not answering yet. If mimeo then says `Cloudflare has no zone`, the token does not cover the new zone (see the table above). Why mimeo does not use Porkbun's API for this: DEC-053.
 

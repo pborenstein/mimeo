@@ -258,7 +258,7 @@ new
 
 `link` (and so `create`) enforces HTTPS if the certificate is already approved, or waits up to 15 minutes for it with `--wait`. Otherwise it reports HTTPS as pending, and `mimeo sync` enforces it later for any site in `fixable` state.
 
-GitHub issues and renews the certificate only while the records resolve to GitHub's addresses. With Cloudflare proxying on they resolve to Cloudflare's, and renewal fails; `status` shows that as `cert error` or `expiring`. mimeo does not act on it (DEC-043).
+GitHub issues and renews the certificate only while the records resolve to GitHub's addresses. A site proxied at all its names uses Cloudflare's certificate instead, so mimeo does not judge GitHub's. It checks that the zone is on SSL/TLS mode Full with Automatic off and Always Use HTTPS on, and `sync` sets those (DEC-058).
 
 ## Dependencies
 

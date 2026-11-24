@@ -2,8 +2,8 @@
 phase: 8
 phase_name: Consolidation
 updated: 2026-11-23
-last_commit: d71d3f7
-last_entry: 102
+last_commit: 8410c35
+last_entry: 104
 ---
 
 ## Current Focus
@@ -11,27 +11,24 @@ last_entry: 102
 mimeo 2.2.0 is the current release (tag `v2.2.0`, 2026-11-23). It reads
 the six Netlify sites and makes no writes to Netlify (DEC-057). Next is
 making Netlify a full host (`docs/IMPLEMENTATION.md`, Phase 9). The
-create fix and the status RENEW column are pushed but not released.
+create fix, the RENEW column, the HTTPS change and `mimeo proxy` are
+committed but not released or pushed.
 
 ## Active Tasks
 
-- [ ] **blueberryhill.fyi** certificate renewal near 2026-12-23, proxied:
-      on `cert error`, `mimeo sync blueberryhill.fyi` is the first run
-      of DEC-050 on a real failure.
 - [ ] **tequitl.dev is being left to expire** (2026-12-06, decided
       2026-11-17). Its site is `pborenstein/twohorses`; when `status`
       shows it as `no domain`, unlink it. Its repo also builds
       twohorses.lol on Netlify; `delete` now keeps the repo (DEC-057).
-- [ ] **mimeo.fyi** certificate pending, records proxied: set them to
-      DNS only until it is issued, then `mimeo sync mimeo.fyi`.
 
 ## Blockers: none
 
 ## Context
 
 - mimeo reports a problem with its fix steps, and `sync` does the fix
-      when it can write the zone (DEC-048, DEC-050).
-- The proxy setting changes only during that certificate sequence.
+      when it can write the zone (DEC-048).
+- A fully proxied site uses Cloudflare's certificate (DEC-058). Only
+      `mimeo proxy` turns a proxy on (DEC-059). 22 sites are proxied.
 - Porkbun requests are spaced 0.25s; `status --all` takes a minute.
 - 24 of 109 hostnames are on Cloudflare; 7 are on Netlify sites.
 - Live config: three organizations, `defaults.dns = "cloudflare"`.
@@ -41,7 +38,6 @@ create fix and the status RENEW column are pushed but not released.
 
 ## Next Session
 
-Finish the mimeo.fyi certificate. Then start the Netlify task list in
-`docs/IMPLEMENTATION.md`, Phase 9: check the three Netlify facts, then
-let `Fleet` hold a list of hosts. Separately: blueberryhill.fyi renewal
-near 2026-12-23.
+Move the 51 GitHub sites on Porkbun DNS to Cloudflare, leaving out
+tequitl.dev, then run `mimeo proxy --all`. After that, the Netlify task
+list in `docs/IMPLEMENTATION.md`, Phase 9.

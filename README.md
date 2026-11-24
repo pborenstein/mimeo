@@ -7,7 +7,7 @@ Connects a domain to the site that serves it, and keeps the connection correct. 
 | The registration | [Porkbun](https://porkbun.com) |
 | The nameservers | Porkbun, set to Porkbun's or [Cloudflare](https://cloudflare.com)'s |
 | The DNS records | Whichever of Porkbun or Cloudflare the nameservers name |
-| The custom-domain setting | The GitHub repository that serves the site |
+| The custom-domain setting | The GitHub repository that serves the site, or a [Netlify site](#netlify-sites), which mimeo reads and does not change |
 
 ## Quick start
 
@@ -54,7 +54,7 @@ mimeo owns the address records (A, AAAA, CNAME, ALIAS) at a site's own names, an
 | Apex (`example.com`) | `example.com`, `www.example.com` | Four A and four AAAA at the apex; `www` CNAME to `<owner>.github.io` |
 | Subdomain (`service.example.com`) | `service.example.com` | One CNAME to `<owner>.github.io` |
 
-At those names a missing record is added, and an address record that is not needed is removed. MX and TXT records and records at any other name are left alone. A record's Cloudflare proxy setting is left alone too, except while `sync` gets a certificate issued (see [Proxied records](#proxied-records)).
+At those names a missing record is added, and an address record that is not needed is removed. MX and TXT records and records at any other name are left alone. A record's Cloudflare proxy setting is left alone too. Only [`mimeo proxy`](#proxy) changes it.
 
 ## Commands
 
@@ -65,6 +65,7 @@ At those names a missing record is added, and an address record that is not need
 | [`link`](#link-and-unlink) | Sets a site's custom domain to a hostname, then syncs it |
 | [`unlink`](#link-and-unlink) | Removes the site's records and its custom domain |
 | [`delegate`](#delegate) | Moves a zone to another DNS provider, asking first when that would stop a service |
+| [`proxy`](#proxy) | Turns on Cloudflare's proxy for sites, with the HTTPS settings they need |
 | [`create`](#create) | `delegate` if needed, a new repository from a template, then `link` |
 | [`delete`](#delete) | `unlink`, then deletes the repository |
 | [`scan`](#scan) | Rebuilds the cache of which repository serves which hostname |
@@ -89,9 +90,9 @@ A bare `mimeo status` refuses to run; a fleet sweep needs `--all`. Findings exit
 | `EXPIRES` | Registration expiry; `elsewhere` for a hostname registered outside this Porkbun account that DNS answers for; `-` for a subdomain, or a hostname not at the registrar that nothing answers for |
 | `RENEW` | `off` when the registration will not renew automatically; blank when it will, or when it does not apply |
 | `DNS` | `porkbun`, `cloudflare`, `netlify`, `external` (a provider or account mimeo cannot read), `none` (no nameservers); a trailing `*` when the site's records are proxied |
-| `RECORDS` | `ok`, `missing`, `extra`, `external` (not compared), `unknown` |
-| `SITE` | `ok`, `fixable`, `pending`, `no cert`, `cert error`, `expiring`, `no pages`, `no domain`, `no site` |
-| `REPO` | The repository whose custom domain is the hostname |
+| `RECORDS` | `ok`, `missing`, `extra`, `external` (not compared), `netlify` (managed by Netlify), `unknown` |
+| `SITE` | `ok`, `fixable`, `pending`, `no cert`, `cert error`, `expiring`, `no pages`, `no domain`, `unknown` (a proxied zone's HTTPS settings could not be read), `no site` |
+| `REPO` | The repository whose custom domain is the hostname, or the one a Netlify site builds from, marked `(netlify)` |
 
 What each value means and what to do about it is in [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md#reading-a-status-row). A registered domain with no site, a zone at an external provider, and proxied records are not problems.
 
@@ -108,9 +109,9 @@ When hostnames are named, or with `--problems`, detail lines follow each row. Th
 | `note:` | Something worth knowing that is not a problem, such as a hostname registered outside this account |
 
 ```
-  example.com      2027-08-31  cloudflare*  ok   cert error  mimeo-sites/example.com
-      sync would: renew the HTTPS certificate, which expires 2026-12-12 (switches A @, CNAME www to DNS-only, sets the custom domain again, waits for the certificate, switches them back to proxied)
-  operation.rodeo  -           -            -    no domain   mimeo-sites/operation.rodeo
+  example.com      2027-08-31         cloudflare*  ok   fixable     mimeo-sites/example.com
+      sync would: set Cloudflare SSL/TLS for example.com to a fixed Full mode with Always Use HTTPS on
+  operation.rodeo  -                  -            -    no domain   mimeo-sites/operation.rodeo
       problem: operation.rodeo is not in the registrar account and nothing answers for it in DNS, so the registration has most likely lapsed. The repository mimeo-sites/operation.rodeo is still set up to serve it.
       do one of:
         - Keep the repository and take the domain off it: mimeo unlink operation.rodeo
@@ -133,14 +134,16 @@ In JSON and CSV output the steps are the `fixes` field, and `fixes_are_choices` 
 |:--------|:-----------------|
 | A needed address record is missing | Adds it |
 | An address record at the site's names is not needed | Removes it |
-| No certificate, a failed renewal, or a certificate within 14 days of expiry | Removes the custom domain and sets it again |
-| Certificate approved, HTTPS not enforced | Enforces HTTPS |
+| Site not fully proxied: no certificate, a failed renewal, or a certificate within 14 days of expiry | Removes the custom domain and sets it again |
+| Site not fully proxied: certificate approved, HTTPS not enforced | Enforces HTTPS |
+| Site fully proxied: the zone's Cloudflare HTTPS settings are wrong | Sets them |
+| A Netlify site | Skips it |
 
 Problems `sync` cannot fix are printed with the same steps `status` prints.
 
 #### Certificates
 
-GitHub requests a certificate at the moment the custom domain is saved, and issues it only if it can reach the site directly. That is why setting the domain again works. Verified 2026-11-16 on five sites with no certificate; GitHub approved the first within 20 seconds.
+This section is about sites that are not fully proxied. GitHub requests a certificate at the moment the custom domain is saved, and issues it only if it can reach the site directly. That is why setting the domain again works. Verified 2026-11-16 on five sites with no certificate; GitHub approved the first within 20 seconds.
 
 `sync` requests a certificate only when the records are already right. A site with wrong records takes two runs a few minutes apart: records, then the request. A further run enforces HTTPS once the certificate is approved.
 
@@ -148,17 +151,14 @@ If the domain cannot be set again, the error gives the `mimeo link` command that
 
 #### Proxied records
 
-Cloudflare's proxy blocks the certificate. When the site's records are proxied, `sync` runs this sequence. It is the one case in which mimeo changes a proxy setting (DEC-050).
+When every name of a site is proxied, Cloudflare answers visitors with its own certificate, which it issues and renews itself. mimeo then ignores GitHub's certificate for that site and checks two settings on the zone. `sync` sets them if they are wrong:
 
-1. Switch the proxied records to DNS-only.
-2. Remove the custom domain and set it again.
-3. Wait up to 15 minutes for the certificate, asking again if a request fails.
-4. Switch the same records back to proxied.
+| Cloudflare setting | Value |
+|:-------------------|:------|
+| SSL/TLS encryption mode | Full, with Automatic off |
+| Always Use HTTPS | On |
 
-| Outcome | State afterwards |
-|:--------|:-----------------|
-| A step fails | The records are switched back to proxied before the error is reported |
-| No certificate in 15 minutes | The records stay DNS-only so it can still arrive; the error says how to switch them back |
+`sync` never turns the proxy on or off; [`mimeo proxy`](#proxy) turns it on. The token needs the Zone Settings: Edit permission. The reasons are in [docs/CERTIFICATES.md](./docs/CERTIFICATES.md).
 
 #### What sync leaves alone
 
@@ -166,7 +166,7 @@ Cloudflare's proxy blocks the certificate. When the site's records are proxied, 
 |:------------|:-----------|
 | Nameservers | `mimeo delegate` |
 | Which repository serves a hostname | `mimeo link` |
-| A proxy setting, outside the sequence above | Cloudflare's dashboard |
+| Whether a record is proxied | `mimeo proxy` to turn it on; Cloudflare's dashboard to turn it off |
 | A zone at a provider that is not configured | That provider |
 
 ### link and unlink
@@ -195,6 +195,8 @@ When the zone is at a provider mimeo cannot write to, `link` sets the custom dom
 | Move | `mimeo delegate example.com --dns cloudflare` |
 | Move back | `mimeo delegate example.com --dns porkbun` |
 
+To move many domains from Porkbun to Cloudflare at once, Porkbun's own [move to Cloudflare](https://porkbun.com/llms/guides/move-domains-to-cloudflare) also works, and mimeo picks each domain up from its nameservers. `delegate` is the one that reads the records back before changing the nameservers (DEC-053).
+
 `delegate` copies every record except NS and SOA from the provider serving the zone now, reads the copies back, and only then sets the nameservers at the registrar. Copies are DNS-only. The old provider's records are left in place. `--dns` defaults to `defaults.dns`.
 
 #### Services a move would stop
@@ -218,6 +220,19 @@ Cloudflare's docs say Email Routing "is available to all Cloudflare customers us
 
 Record types the target cannot hold (ALIAS on Cloudflare) are listed and not copied.
 
+### proxy
+
+```bash
+mimeo proxy example.com --dry-run
+mimeo proxy site1.com site2.com
+mimeo proxy --all --dry-run
+mimeo proxy --all
+```
+
+For each site, `proxy` sets the zone to SSL/TLS mode Full with Always Use HTTPS on, turns on the proxy for the site's own address records, and checks that `https://` still answers. If it does not, the proxy is switched back off and the run stops. Mail, TXT and other records are left alone.
+
+It skips, and says why, a hostname with no site, a Netlify site, and a domain whose DNS is not on Cloudflare. `--all` asks first; `--yes` skips the question.
+
 ### create
 
 | Task | Command |
@@ -234,8 +249,10 @@ Record types the target cannot hold (ALIAS on Cloudflare) are listed and not cop
 For each hostname, `create` runs these steps. Nothing is created for a hostname no registered domain covers.
 
 1. Move the zone to `defaults.dns` if it is at another configured provider. Apex hostnames only; a subdomain never moves its parent zone. When the move would stop a service, the zone stays where it is and the `delegate` command is printed.
-2. Create the repository from the template in the template org. The template must have its `is_template` flag set. An existing repository is left unchanged.
+2. Create the repository from the template in the template org. The template must have its `is_template` flag set. GitHub copies the files after creating the repository, so `create` waits up to 5 minutes and reports progress. An existing repository is left unchanged.
 3. Link the repository to the hostname.
+
+`create` refuses a hostname a Netlify site serves. If a `create` fails partway, rerun it with `--force`: without it, the half-made repository is left unchanged and gets linked.
 
 `--force` deletes and recreates the repository, so all content, issues and history are lost. It prompts unless `--yes` is passed. `--skip-dns` leaves nameservers and records alone.
 
@@ -255,6 +272,8 @@ To push without deploying, put `[skip ci]` (or `[no ci]`, `[skip actions]`) in t
 
 `delete` does what `unlink` does, then deletes the repository serving the hostname, whatever it is called and whichever listed organization it is in. The prompt names the repository. It needs the `delete_repo` token scope. The registration, nameservers and every other record are left alone.
 
+It refuses a hostname a Netlify site serves. If a Netlify site builds from the repository, it unlinks the hostname and keeps the repository.
+
 When nothing is linked, it falls back to the repository named after the hostname in the default org, after a full scan confirms no other repository serves the hostname.
 
 ### scan
@@ -273,6 +292,8 @@ It runs by itself when a lookup misses and the cache was never filled, or was fi
 | Pages IPs | GitHub still lists the eight Pages addresses mimeo writes (from `api.github.com/meta`) |
 | Porkbun keys | Accepted by Porkbun |
 | Cloudflare token | Active, when a `[cloudflare]` section is configured |
+| Cloudflare settings | The token can read zone settings. Write access is not tested |
+| Netlify | The account can be read, when the `netlify` tool is installed |
 | Nameservers | `mimeo doctor example.com` only: the domain's nameservers belong to a provider mimeo can write to |
 
 ### Global options
@@ -303,7 +324,7 @@ A 1.x config file loads unchanged. With no new keys mimeo behaves as before: one
 
 ## Known limitations
 
-- One registrar (Porkbun), two DNS providers (Porkbun, Cloudflare), one host (GitHub Pages). The interfaces leave room for more.
+- One registrar (Porkbun), two DNS providers (Porkbun, Cloudflare), one host mimeo can change (GitHub Pages). Netlify sites are read only. The plan for more hosts is in [docs/HOSTS.md](./docs/HOSTS.md).
 - `delegate` warns only about the two services in [its table](#services-a-move-would-stop). Anything else that depends on the old provider moves without a question.
 - Requests to Porkbun start 0.25 seconds apart, so `status --all` over about 100 domains takes about a minute. Whether Porkbun publishes a request limit is unverified; the interval was chosen on 2026-11-16 after unspaced sweeps lost a domain to a 503.
 - `scan` sees private repositories only in the authenticated account and in organizations it belongs to.
@@ -315,8 +336,10 @@ A 1.x config file loads unchanged. With no new keys mimeo behaves as before: one
 | `delegate` from Porkbun to Cloudflare | Once, 2026-11-16 |
 | `delegate` back to Porkbun | Once, 2026-11-17 |
 | `sync` removing and adding records in a Cloudflare zone | Once each, 2026-11-17 |
-| `sync` getting a certificate behind the proxy, while the certificate was still valid | Once, 2026-11-17, in 22 seconds |
-| `sync` getting a certificate behind the proxy, after a failed certificate renewal | No; the same steps by hand fixed xhosi.com on 2026-11-17 |
+| `sync` setting Cloudflare's HTTPS settings on a proxied zone | Once, on 002370.xyz, 2026-11-23 |
+| `proxy` turning on the proxy | Six sites, 2026-11-23 |
+| Reading Netlify sites, zones and certificates | Yes, 2026-11-23 |
+| Netlify problem reports (expiring certificate, missing record) | No; every live site is healthy |
 
 ## Development
 
@@ -331,13 +354,13 @@ mimeo/
 ├── mimeo/
 │   ├── connection.py         # Read: Fleet.read -> Connection
 │   ├── plan.py               # Compare and apply: compare() -> Plan, apply()
-│   ├── operations.py         # link, unlink, delegate
+│   ├── operations.py         # link, unlink, delegate, proxy
 │   ├── cache.py              # Hostname-to-site cache
 │   ├── cli/                  # One command per function; _fleet.py builds the providers
-│   ├── providers/            # Registrar, DNSProvider, Host, RepoProvider; Porkbun, Cloudflare, GitHub
+│   ├── providers/            # Registrar, DNSProvider, Host, RepoProvider; Porkbun, Cloudflare, GitHub, Netlify (read-only)
 │   ├── utils/                # HTTP session with error handling, retry with jitter
 │   ├── config.py             # Config loading (~/.config/mimeo/config.toml)
-│   ├── models.py             # DNSRecord, Site, SiteState
+│   ├── models.py             # DNSRecord, Site, SiteState, ProxyTLS
 │   └── exceptions.py         # Exception hierarchy + exit codes
 ├── tests/
 ├── scripts/
@@ -351,6 +374,8 @@ mimeo/
 | [docs/INSTALLATION.md](./docs/INSTALLATION.md) | Prerequisites, install, configuration |
 | [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) | What each status value means, refusals and errors, and what to do |
 | [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Component map, data flows |
+| [docs/CERTIFICATES.md](./docs/CERTIFICATES.md) | Which certificate a site uses, and the Cloudflare settings for proxied sites |
+| [docs/HOSTS.md](./docs/HOSTS.md) | Evaluation of other hosts and the plan for adding them |
 | [docs/MIMEO2_DESIGN.md](./docs/MIMEO2_DESIGN.md) | The 2.0 design and the reasons for it |
 | [docs/DECISIONS.md](./docs/DECISIONS.md) | Architectural decision registry |
 | [docs/IMPLEMENTATION.md](./docs/IMPLEMENTATION.md) | Phase tracker and task status |

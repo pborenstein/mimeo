@@ -15,6 +15,17 @@ Versions before 2.0.0 were not tagged. Their history is in
 
 - `status` has a `RENEW` column. It says `off` for a registration that will not renew automatically and is blank otherwise.
 
+- `doctor` checks that the Cloudflare token can read zone settings.
+- `mimeo proxy HOSTNAME...` and `mimeo proxy --all` turn on Cloudflare's proxy for a site's address records, after setting the zone's HTTPS settings. If `https://` stops answering, the proxy is switched back off and the run stops.
+
+### Changed
+
+- A site proxied at all its names is judged by Cloudflare's HTTPS settings instead of GitHub's certificate. `status` no longer reports a problem for a missing, failed or expiring GitHub certificate on such a site. `sync` sets the zone to SSL/TLS mode Full with Automatic off and Always Use HTTPS on. The Cloudflare token needs Zone Settings: Edit.
+
+### Removed
+
+- The `sync` sequence that switched the proxy off to get a GitHub certificate. `sync` no longer changes a record's proxy setting.
+
 ### Fixed
 
 - `create` waits up to 5 minutes for GitHub to copy a template into the new repository and reports progress while it waits. It used to give up after about 8 seconds and leave a repository that had not been customized.

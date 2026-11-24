@@ -1519,3 +1519,28 @@ created nothing (it stopped before the repo existed).
 - `RENEW` says `off` for a registration that will not renew. Eleven domains read `off` on 2026-11-23: ayeye.dev, ayeye.rodeo, bluegazebo.dev, ekranoplan.dev, laminar.rodeo, tantamount.art, tantamount.gallery, tantamount.studio, tequitl.agency, tequitl.dev, thisisjusttosay.lol.
 
 **Files**: `mimeo/providers/repo/github.py`, `mimeo/providers/base.py`, `mimeo/cli/create.py`, `mimeo/cli/_fleet.py`, `mimeo/cli/status.py`, tests, `README.md`, `docs/TROUBLESHOOTING.md`, `CHANGELOG.md`.
+
+## Entry 103: proxied sites use Cloudflare's certificate (2026-11-23)
+
+**What**: mimeo judged every site by its GitHub certificate. On a proxied site visitors get Cloudflare's certificate, so mimeo reported problems on working sites and `sync` switched the proxy off to renew a certificate visitors did not see. mimeo now judges a fully proxied site by the zone's Cloudflare settings. 453 tests pass.
+
+**How**:
+
+- mimeo.fyi served HTTPS through Cloudflare while GitHub presented `*.github.io` for it, which is what exposed the error. An earlier message in this session had told the user to set it to DNS only; that advice was wrong and was never followed.
+- The user added Zone Settings: Edit to the token. All 24 zones read `full`. Automatic was on for blueberryhill.fyi, mimeo.lol and xhosi.com and was turned off. Always Use HTTPS was turned on for the 16 zones with proxied sites, testing 002370.xyz first. Each zone then answered 200 on `https://` and redirected `http://`.
+- `CloudflareDNS` reads and sets the three settings. `plan.py` compares them for a fully proxied site. The proxy-off sequence and `set_proxied` are removed.
+- Tested live: Always Use HTTPS was turned off on 002370.xyz, `status` read `fixable`, and `mimeo sync` turned it back on. `status --all` reads 109 hostnames with 0 issues, and `sync --all --dry-run` would change nothing.
+
+**Decisions**: DEC-058, superseding the proxied case in DEC-050.
+
+**Files**: `mimeo/models.py`, `mimeo/connection.py`, `mimeo/plan.py`, `mimeo/operations.py`, `mimeo/providers/base.py`, `mimeo/providers/dns/cloudflare.py`, `mimeo/cli/doctor.py`, `mimeo/cli/status.py`, tests, `README.md`, `CHANGELOG.md`, `docs/CERTIFICATES.md`, `docs/TROUBLESHOOTING.md`, `docs/ARCHITECTURE.md`.
+
+## Entry 104: `mimeo proxy` (2026-11-23)
+
+**What**: Added `mimeo proxy` and ran it on the six GitHub sites on Cloudflare that were not proxied: particuluxe.com, pborenstein.co, tantamount.dev, tantamount.lol, tantamount.rodeo, xhosi.dev. 462 tests pass.
+
+**How**: Each site was checked directly against its Cloudflare address afterwards: `https://` answered 200 from Cloudflare, `http://` redirected to `https://`, and `www` redirected. `status --all` reads 109 hostnames with 0 issues. 22 sites are now proxied. 51 GitHub sites remain on Porkbun DNS and need moving to Cloudflare first.
+
+**Decisions**: DEC-059.
+
+**Files**: `mimeo/cli/proxy.py` (new), `mimeo/operations.py`, `mimeo/providers/base.py`, `mimeo/providers/dns/cloudflare.py`, tests, `README.md`, `CHANGELOG.md`, `docs/CERTIFICATES.md`.

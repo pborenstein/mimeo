@@ -1081,3 +1081,40 @@ Use `delegate` when the read-back check matters: it compares the written records
 **Alternatives considered**: A `NetlifyHost` subclass whose write methods raise (rejected: it needs `Fleet` to hold several hosts first, and a read-only request should not start with that change). Calling Netlify's REST API with a token in the config (rejected: a new secret for reads the logged-in CLI can already make).
 
 **Consequences**: Netlify is a special case in `plan.py`, `connection.py`, `delete.py` and `status.py` until `NetlifyHost` replaces `NetlifyReader`. The problem paths (expiring certificate, missing record) have run only against test data, because every live site is healthy.
+
+---
+
+### DEC-058: Whoever Answers the Visitor Provides the Certificate (2026-11-23)
+
+**Status**: Active ([CERTIFICATES.md](CERTIFICATES.md)). User call: do the straightforward thing. Supersedes the proxied case in DEC-050.
+
+**Context**: mimeo judges every site by its GitHub Pages certificate. On a proxied site visitors get Cloudflare's certificate instead. On 2026-11-23 mimeo.fyi served HTTPS through Cloudflare while GitHub had no certificate for it, and `status` reported a problem. DEC-050 switches the proxy off to renew a certificate visitors of a proxied site do not see.
+
+**Decision**:
+
+- A site proxied at all its names uses Cloudflare's certificate, and mimeo ignores GitHub's. Any other site uses GitHub's, as today.
+- `sync` sets each proxied zone to SSL/TLS mode Full, fixed rather than Automatic, with Always Use HTTPS on.
+- mimeo never switches a proxy to obtain a certificate. The proxy-off sequence is removed.
+
+**Alternatives considered**: Full (strict) (rejected: it needs a valid GitHub certificate, which GitHub cannot renew behind the proxy). Flexible (rejected: unencrypted between Cloudflare and GitHub, and a redirect loop where GitHub enforces HTTPS). Leaving Automatic on (rejected: it can raise a zone to strict on its own). Keeping DEC-050's sequence (rejected: it exposes the site to renew a certificate that is not needed).
+
+**Consequences**: Cloudflare does not verify that the server it reaches is GitHub. mimeo's Cloudflare token needs Zone Settings: Edit, which the user added on 2026-11-23. All 24 zones were on Full when first read. Automatic was on for three of them and is now off. Always Use HTTPS is on for the 16 zones with proxied sites.
+
+---
+
+### DEC-059: `mimeo proxy` Turns On Cloudflare's Proxy for Sites (2026-11-23)
+
+**Status**: Active. User call, including the name.
+
+**Context**: With DEC-058, proxied sites need no GitHub certificate, and the user wants sites proxied. Cloudflare's dashboard does this one zone at a time.
+
+**Decision**:
+
+- `mimeo proxy HOSTNAME...` or `--all`. It is the only command that turns a proxy on, and only when asked. No command turns one off, except this one undoing its own change after a failure.
+- Order for each site: set the zone's HTTPS settings, proxy the site's own address records, check that `https://` answers. On failure the records this run switched go back, and the run stops.
+- A site whose records are wrong is refused, with the `sync` command to run. A hostname with no site, a Netlify site, and a domain not on Cloudflare are skipped with the reason.
+- The name is Cloudflare's own word for the setting. Cloudflare is the only provider with a proxy.
+
+**Alternatives considered**: `mimeo cloudflare` (names a vendor rather than an action). `delegate --proxy` (does not fit sites already on Cloudflare). `protect` or `front` (invented labels).
+
+**Consequences**: The check can reach the site directly while a resolver still holds the old addresses, so a pass does not prove the path through Cloudflare. On 2026-11-23 the six sites were also checked directly against Cloudflare's addresses.

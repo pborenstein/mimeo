@@ -12,7 +12,8 @@ from dataclasses import dataclass, field
 from typing import Any, Dict
 
 from mimeo.cache import SiteCache
-from mimeo.models import DNSRecord, Site, SiteState
+from mimeo.exceptions import APIError
+from mimeo.models import DNSRecord, ProxyTLS, Site, SiteState
 from mimeo.providers.base import DNSProvider, Host, Registrar, RepoProvider
 from mimeo.providers.host.netlify import NetlifyCertificate, NetlifyReader, NetlifySite
 
@@ -40,6 +41,10 @@ class Connection:
     # public DNS gives for it. Empty when nothing answers, which is what
     # a lapsed registration looks like. None when it was not looked up.
     public_nameservers: list[str] | None = None
+    # The zone's HTTPS settings at its proxy, read when the site has
+    # proxied records in the zone. The error says why they could not be.
+    proxy_tls: ProxyTLS | None = None
+    proxy_tls_error: str | None = None
     # The Netlify site serving the hostname. mimeo reads it and never
     # changes it, so it is kept apart from `site`.
     netlify: NetlifySite | None = None
@@ -87,6 +92,7 @@ class Fleet:
         self._registered: Dict[str, Dict[str, Any]] | None = None
         self._nameservers: Dict[str, list[str]] = {}
         self._records: Dict[str, list[DNSRecord]] = {}
+        self._proxy_tls: Dict[str, ProxyTLS | None] = {}
 
     @property
     def registered(self) -> Dict[str, Dict[str, Any]]:
@@ -143,11 +149,22 @@ class Fleet:
             self._records[zone] = found
         return found
 
+    def zone_proxy_tls(self, zone: str, provider: DNSProvider) -> ProxyTLS | None:
+        """The zone's HTTPS settings at its proxy. Read once per run."""
+        with self._lock:
+            if zone in self._proxy_tls:
+                return self._proxy_tls[zone]
+        found = provider.proxy_tls(zone)
+        with self._lock:
+            self._proxy_tls[zone] = found
+        return found
+
     def forget(self, zone: str) -> None:
         """Drop what was read about a zone, after changing it."""
         with self._lock:
             self._nameservers.pop(zone, None)
             self._records.pop(zone, None)
+            self._proxy_tls.pop(zone, None)
 
     def rescan(self) -> Dict[str, list[Site]]:
         """Ask the host for every site and rebuild the cache from the answer.
@@ -220,6 +237,16 @@ class Fleet:
                 conn.records = self.zone_records(zone, conn.dns)
 
         conn.site, conn.state = self.site_for(hostname, search=search)
+        if (
+            conn.site is not None
+            and zone is not None
+            and conn.dns is not None
+            and any(r.proxied for r in conn.records or [])
+        ):
+            try:
+                conn.proxy_tls = self.zone_proxy_tls(zone, conn.dns)
+            except APIError as e:
+                conn.proxy_tls_error = str(e)
         if self.netlify is not None:
             conn.netlify = self.netlify.site_for(hostname)
             if conn.netlify is not None:

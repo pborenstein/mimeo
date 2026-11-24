@@ -2,8 +2,8 @@
 
 import pytest
 
-from mimeo.models import DNSRecord, Site
-from mimeo.operations import OperationError, delegate, link, unlink
+from mimeo.models import DNSRecord, ProxyTLS, Site
+from mimeo.operations import NotProxyable, OperationError, delegate, link, proxy, unlink
 from mimeo.plan import compare
 from tests.conftest import World
 
@@ -236,3 +236,54 @@ class TestDelegate:
         world.cf.seed("example.com", DNSRecord(type="MX", name="", content="mx.example.net", priority=10))
         delegate(world.fleet, "example.com", "cf")
         assert len([r for r in world.cf.zones["example.com"] if r.type == "MX"]) == 1
+
+
+class TestProxy:
+    def _site(self, world: World) -> None:
+        world.healthy_site("example.com", dns=world.cf)
+        world.cf.seed(
+            "example.com",
+            DNSRecord(type="MX", name="", content="mail.example.net", priority=10),
+            DNSRecord(type="A", name="other", content="192.0.2.1"),
+        )
+        world.cf.tls["example.com"] = ProxyTLS("flexible", True, False)
+
+    def test_sets_https_first_and_proxies_only_the_sites_records(self, world: World) -> None:
+        self._site(world)
+        outcome = proxy(world.fleet, "example.com", check=lambda hostname: True)
+        assert world.cf.calls[0] == ("set proxy tls", "example.com", "")
+        assert world.cf.tls["example.com"].correct
+        by_name = {(r.type, r.name): r.proxied for r in world.cf.zones["example.com"]}
+        assert by_name[("A", "")] and by_name[("AAAA", "")] and by_name[("CNAME", "www")]
+        assert not by_name[("MX", "")] and not by_name[("A", "other")]
+        assert len(outcome.actions) == 2
+
+    def test_dry_run_changes_nothing(self, world: World) -> None:
+        self._site(world)
+        outcome = proxy(world.fleet, "example.com", dry_run=True)
+        assert world.cf.calls == []
+        assert all(a.startswith("would ") for a in outcome.actions)
+
+    def test_switches_back_when_the_site_stops_answering(self, world: World) -> None:
+        self._site(world)
+        with pytest.raises(OperationError, match="switched back off"):
+            proxy(world.fleet, "example.com", check=lambda hostname: False)
+        assert not any(r.proxied for r in world.cf.zones["example.com"])
+
+    def test_already_proxied_changes_nothing(self, world: World) -> None:
+        self._site(world)
+        proxy(world.fleet, "example.com", check=lambda hostname: True)
+        world.cf.calls.clear()
+        outcome = proxy(world.fleet, "example.com", check=lambda hostname: True)
+        assert outcome.notes == ["already proxied"] and world.cf.calls == []
+
+    def test_refuses_wrong_records(self, world: World) -> None:
+        world.register("example.com", world.cf)
+        world.host.add("sites/example.com", "example.com")
+        with pytest.raises(OperationError, match="mimeo sync example.com"):
+            proxy(world.fleet, "example.com")
+
+    def test_no_proxy_at_the_provider_says_how_to_move(self, world: World) -> None:
+        world.healthy_site("example.com")
+        with pytest.raises(NotProxyable, match="mimeo delegate example.com --dns cloudflare"):
+            proxy(world.fleet, "example.com")

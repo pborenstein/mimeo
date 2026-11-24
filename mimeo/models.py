@@ -85,6 +85,23 @@ class SiteState:
     cert_expires: str | None = None
 
 
+@dataclass(frozen=True)
+class ProxyTLS:
+    """A proxying DNS provider's HTTPS settings for a zone (DEC-058)."""
+
+    # How the proxy connects to the site: off, flexible, full, strict.
+    mode: str
+    # True when the provider picks the mode itself and can raise it.
+    automatic: bool
+    # True when the proxy redirects http:// to https://.
+    always_https: bool
+
+    @property
+    def correct(self) -> bool:
+        """True for a fixed Full mode with http:// redirected."""
+        return self.mode == "full" and not self.automatic and self.always_https
+
+
 def relative_name(fqdn: str, zone: str) -> str:
     """Turn a provider's record name into a name relative to the zone.
 

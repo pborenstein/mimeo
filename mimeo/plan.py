@@ -6,9 +6,6 @@ change can fix. `status` prints a Plan and `sync` applies it, so the two
 cannot disagree about what is wrong.
 """
 
-import logging
-import time
-from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import date
 
@@ -17,8 +14,6 @@ from mimeo.exceptions import HostError
 from mimeo.models import ADDRESS_TYPES, DNSRecord
 from mimeo.providers.base import Host
 from mimeo.providers.host.netlify import NETLIFY_APEX_IP, NETLIFY_TARGETS
-
-logger = logging.getLogger(__name__)
 
 # Certificate states GitHub reports while it is still issuing.
 PENDING_CERT_STATES = frozenset({"new", "authorization_created", "authorization_pending", "issued"})
@@ -34,7 +29,7 @@ class Change:
 
     target: str  # "dns" or "host"
     # "add_record", "delete_record", "enforce_https", "request_certificate",
-    # "renew_behind_proxy"
+    # "set_proxy_tls"
     action: str
     summary: str
     record: DNSRecord | None = None
@@ -65,6 +60,9 @@ class Plan:
     proxied: bool | None = None
     # The site's records that are proxied now.
     proxied_records: list[DNSRecord] = field(default_factory=list)
+    # True when every one of the site's names is proxied, so the proxy
+    # answers visitors with its own certificate (DEC-058).
+    behind_proxy: bool = False
 
     @property
     def has_problem(self) -> bool:
@@ -270,6 +268,7 @@ def _compare_records(conn: Connection, host: Host, plan: Plan) -> None:
     if any(r.proxied is not None for r in live):
         plan.proxied = any(r.proxied for r in live)
         plan.proxied_records = [r for r in live if r.proxied]
+        plan.behind_proxy = all(r.proxied for r in live) and names <= {r.name for r in live}
 
     plan.extra = [r for r in live if r.key() not in required_keys]
     plan.missing = [r for r in required if r.key() not in live_keys]
@@ -323,6 +322,10 @@ def _compare_site(conn: Connection, plan: Plan, today: date) -> None:
                 f"Run: mimeo status {name}",
             ]
         )
+        return
+
+    if plan.behind_proxy:
+        _compare_proxy_tls(conn, plan)
         return
 
     cert = state.cert_state
@@ -382,15 +385,41 @@ def _compare_site(conn: Connection, plan: Plan, today: date) -> None:
         _fix_certificate(conn, plan, problem, what)
 
 
+def _compare_proxy_tls(conn: Connection, plan: Plan) -> None:
+    """Judge a fully proxied site by the proxy's settings, not the host's certificate."""
+    assert conn.dns is not None
+    provider = conn.dns.name.capitalize()
+    if conn.proxy_tls is None:
+        plan.site = "unknown"
+        plan.problems.append(
+            f"mimeo could not read the {provider} HTTPS settings for {conn.zone}:"
+            f" {conn.proxy_tls_error or 'no answer'}"
+        )
+        plan.fixes.append(f"Then run: mimeo sync {conn.hostname}")
+    elif conn.proxy_tls.correct:
+        plan.site = "ok"
+    else:
+        plan.site = "fixable"
+        plan.changes.append(
+            Change(
+                "dns",
+                "set_proxy_tls",
+                f"set {provider} SSL/TLS for {conn.zone} to a fixed Full mode with"
+                " Always Use HTTPS on",
+            )
+        )
+
+
 def _fix_certificate(conn: Connection, plan: Plan, problem: str, what: str) -> None:
     """Add the change that gets a certificate issued, or the problem and its steps.
 
     The host requests a certificate when the custom domain is saved, and
     issues it only if it can reach the site directly at records that
     point to it. So `sync` can do it when it can write the zone and the
-    records are already right: it sets the custom domain again, first
-    taking the DNS provider's proxy out of the way when it is on
-    (DEC-050). When the records are wrong, this run fixes them and a
+    records are already right and none is proxied: it sets the custom
+    domain again. mimeo never switches a proxy to get a certificate
+    (DEC-058), so a site proxied at only some of its names gets the steps
+    to do by hand. When the records are wrong, this run fixes them and a
     later run asks for the certificate, because a record just written
     is not answered for yet. When the zone cannot be written from here,
     the steps are printed for doing by hand.
@@ -408,17 +437,7 @@ def _fix_certificate(conn: Connection, plan: Plan, problem: str, what: str) -> N
                 " right, that run gets the certificate issued.",
             ]
         )
-    elif writable and plan.records == "ok" and plan.proxied_records:
-        which = _names(plan.proxied_records)
-        plan.changes.append(
-            Change(
-                "host",
-                "renew_behind_proxy",
-                f"{what} (switches {which} to DNS-only, sets the custom domain again,"
-                " waits for the certificate, switches them back to proxied)",
-            )
-        )
-    elif writable and plan.records == "ok":
+    elif writable and plan.records == "ok" and not plan.proxied_records:
         plan.changes.append(
             Change(
                 "host",
@@ -429,11 +448,6 @@ def _fix_certificate(conn: Connection, plan: Plan, problem: str, what: str) -> N
     else:
         plan.problems.append(problem)
         plan.fixes.extend(_certificate_steps(conn, plan))
-
-
-def _names(records: list[DNSRecord]) -> str:
-    """`A @, CNAME www`: the distinct type-and-name pairs among records."""
-    return ", ".join(sorted({f"{r.type} {r.name or '@'}" for r in records}))
 
 
 def _expiry(day: str | None, today: date) -> str:
@@ -513,18 +527,10 @@ def _certificate_steps(conn: Connection, plan: Plan) -> list[str]:
     return steps
 
 
-# How long `sync` waits for a certificate with the proxy switched off, how
-# long it gives one request before asking again, and how often it looks.
-CERT_WAIT = 900
-CERT_ROUND = 180
-CERT_POLL = 15
-
-
 def apply(
     conn: Connection,
     plan: Plan,
     host: Host,
-    sleep: Callable[[float], None] | None = None,
 ) -> list[str]:
     """Carry out a plan's changes, in order.
 
@@ -532,7 +538,6 @@ def apply(
         conn: What was read for the hostname
         plan: What `compare` made of it
         host: The host serving the site
-        sleep: Waits between looks at a certificate (default: time.sleep)
 
     Returns:
         The summary of each change made
@@ -542,7 +547,10 @@ def apply(
     """
     done: list[str] = []
     for change in plan.changes:
-        if change.target == "dns":
+        if change.action == "set_proxy_tls":
+            assert conn.dns is not None and conn.zone is not None
+            conn.dns.set_proxy_tls(conn.zone)
+        elif change.target == "dns":
             assert conn.dns is not None and conn.zone is not None and change.record is not None
             if change.action == "delete_record":
                 conn.dns.delete_record(conn.zone, change.record)
@@ -554,8 +562,6 @@ def apply(
                 continue
         elif change.action == "request_certificate":
             _set_domain_again(conn, host)
-        elif change.action == "renew_behind_proxy":
-            _renew_behind_proxy(conn, plan, host, sleep or time.sleep)
         done.append(change.summary)
     return done
 
@@ -573,77 +579,3 @@ def _set_domain_again(conn: Connection, host: Host) -> None:
             f" be set again ({exc}). Put it back with: mimeo link {domain} {conn.site}",
             status_code=getattr(exc, "status_code", None),
         ) from exc
-
-
-def _renew_behind_proxy(
-    conn: Connection, plan: Plan, host: Host, sleep: Callable[[float], None]
-) -> None:
-    """Get a certificate issued for a site whose records are proxied (DEC-050).
-
-    Switches the proxied records to DNS-only, asks for the certificate,
-    waits for it, and switches the records back. If anything fails
-    along the way the records are switched back before the error is
-    raised. If the certificate does not arrive in time the records are
-    left DNS-only, because switching them back would block it again;
-    the error says so and what to do.
-    """
-    assert conn.dns is not None and conn.zone is not None and conn.site is not None
-    assert conn.state is not None
-    name = conn.hostname
-    records = plan.proxied_records
-    which = _names(records)
-
-    def _proxy(on: bool) -> None:
-        assert conn.dns is not None and conn.zone is not None
-        for record in records:
-            conn.dns.set_proxied(conn.zone, record, on)
-
-    _proxy(False)
-    logger.info("%s: switched %s to DNS-only", name, which)
-    try:
-        approved = _wait_for_certificate(conn, host, sleep)
-    except Exception:
-        _proxy(True)
-        raise
-    if not approved:
-        raise HostError(
-            f"The certificate for {name} was not issued within {CERT_WAIT // 60} minutes."
-            f" {which} were left DNS-only so that it still can be. Run: mimeo status"
-            f" {name} until SITE says ok or fixable. Then, in the"
-            f" {conn.dns.name.capitalize()} dashboard, open {conn.zone} > DNS > Records"
-            f" and switch {which} back to Proxied."
-        )
-    _proxy(True)
-    logger.info("%s: certificate issued; switched %s back to proxied", name, which)
-    if not conn.state.https_enforced:
-        host.enforce_https(conn.site)
-
-
-def _wait_for_certificate(conn: Connection, host: Host, sleep: Callable[[float], None]) -> bool:
-    """Ask for the certificate and wait, asking again when a request fails or stalls.
-
-    The first request can fail because the host's resolver still holds
-    the proxy's addresses, so one request is not the end of it.
-
-    Returns:
-        True when the certificate was approved within CERT_WAIT seconds
-    """
-    assert conn.site is not None
-    waited = 0
-    while waited < CERT_WAIT:
-        _set_domain_again(conn, host)
-        logger.info("%s: asked for the certificate; waiting", conn.hostname)
-        this_round = 0
-        while this_round < CERT_ROUND and waited < CERT_WAIT:
-            sleep(CERT_POLL)
-            waited += CERT_POLL
-            this_round += CERT_POLL
-            cert = host.state(conn.site).cert_state
-            if cert == "approved":
-                return True
-            if cert is not None and cert not in PENDING_CERT_STATES:
-                # The request failed. Give resolvers a minute before the next one.
-                sleep(60)
-                waited += 60
-                break
-    return False

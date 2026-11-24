@@ -4,9 +4,9 @@ from datetime import date
 
 import pytest
 
-from mimeo.exceptions import HostError
+from mimeo.exceptions import APIError, HostError
 
-from mimeo.models import DNSRecord, Site
+from mimeo.models import DNSRecord, ProxyTLS, Site
 from mimeo.plan import apply, compare
 from tests.conftest import World
 
@@ -318,52 +318,64 @@ class TestCompareSite:
         world.cf.seed("example.com", *records)
         world.cache.set("example.com", site)
 
-    def _issue_only_when_unproxied(self, world: World) -> None:
-        def _decide(ref: str, hostname: str) -> str | None:
-            proxied = any(r.proxied for r in world.cf.zones[hostname])
-            return "bad_authz" if proxied else "approved"
+    def test_proxied_site_ignores_the_hosts_certificate(self, world: World) -> None:
+        self._proxied_site(world, cert_state=None, https_enforced=False, cert_expires=None)
+        _, plan = _plan(world, "example.com")
+        assert plan.behind_proxy
+        assert plan.site == "ok"
+        assert not plan.has_problem
 
-        world.host.certificate_on_set = _decide
-
-    def test_failed_renewal_behind_a_proxy_is_fixed_by_sync(self, world: World) -> None:
-        self._proxied_site(world, cert_state="bad_authz", cert_expires="2026-12-12")
-        self._issue_only_when_unproxied(world)
-        conn, plan = _plan(world, "example.com")
-        assert plan.site == "cert error"
-        assert plan.fixable and not plan.problems
-        assert plan.changes[0].summary.startswith(
-            "renew the HTTPS certificate, which expires 2026-12-12 (switches "
-        )
-        waits: list[float] = []
-        apply(conn, plan, world.host, sleep=waits.append)
-        assert world.host.sites["sites/example.com"].cert_state == "approved"
-        assert all(r.proxied for r in world.cf.zones["example.com"])
-        kinds = [kind for kind, _, _ in world.cf.calls]
-        assert kinds == ["proxy off"] * 9 + ["proxy on"] * 9
-        assert waits == [15]
-
-    def test_certificate_that_never_arrives_leaves_records_unproxied_and_says_so(
+    def test_expired_host_certificate_is_not_a_problem_behind_the_proxy(
         self, world: World
     ) -> None:
-        self._proxied_site(world, cert_state="bad_authz", cert_expires="2026-12-12")
-        world.host.certificate_on_set = lambda ref, hostname: "authorization_pending"
+        self._proxied_site(world, cert_state="bad_authz", cert_expires="2026-01-01")
+        _, plan = _plan(world, "example.com")
+        assert plan.site == "ok" and not plan.has_problem
+
+    @pytest.mark.parametrize(
+        "wrong",
+        [
+            ProxyTLS("strict", False, True),
+            ProxyTLS("flexible", False, True),
+            ProxyTLS("full", True, True),
+            ProxyTLS("full", False, False),
+        ],
+    )
+    def test_sync_corrects_the_proxy_settings_and_never_touches_the_proxy(
+        self, world: World, wrong: ProxyTLS
+    ) -> None:
+        self._proxied_site(world)
+        world.cf.tls["example.com"] = wrong
         conn, plan = _plan(world, "example.com")
-        with pytest.raises(HostError, match="were left DNS-only") as raised:
-            apply(conn, plan, world.host, sleep=lambda seconds: None)
-        assert "switch A @, AAAA @, CNAME www back to Proxied" in str(raised.value)
-        assert not any(r.proxied for r in world.cf.zones["example.com"])
-
-    def test_proxy_is_put_back_when_asking_for_the_certificate_fails(self, world: World) -> None:
-        self._proxied_site(world, cert_state="bad_authz", cert_expires="2026-12-12")
-        conn, plan = _plan(world, "example.com")
-
-        def _fail(site, hostname):  # type: ignore[no-untyped-def]
-            raise HostError("boom", status_code=500)
-
-        world.host.set_custom_domain = _fail  # type: ignore[method-assign]
-        with pytest.raises(HostError):
-            apply(conn, plan, world.host, sleep=lambda seconds: None)
+        assert plan.site == "fixable"
+        assert [c.action for c in plan.changes] == ["set_proxy_tls"]
+        apply(conn, plan, world.host)
+        assert world.cf.tls["example.com"].correct
+        assert world.cf.calls == [("set proxy tls", "example.com", "")]
         assert all(r.proxied for r in world.cf.zones["example.com"])
+
+    def test_unreadable_proxy_settings_say_how_to_fix_it(self, world: World) -> None:
+        self._proxied_site(world)
+
+        def _denied(zone: str) -> ProxyTLS:
+            raise APIError("Unauthorized. add the permission Zone > Zone Settings > Edit")
+
+        world.cf.proxy_tls = _denied  # type: ignore[method-assign]
+        _, plan = _plan(world, "example.com")
+        assert plan.site == "unknown"
+        assert "Zone Settings" in plan.problems[0]
+        assert not plan.changes
+
+    def test_partly_proxied_site_still_needs_the_hosts_certificate(self, world: World) -> None:
+        self._proxied_site(world, cert_state="bad_authz", cert_expires="2026-12-12")
+        for record in world.cf.zones["example.com"]:
+            if record.name == "www":
+                record.proxied = False
+        _, plan = _plan(world, "example.com")
+        assert not plan.behind_proxy
+        assert plan.site == "cert error"
+        assert not plan.changes
+        assert any("switch Proxy status to DNS only" in f for f in plan.fixes)
 
     def test_certificate_trouble_on_a_zone_mimeo_cannot_write_gives_steps(
         self, world: World

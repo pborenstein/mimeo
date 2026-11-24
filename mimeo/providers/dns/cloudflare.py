@@ -7,7 +7,7 @@ API reference: https://developers.cloudflare.com/api/
 from typing import Any, Dict
 
 from mimeo.exceptions import APIError
-from mimeo.models import DNSRecord, relative_name
+from mimeo.models import DNSRecord, ProxyTLS, relative_name
 from mimeo.providers.base import DNSProvider
 from mimeo.utils.http import HTTPClient
 from mimeo.utils.retry import retry_with_jitter
@@ -15,6 +15,10 @@ from mimeo.utils.retry import retry_with_jitter
 # ttl 1 is Cloudflare's "automatic"; proxied records always use it.
 _AUTO_TTL = 1
 _PRIORITY_TYPES = frozenset({"MX", "SRV", "URI"})
+_SETTINGS_PERMISSION = (
+    "In Cloudflare, open My Profile > API Tokens, edit the token mimeo uses, and add"
+    " the permission Zone > Zone Settings > Edit."
+)
 
 
 class CloudflareDNS(DNSProvider):
@@ -174,6 +178,48 @@ class CloudflareDNS(DNSProvider):
             f"/zones/{self._zone_id(zone)}/dns_records/{record.id}",
             json={"proxied": proxied},
         )
+
+    def _setting(self, zone_id: str, key: str) -> str:
+        result = self._call("GET", f"/zones/{zone_id}/settings/{key}").get("result") or {}
+        return str(result.get("value", ""))
+
+    def proxy_tls(self, zone: str) -> ProxyTLS:
+        """Read the zone's SSL/TLS mode, Automatic setting and Always Use HTTPS.
+
+        Raises:
+            APIError: If the token cannot read them; the message says how to fix it
+        """
+        zone_id = self._zone_id(zone)
+        try:
+            return ProxyTLS(
+                mode=self._setting(zone_id, "ssl"),
+                automatic=self._setting(zone_id, "ssl_automatic_mode") == "auto",
+                always_https=self._setting(zone_id, "always_use_https") == "on",
+            )
+        except APIError as e:
+            raise APIError(f"{e}. {_SETTINGS_PERMISSION}", status_code=e.status_code) from e
+
+    def set_proxy_tls(self, zone: str) -> None:
+        """Turn Automatic off, set the mode to Full, and turn on Always Use HTTPS.
+
+        Automatic goes first because it can raise the mode on its own.
+
+        Raises:
+            APIError: If the token cannot change them; the message says how to fix it
+        """
+        zone_id = self._zone_id(zone)
+        now = self.proxy_tls(zone)
+        wanted = [
+            ("ssl_automatic_mode", "custom", now.automatic),
+            ("ssl", "full", now.mode != "full"),
+            ("always_use_https", "on", not now.always_https),
+        ]
+        try:
+            for key, value, needed in wanted:
+                if needed:
+                    self._call("PATCH", f"/zones/{zone_id}/settings/{key}", json={"value": value})
+        except APIError as e:
+            raise APIError(f"{e}. {_SETTINGS_PERMISSION}", status_code=e.status_code) from e
 
     def stops_on_leaving(self, zone: str, records: list[DNSRecord]) -> list[str]:
         """Email Routing and the proxy work only while Cloudflare serves the zone.

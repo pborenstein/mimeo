@@ -8,14 +8,14 @@ from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 
-from mimeo.cli import create, delegate, delete, link, main, scan, status, sync, unlink
+from mimeo.cli import create, delegate, delete, link, main, proxy, scan, status, sync, unlink
 from mimeo.cli._processing import set_cli_overrides, set_log_format
 from mimeo.config import Config
 from mimeo.exceptions import EXIT_CONFIG, EXIT_PARTIAL
 from mimeo.models import DNSRecord, Site
 from tests.conftest import World
 
-_MODULES = ["status", "sync", "connect", "create", "delete"]
+_MODULES = ["status", "sync", "connect", "create", "delete", "proxy"]
 
 
 @pytest.fixture
@@ -89,10 +89,10 @@ class TestStatus:
         assert row["proxied"] is True
         assert row["records"] == "ok"
         assert row["site"] == "github:other/example.com"
-        assert row["site_status"] == "cert error"
+        assert row["site_status"] == "ok"
         assert row["problems"] == []
-        assert row["changes"][0].startswith("renew the HTTPS certificate, which expires 2026-12-12")
-        assert row["fixable"] is True
+        assert row["changes"] == []
+        assert row["fixable"] is False
 
     def test_all_scans_once_then_covers_registered_and_cached(self, run: Any, world: World) -> None:
         world.register("parked.com")
@@ -470,3 +470,33 @@ def test_status_does_not_report_a_subdomain_as_not_renewing(world: World, run: A
     result = run(status, "blog.lapses.test")
 
     assert " off " not in result.output
+
+
+def _unproxied_cf_site(world: World, hostname: str) -> None:
+    world.healthy_site(hostname, dns=world.cf)
+
+
+def test_proxy_command_stops_at_the_first_failure(world: World, run: Any) -> None:
+    _unproxied_cf_site(world, "a.test")
+    _unproxied_cf_site(world, "b.test")
+    with patch("mimeo.cli.proxy.site_answers", return_value=False):
+        result = run(proxy, "a.test", "b.test")
+    assert result.exit_code != 0
+    assert "stopped answering" in result.output
+    assert "not attempted" in result.output
+    assert not any(r.proxied for r in world.cf.zones["a.test"])
+    assert not any(r.proxied for r in world.cf.zones["b.test"])
+
+
+def test_proxy_command_skips_a_domain_with_no_proxy(world: World, run: Any) -> None:
+    world.healthy_site("porkbun.test")
+    result = run(proxy, "porkbun.test")
+    assert result.exit_code == 0
+    assert "mimeo delegate porkbun.test --dns cloudflare" in result.output.replace("\n", " ")
+
+
+def test_proxy_all_asks_first(world: World, run: Any) -> None:
+    _unproxied_cf_site(world, "a.test")
+    result = run(proxy, "--all", input="n\n")
+    assert "Aborted" in result.output
+    assert not any(r.proxied for r in world.cf.zones["a.test"])

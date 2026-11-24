@@ -1,4 +1,4 @@
-"""The operations behind `link`, `unlink`, `delegate` and `create`.
+"""The operations behind `link`, `unlink`, `delegate`, `proxy` and `create`.
 
 Each takes a Fleet and returns the list of things it did (or, with
 dry_run, would do) as plain sentences. They hold no vendor knowledge:
@@ -22,6 +22,10 @@ _NOT_COPIED = frozenset({"NS", "SOA"})
 
 class OperationError(MimeoError):
     """Raised when an operation refuses to proceed. The message says why."""
+
+
+class NotProxyable(OperationError):
+    """Raised by proxy for a hostname it has nothing to do for. Not a failure."""
 
 
 class WouldStopService(OperationError):
@@ -164,6 +168,8 @@ def _finish_https(
     Returns:
         True when HTTPS is still not enforced
     """
+    if plan.behind_proxy:
+        return False  # The proxy provides the certificate (DEC-058).
     state = fleet.host.state(site)
     if state.https_enforced:
         return False
@@ -183,6 +189,95 @@ def _finish_https(
         f"Run 'mimeo sync' for this hostname once the certificate is issued."
     )
     return True
+
+
+def proxy(
+    fleet: Fleet,
+    hostname: str,
+    dry_run: bool = False,
+    search: bool = True,
+    check: Callable[[str], bool] | None = None,
+) -> Outcome:
+    """Turn on the DNS provider's proxy for a site's address records (DEC-059).
+
+    Sets the zone's HTTPS settings first, so the site is never proxied
+    with the wrong ones. Other records are left alone. If a step fails,
+    or `check` says the site stopped answering, the records this run
+    switched are switched back.
+
+    Args:
+        fleet: The providers
+        hostname: The site's hostname
+        dry_run: Describe the changes without making them
+        search: Look beyond the cache for the site
+        check: Asked whether the site answers, after the change
+
+    Raises:
+        NotProxyable: If the hostname has no site or no proxy available
+        OperationError: If the site's records are wrong, or it stopped answering
+    """
+    hostname = hostname.lower()
+    conn = fleet.read(hostname, search=search)
+    if conn.site is None:
+        if conn.netlify is not None:
+            raise NotProxyable("served by Netlify, which provides its own certificate")
+        raise NotProxyable("no site")
+    if conn.zone is None:
+        raise NotProxyable("registered outside this account, so mimeo cannot change its DNS")
+    if conn.dns is None:
+        raise NotProxyable(f"{conn.zone} is at a DNS provider mimeo cannot write to")
+    tls = conn.dns.proxy_tls(conn.zone)
+    if tls is None:
+        raise NotProxyable(
+            f"{conn.zone} is on {conn.dns.name.capitalize()} DNS, which has no proxy."
+            f" To move it: mimeo delegate {conn.zone} --dns cloudflare"
+        )
+    plan = compare(conn, fleet.host)
+    if plan.records != "ok":
+        raise OperationError(
+            f"The records for {hostname} are not right, so it was not proxied."
+            f" Run: mimeo sync {hostname}"
+        )
+
+    names = {r.name for r in fleet.host.required_records(conn.site, conn.label)}
+    records = [
+        r
+        for r in conn.records or []
+        if r.name in names and r.type in ADDRESS_TYPES and not r.proxied
+    ]
+    outcome = Outcome()
+    would = "would " if dry_run else ""
+    if not tls.correct:
+        outcome.actions.append(
+            f"{would}set SSL/TLS for {conn.zone} to a fixed Full mode with Always Use HTTPS on"
+        )
+    if records:
+        which = ", ".join(sorted({f"{r.type} {r.name or '@'}" for r in records}))
+        outcome.actions.append(f"{would}proxy {which}")
+    if dry_run or not outcome.actions:
+        if not outcome.actions:
+            outcome.notes.append("already proxied")
+        return outcome
+
+    if not tls.correct:
+        conn.dns.set_proxy_tls(conn.zone)
+    switched: list[DNSRecord] = []
+    try:
+        for record in records:
+            conn.dns.set_proxied(conn.zone, record, True)
+            switched.append(record)
+        if check is not None and not check(hostname):
+            raise OperationError(
+                f"https://{hostname} stopped answering after it was proxied, so the"
+                " proxy was switched back off."
+            )
+    except Exception:
+        for record in switched:
+            conn.dns.set_proxied(conn.zone, record, False)
+        fleet.forget(conn.zone)
+        raise
+    fleet.forget(conn.zone)
+    return outcome
 
 
 def unlink(fleet: Fleet, hostname: str, dry_run: bool = False) -> tuple[Outcome, Site]:

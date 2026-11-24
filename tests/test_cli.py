@@ -59,7 +59,7 @@ def _credential_checks_off_network() -> Any:
     """Keep doctor's provider credential checks off the network."""
     with patch(f"{_DOCTOR}._check_porkbun_credentials", return_value=(True, "accepted", "")), patch(
         f"{_DOCTOR}._check_cloudflare_credentials", return_value=(True, "active", "")
-    ):
+    ), patch(f"{_DOCTOR}._check_cloudflare_settings", return_value=(True, "readable", "")):
         yield
 
 

@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import Any
 
-from mimeo.models import DNSRecord, Site, SiteState
+from mimeo.models import DNSRecord, ProxyTLS, Site, SiteState
 
 
 class Registrar(ABC):
@@ -71,11 +71,22 @@ class DNSProvider(ABC):
         """Delete a record previously returned by list_records."""
 
     def set_proxied(self, zone: str, record: DNSRecord, proxied: bool) -> None:
-        """Turn the provider's proxy on or off for a record list_records returned.
+        """Turn the proxy on or off for a record list_records returned.
 
-        Only providers that have a proxy setting implement this.
+        Only providers that have a proxy implement this.
         """
-        raise NotImplementedError(f"{self.name} has no proxy setting")
+        raise NotImplementedError(f"{self.name} has no proxy")
+
+    def proxy_tls(self, zone: str) -> ProxyTLS | None:
+        """Return the zone's HTTPS settings; None for a provider with no proxy."""
+        return None
+
+    def set_proxy_tls(self, zone: str) -> None:
+        """Set a fixed Full mode and redirect http:// to https:// (DEC-058).
+
+        Only providers that have a proxy implement this.
+        """
+        raise NotImplementedError(f"{self.name} has no proxy")
 
     def stops_on_leaving(self, zone: str, records: list[DNSRecord]) -> list[str]:
         """Say what stops working when the zone moves to another provider.

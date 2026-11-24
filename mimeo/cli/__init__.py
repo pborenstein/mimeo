@@ -22,6 +22,7 @@ from .doctor import (
     doctor,
 )
 from .connect import delegate, link, scan, unlink
+from .proxy import proxy
 from .status import status
 from .sync import sync
 
@@ -60,6 +61,7 @@ main.add_command(delete)
 main.add_command(link)
 main.add_command(unlink)
 main.add_command(delegate)
+main.add_command(proxy)
 main.add_command(scan)
 main.add_command(status)
 main.add_command(sync)
@@ -73,6 +75,7 @@ __all__ = [
     "link",
     "unlink",
     "delegate",
+    "proxy",
     "scan",
     "status",
     "sync",

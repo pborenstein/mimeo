@@ -184,13 +184,32 @@ def _check_cloudflare_credentials(cfg: Config) -> tuple[bool, str, str]:
             except Exception as e:
                 error = e
     if error is not None:
-        return False, str(error), "Check cloudflare.api_token (needs Zone Read and DNS Edit)."
+        return False, str(error), "Check cloudflare.api_token (needs Zone Read, Zone Edit, DNS Edit and Zone Settings Edit)."
     token_status = str(result.get("status", "unknown"))
     if token_status != "active":
         return False, f"token is {token_status}", "Create a new API token in Cloudflare."
     if not cfg.cloudflare_account_id:
         return True, "active (no account_id: cannot create zones)", ""
     return True, "active", ""
+
+
+def _check_cloudflare_settings(cfg: Config) -> tuple[bool, str, str]:
+    """Check that the token can read zone HTTPS settings (DEC-058)."""
+    from ..providers.dns.cloudflare import CloudflareDNS
+
+    fix = (
+        "In Cloudflare, open My Profile > API Tokens, edit the token mimeo uses, and add "
+        "the permission Zone > Zone Settings > Edit."
+    )
+    with CloudflareDNS(cfg.cloudflare_api_token or "", cfg.cloudflare_account_id) as cloudflare:
+        try:
+            zones = cloudflare._call("GET", "/zones", params={"per_page": 1}).get("result") or []
+            if not zones:
+                return True, "no zones to check", ""
+            cloudflare.proxy_tls(str(zones[0]["name"]))
+        except Exception:
+            return False, "cannot read zone settings", fix
+    return True, "can read zone settings", ""
 
 
 def _check_config(config_path: Path | None) -> tuple[bool, str, str]:
@@ -264,6 +283,7 @@ def doctor(config: Path | None, domains: tuple[str, ...]) -> None:
         checks.append(("Porkbun keys", lambda: _check_porkbun_credentials(loaded)))
         if cfg.cloudflare_api_token:
             checks.append(("Cloudflare token", lambda: _check_cloudflare_credentials(loaded)))
+            checks.append(("Cloudflare settings", lambda: _check_cloudflare_settings(loaded)))
 
     from ..providers.host.netlify import open_reader
 

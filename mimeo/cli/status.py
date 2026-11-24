@@ -57,6 +57,7 @@ _SITE_COLORS = {
     "cert error": "red",
     "no pages": "red",
     "no domain": "red",
+    "unknown": "red",
 }
 
 
@@ -207,9 +208,10 @@ def status(
         RECORDS  the site's address records against what the host needs:
                  ok, missing, extra, external, netlify (Netlify manages
                  them), unknown
-        SITE     ok, fixable (certificate ready, HTTPS not enforced),
-                 pending, no cert, cert error, expiring, no pages,
-                 no site
+        SITE     ok, fixable (sync can finish the HTTPS setup), pending,
+                 no cert, cert error, expiring, no pages, unknown, no site.
+                 A fully proxied site is judged by the proxy's HTTPS
+                 settings, not by GitHub's certificate.
         REPO     the repository whose custom domain is the hostname, or
                  the repository a Netlify site builds from, marked
                  (netlify). mimeo reads Netlify sites and never changes them.

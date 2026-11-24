@@ -14,7 +14,7 @@ secret_key = "sk1_your_secret_key"
 # Optional. Without this section Cloudflare-served zones show as
 # "external" and mimeo does not read or write their records.
 # [cloudflare]
-# API token with Zone:Read and DNS:Edit on the zones mimeo manages
+# API token with Zone:Read, Zone:Edit, DNS:Edit and Zone Settings:Edit on the zones mimeo manages
 # (and Zone:Edit to let `delegate` create zones).
 # api_token = "your_cloudflare_api_token"
 # Account new zones are created in; needed only by `delegate`/`create`.

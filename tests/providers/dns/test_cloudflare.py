@@ -133,3 +133,60 @@ def test_delete_record(cf: CloudflareDNS) -> None:
 def test_delete_record_without_id_raises(cf: CloudflareDNS) -> None:
     with pytest.raises(APIError):
         cf.delete_record("example.com", DNSRecord(type="A", name="", content="1.2.3.4"))
+
+
+def _settings(values: dict[str, str]) -> tuple[Any, list[tuple[str, str]]]:
+    """A fake Cloudflare API holding zone settings, and the list of writes made."""
+    writes: list[tuple[str, str]] = []
+
+    def request(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        if path == "/zones":
+            return ok([ZONE])
+        key = path.rsplit("/", 1)[1]
+        if method == "PATCH":
+            values[key] = kwargs["json"]["value"]
+            writes.append((key, values[key]))
+        return ok({"id": key, "value": values[key]})
+
+    return request, writes
+
+
+def test_proxy_tls_reads_the_three_settings(cf: CloudflareDNS) -> None:
+    values = {"ssl": "full", "ssl_automatic_mode": "auto", "always_use_https": "off"}
+    request, _ = _settings(values)
+    with patch.object(cf.client, "_request", side_effect=request):
+        tls = cf.proxy_tls("example.com")
+    assert (tls.mode, tls.automatic, tls.always_https) == ("full", True, False)
+    assert not tls.correct
+
+
+def test_set_proxy_tls_turns_automatic_off_first(cf: CloudflareDNS) -> None:
+    values = {"ssl": "strict", "ssl_automatic_mode": "auto", "always_use_https": "off"}
+    request, writes = _settings(values)
+    with patch.object(cf.client, "_request", side_effect=request):
+        cf.set_proxy_tls("example.com")
+        assert cf.proxy_tls("example.com").correct
+    assert writes == [
+        ("ssl_automatic_mode", "custom"),
+        ("ssl", "full"),
+        ("always_use_https", "on"),
+    ]
+
+
+def test_set_proxy_tls_writes_only_what_is_wrong(cf: CloudflareDNS) -> None:
+    values = {"ssl": "full", "ssl_automatic_mode": "custom", "always_use_https": "off"}
+    request, writes = _settings(values)
+    with patch.object(cf.client, "_request", side_effect=request):
+        cf.set_proxy_tls("example.com")
+    assert writes == [("always_use_https", "on")]
+
+
+def test_denied_settings_say_which_permission_to_add(cf: CloudflareDNS) -> None:
+    def request(method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        if path == "/zones":
+            return ok([ZONE])
+        raise APIError("Unauthorized", status_code=403)
+
+    with patch.object(cf.client, "_request", side_effect=request):
+        with pytest.raises(APIError, match="Zone > Zone Settings > Edit"):
+            cf.proxy_tls("example.com")

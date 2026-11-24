@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from typing import Any
 
-from mimeo.models import DNSRecord, Site, SiteState
+from mimeo.models import DNSRecord, ProxyTLS, Site, SiteState
 from mimeo.providers.base import DNSProvider, Host, Registrar, RepoProvider
 
 PAGES_V4 = ["185.199.108.153", "185.199.109.153", "185.199.110.153", "185.199.111.153"]
@@ -52,6 +52,7 @@ class FakeDNS(DNSProvider):
         self.zones: dict[str, list[DNSRecord]] = {}
         self._next_id = 1
         self.calls: list[tuple[str, str, str]] = []
+        self.tls: dict[str, ProxyTLS] = {}
 
     @property
     def nameserver_names(self) -> list[str]:
@@ -95,6 +96,15 @@ class FakeDNS(DNSProvider):
             if stored.id == record.id:
                 stored.proxied = proxied
         self.calls.append(("proxy on" if proxied else "proxy off", zone, record.describe()))
+
+    def proxy_tls(self, zone: str) -> ProxyTLS | None:
+        if not self.proxies:
+            return None
+        return self.tls.get(zone, ProxyTLS(mode="full", automatic=False, always_https=True))
+
+    def set_proxy_tls(self, zone: str) -> None:
+        self.tls[zone] = ProxyTLS(mode="full", automatic=False, always_https=True)
+        self.calls.append(("set proxy tls", zone, ""))
 
     def stops_on_leaving(self, zone: str, records: list[DNSRecord]) -> list[str]:
         if any(r.type == "MX" and r.content.endswith(f".{self.name}.test") for r in records):

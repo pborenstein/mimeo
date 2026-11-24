@@ -230,7 +230,8 @@ def proxy(
     if tls is None:
         raise NotProxyable(
             f"{conn.zone} is on {conn.dns.name.capitalize()} DNS, which has no proxy."
-            f" To move it: mimeo delegate {conn.zone} --dns cloudflare"
+            f" To proxy it, run: mimeo delegate {conn.zone} --dns cloudflare"
+            f" and then: mimeo proxy {hostname}"
         )
     plan = compare(conn, fleet.host)
     if plan.records != "ok":

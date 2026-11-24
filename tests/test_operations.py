@@ -285,5 +285,5 @@ class TestProxy:
 
     def test_no_proxy_at_the_provider_says_how_to_move(self, world: World) -> None:
         world.healthy_site("example.com")
-        with pytest.raises(NotProxyable, match="mimeo delegate example.com --dns cloudflare"):
+        with pytest.raises(NotProxyable, match="mimeo delegate example.com --dns cloudflare and then: mimeo proxy example.com"):
             proxy(world.fleet, "example.com")

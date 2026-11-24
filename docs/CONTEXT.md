@@ -3,7 +3,7 @@ phase: 8
 phase_name: Consolidation
 updated: 2026-11-24
 last_commit: 062cd5a
-last_entry: 104
+last_entry: 105
 ---
 
 ## Current Focus
@@ -30,7 +30,8 @@ committed but not released or pushed.
 - A fully proxied site uses Cloudflare's certificate (DEC-058). Only
       `mimeo proxy` turns a proxy on (DEC-059). 22 sites are proxied.
 - Porkbun requests are spaced 0.25s; `status --all` takes a minute.
-- 24 of 109 hostnames are on Cloudflare; 7 are on Netlify sites.
+- 84 of 109 hostnames are on Cloudflare (Entry 105); 7 are on Netlify
+      sites. 44 moved GitHub sites are not proxied yet.
 - Live config: three organizations, `defaults.dns = "cloudflare"`.
 - 002370.xyz is the junk domain, on Cloudflare again since 2026-11-17.
 - Porkbun can move a domain to Cloudflare itself (account connected
@@ -38,6 +39,6 @@ committed but not released or pushed.
 
 ## Next Session
 
-Move the 51 GitHub sites on Porkbun DNS to Cloudflare, leaving out
-tequitl.dev, then run `mimeo proxy --all`. After that, the Netlify task
-list in `docs/IMPLEMENTATION.md`, Phase 9.
+Run `mimeo proxy --all --dry-run`, then `mimeo proxy --all`, for the 44
+GitHub sites moved to Cloudflare. Then the Netlify task list in
+`docs/IMPLEMENTATION.md`, Phase 9.

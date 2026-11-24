@@ -124,7 +124,7 @@ Stable facts that sessions need. Current work state lives in
   domain is the hostname, in any organization listed under
   `github.organizations` (DEC-040).
 - **DNS**: Porkbun is the registrar. DNS is moving to Cloudflare
-  (24 of 109 hostnames as of 2026-11-22, Entry 98); Porkbun zone
+  (84 of 109 hostnames as of 2026-11-24, Entry 105); Porkbun zone
   records are live only on Porkbun nameservers (DEC-037).
 - **Netlify**: six sites on a legacy plan, each building from
   a GitHub repo. mimeo reads them through the `netlify` CLI and makes

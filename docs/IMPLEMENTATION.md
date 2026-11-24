@@ -48,8 +48,11 @@ ships on its own.
 **Proxy ([DEC-059](DECISIONS.md))**
 
 - [x] `mimeo proxy`; run on the six GitHub sites already on Cloudflare
-- [ ] Move the 51 GitHub sites on Porkbun DNS to Cloudflare (leave out
-      tequitl.dev, which is expiring), then run `mimeo proxy --all`
+- [x] Move the GitHub sites on Porkbun DNS to Cloudflare (2026-11-24,
+      Entry 105): 44 moved
+- [ ] Run `mimeo proxy --all` for the 44 moved sites
+- [ ] Decide on the six GitHub sites still on Porkbun DNS: 002371.xyz to
+      002375.xyz and subliminal.rodeo (tequitl.dev stays, as it expires)
 
 **Netlify as a host**
 

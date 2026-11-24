@@ -1544,3 +1544,13 @@ created nothing (it stopped before the repo existed).
 **Decisions**: DEC-059.
 
 **Files**: `mimeo/cli/proxy.py` (new), `mimeo/operations.py`, `mimeo/providers/base.py`, `mimeo/providers/dns/cloudflare.py`, tests, `README.md`, `CHANGELOG.md`, `docs/CERTIFICATES.md`.
+
+## Entry 105: GitHub sites moved to Cloudflare DNS (2026-11-24)
+
+**What**: The user moved the GitHub sites on Porkbun DNS to Cloudflare, outside mimeo. No code change.
+
+**Checked**: `mimeo status --all` read 109 hostnames with 0 problems and 0 errors. 84 hostnames are now on Cloudflare: 66 GitHub sites (22 proxied, 44 not yet), twohorses.net for Netlify, and 17 domains with no site. Seven GitHub sites are still on Porkbun DNS: 002371.xyz to 002375.xyz, subliminal.rodeo, and tequitl.dev, which is being left to expire. The six Netlify domains are on Netlify DNS, and spacemang.com and spacemang.org are registered elsewhere.
+
+**Next**: `mimeo proxy --all` for the 44 moved sites.
+
+**Files**: `CLAUDE.md`, `docs/CONTEXT.md`, `docs/IMPLEMENTATION.md`.
